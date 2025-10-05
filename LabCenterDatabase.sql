@@ -885,17 +885,35 @@ BEGIN
 
     DECLARE @Loan TABLE(intItemLoanID INT);
 
-    INSERT INTO @Loan EXEC dbo.usp_CheckoutItem @CableID,@JaneID,@JosieID,DATEADD(HOUR,24,SYSUTCDATETIME()),'Checked condition';
+    INSERT INTO @Loan
+    EXEC dbo.usp_CheckoutItem
+        @intItemID            = @CableID,
+        @intBorrowerID        = @JaneID,
+        @intCheckoutLabTechID = @JosieID,
+        @dtmDueUTC            = DATEADD(HOUR,24,SYSUTCDATETIME()),
+        @strCheckoutNotes     = 'Checked condition';
     DECLARE @LoanJane INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
     UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-6,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanJane;
 
     DELETE FROM @Loan;
-    INSERT INTO @Loan EXEC dbo.usp_CheckoutItem @PiID,@AlexID,@JosieID,DATEADD(HOUR,40,SYSUTCDATETIME()),NULL;
+    INSERT INTO @Loan
+    EXEC dbo.usp_CheckoutItem
+        @intItemID            = @PiID,
+        @intBorrowerID        = @AlexID,
+        @intCheckoutLabTechID = @JosieID,
+        @dtmDueUTC            = DATEADD(HOUR,40,SYSUTCDATETIME()),
+        @strCheckoutNotes     = NULL;
     DECLARE @LoanAlex INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
     UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-10,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanAlex;
 
     DELETE FROM @Loan;
-    INSERT INTO @Loan EXEC dbo.usp_CheckoutItem @ProbeID,@ChrisID,@AlexTechID,DATEADD(HOUR,-3,SYSUTCDATETIME()),'Handle with care';
+    INSERT INTO @Loan
+    EXEC dbo.usp_CheckoutItem
+        @intItemID            = @ProbeID,
+        @intBorrowerID        = @ChrisID,
+        @intCheckoutLabTechID = @AlexTechID,
+        @dtmDueUTC            = DATEADD(HOUR,-3,SYSUTCDATETIME()),
+        @strCheckoutNotes     = 'Handle with care';
     DECLARE @LoanChris INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
     UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-30,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanChris;
 END
