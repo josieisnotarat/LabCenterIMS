@@ -885,17 +885,38 @@ BEGIN
 
     DECLARE @Loan TABLE(intItemLoanID INT);
 
-    INSERT INTO @Loan EXEC dbo.usp_CheckoutItem @CableID,@JaneID,@JosieID,DATEADD(HOUR,24,SYSUTCDATETIME()),'Checked condition';
+    DECLARE @CableDueUTC DATETIME2(0) = DATEADD(HOUR,24,SYSUTCDATETIME());
+    INSERT INTO @Loan
+    EXEC dbo.usp_CheckoutItem
+        @intItemID            = @CableID,
+        @intBorrowerID        = @JaneID,
+        @intCheckoutLabTechID = @JosieID,
+        @dtmDueUTC            = @CableDueUTC,
+        @strCheckoutNotes     = 'Checked condition';
     DECLARE @LoanJane INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
     UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-6,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanJane;
 
     DELETE FROM @Loan;
-    INSERT INTO @Loan EXEC dbo.usp_CheckoutItem @PiID,@AlexID,@JosieID,DATEADD(HOUR,40,SYSUTCDATETIME()),NULL;
+    DECLARE @PiDueUTC DATETIME2(0) = DATEADD(HOUR,40,SYSUTCDATETIME());
+    INSERT INTO @Loan
+    EXEC dbo.usp_CheckoutItem
+        @intItemID            = @PiID,
+        @intBorrowerID        = @AlexID,
+        @intCheckoutLabTechID = @JosieID,
+        @dtmDueUTC            = @PiDueUTC,
+        @strCheckoutNotes     = NULL;
     DECLARE @LoanAlex INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
     UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-10,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanAlex;
 
     DELETE FROM @Loan;
-    INSERT INTO @Loan EXEC dbo.usp_CheckoutItem @ProbeID,@ChrisID,@AlexTechID,DATEADD(HOUR,-3,SYSUTCDATETIME()),'Handle with care';
+    DECLARE @ProbeDueUTC DATETIME2(0) = DATEADD(HOUR,-3,SYSUTCDATETIME());
+    INSERT INTO @Loan
+    EXEC dbo.usp_CheckoutItem
+        @intItemID            = @ProbeID,
+        @intBorrowerID        = @ChrisID,
+        @intCheckoutLabTechID = @AlexTechID,
+        @dtmDueUTC            = @ProbeDueUTC,
+        @strCheckoutNotes     = 'Handle with care';
     DECLARE @LoanChris INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
     UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-30,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanChris;
 END
