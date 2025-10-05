@@ -419,9 +419,9 @@
                   </tr>
                 </thead>
                 <tbody id="tbl-admin-log">
-                  <tr><td>j.wooldridge</td><td>000251</td><td>Checkout</td><td>2025-10-04 09:10</td><td>RJ45 Crimper to Sam R. (445566)</td></tr>
-                  <tr><td>a.smith</td><td>000246</td><td>Check-in</td><td>2025-10-04 16:05</td><td>USB-C Cable (1m) from Jane Doe</td></tr>
-                  <tr><td>k.jones</td><td>S-0194</td><td>Service Update</td><td>2025-10-01 11:40</td><td>Quarantined Laptop 15</td></tr>
+                  <tr>
+                    <td colspan="5" style="text-align:center; color:var(--muted); padding:18px 12px">Loading recent activity…</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -742,6 +742,60 @@
     };
     const ROW_STATUS_CLASSNAMES = Object.values(STATUS_ROW_CLASS_MAP);
 
+    const AUDIT_ACTION_TITLES = {
+      BORROWER_CREATE: "Borrower Created",
+      ITEM_CREATE: "Item Added",
+      CHECKOUT: "Checkout",
+      CHECKIN: "Check-in",
+      TICKET_CREATE: "Service Ticket Created",
+      TICKET_STATUS: "Service Status Update",
+      NOTE_ADD: "Note Added"
+    };
+
+    const DEMO_AUDIT_LOG = [
+      {
+        intTraceID: 251,
+        dtmEventUTC: "2025-10-04T13:10:00Z",
+        username: "j.wooldridge",
+        strAction: "CHECKOUT",
+        strDetails: JSON.stringify({
+          item: "RJ45 Crimper",
+          borrower: "Sam R.",
+          schoolId: "445566"
+        })
+      },
+      {
+        intTraceID: 246,
+        dtmEventUTC: "2025-10-04T20:05:00Z",
+        username: "a.smith",
+        strAction: "CHECKIN",
+        strDetails: JSON.stringify({
+          item: "USB-C Cable (1m)",
+          borrower: "Jane Doe"
+        })
+      },
+      {
+        intTraceID: 194,
+        dtmEventUTC: "2025-10-01T15:40:00Z",
+        username: "k.jones",
+        strAction: "TICKET_STATUS",
+        strDetails: JSON.stringify({
+          publicId: "S-0194",
+          status: "Ready for Pickup"
+        })
+      },
+      {
+        intTraceID: 195,
+        dtmEventUTC: "2025-10-01T16:10:00Z",
+        username: "k.jones",
+        strAction: "NOTE_ADD",
+        strDetails: "Updated diagnostics log with thermal test results."
+      }
+    ];
+
+    const AUDIT_DATETIME_FORMAT = new Intl.DateTimeFormat([], { dateStyle: "medium", timeStyle: "short" });
+    const AUDIT_DATE_FORMAT = new Intl.DateTimeFormat([], { dateStyle: "medium" });
+
     /**
      * Utility helper to close a dialog by id. Prevents repeated DOM lookups
      * and makes intent clear at the call site.
@@ -904,6 +958,9 @@
       if(!USE_BACKEND){
         // stub fake latency
         await new Promise(r=>setTimeout(r, 600));
+        if(path.startsWith("/audit-log")){
+          return { ok:true, json: async()=>({ entries: DEMO_AUDIT_LOG }) };
+        }
         return { ok:true, json: async()=>({ ok:true }) };
       }
       const res = await fetch(API_BASE+path, {
@@ -912,6 +969,180 @@
       });
       if(!res.ok) throw new Error(`HTTP ${res.status}`);
       return res;
+    }
+
+    async function fetchAuditLog(){
+      const res = await api(`/audit-log?top=50`, { method:"GET" });
+      const payload = await res.json();
+      if(Array.isArray(payload)) return payload;
+      if(Array.isArray(payload?.entries)) return payload.entries;
+      if(Array.isArray(payload?.data)) return payload.data;
+      return [];
+    }
+
+    function formatAuditUser(entry){
+      const user = entry.username || entry.user || entry.userName || entry.strUsername;
+      if(user) return user;
+      const first = entry.strFirstName || entry.firstName;
+      const last = entry.strLastName || entry.lastName;
+      if(first || last) return [first, last].filter(Boolean).join(" ").trim();
+      return entry.intLabTechID ? `Tech #${entry.intLabTechID}` : "System";
+    }
+
+    function formatAuditTrace(entry){
+      const raw = entry.trace || entry.traceId || entry.intTraceID;
+      if(raw == null) return "—";
+      const num = Number(raw);
+      if(Number.isFinite(num)) return num.toString().padStart(6, "0");
+      const str = String(raw);
+      return str.padStart(Math.max(6, str.length), "0");
+    }
+
+    function titleCase(str){
+      return str.toLowerCase().replace(/\b\w/g, c=>c.toUpperCase());
+    }
+
+    function formatAuditAction(entry){
+      const code = (entry.action || entry.strAction || "").toString().trim();
+      if(!code) return "—";
+      return AUDIT_ACTION_TITLES[code] || titleCase(code.replace(/_/g, " "));
+    }
+
+    function safeDate(value){
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+
+    function formatAuditDateTime(entry){
+      const raw = entry.dtmEventLocal || entry.dtmEventUTC || entry.timestamp || entry.dateTime || entry.date;
+      if(!raw) return "—";
+      const dt = safeDate(raw);
+      return dt ? AUDIT_DATETIME_FORMAT.format(dt) : raw;
+    }
+
+    function formatDetailDate(raw){
+      if(!raw) return null;
+      const dt = safeDate(raw);
+      return dt ? AUDIT_DATE_FORMAT.format(dt) : null;
+    }
+
+    function humanizeKey(key){
+      return key
+        .replace(/([A-Z])/g, " $1")
+        .replace(/_/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .replace(/\b\w/g, c=>c.toUpperCase());
+    }
+
+    function summarizeDetail(obj){
+      if(!obj || typeof obj !== "object") return "";
+      if(Array.isArray(obj)){
+        return obj.map(summarizeDetail).filter(Boolean).join("; ");
+      }
+      const item = obj.item || obj.itemName;
+      const borrower = obj.borrower || obj.customer || obj.customerName;
+      if(item){
+        const parts = [item];
+        if(obj.itemNumber) parts[0] += ` (${obj.itemNumber})`;
+        if(borrower){
+          let borrowerTxt = borrower;
+          if(obj.schoolId || obj.schoolID || obj.schoolIdNumber){
+            borrowerTxt += ` (${obj.schoolId || obj.schoolID || obj.schoolIdNumber})`;
+          }
+          parts.push(`→ ${borrowerTxt}`);
+        }
+        const due = formatDetailDate(obj.dueLocal || obj.dueUTC);
+        if(due) parts.push(`Due ${due}`);
+        if(obj.checkoutUTC){
+          const checkout = formatDetailDate(obj.checkoutUTC);
+          if(checkout) parts.push(`Checked Out ${checkout}`);
+        }
+        if(obj.checkinUTC){
+          const checkin = formatDetailDate(obj.checkinUTC);
+          if(checkin) parts.push(`Checked In ${checkin}`);
+        }
+        return parts.join(" · ");
+      }
+      if(obj.publicId || obj.publicTicketID){
+        const ticket = obj.publicId || obj.publicTicketID;
+        return obj.status ? `${ticket} — ${obj.status}` : ticket;
+      }
+      if(Object.prototype.hasOwnProperty.call(obj, "note")){
+        return String(obj.note);
+      }
+      return Object.entries(obj).map(([k,v])=>`${humanizeKey(k)}: ${v}`).join("; ");
+    }
+
+    function formatAuditDetails(entry){
+      const raw = entry.details ?? entry.strDetails ?? entry.detail ?? entry.message;
+      if(raw == null) return "";
+      if(typeof raw === "object"){
+        return summarizeDetail(raw);
+      }
+      const text = raw.toString().trim();
+      if(!text) return "";
+      try{
+        const parsed = JSON.parse(text);
+        return summarizeDetail(parsed) || text;
+      }catch{
+        return text;
+      }
+    }
+
+    function renderAuditLog(entries){
+      const tbody = document.getElementById("tbl-admin-log");
+      if(!tbody) return;
+      tbody.textContent = "";
+      if(!entries.length){
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 5;
+        td.style.textAlign = "center";
+        td.style.color = "var(--muted)";
+        td.style.padding = "18px 12px";
+        td.textContent = "No recent activity.";
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+        return;
+      }
+      entries.forEach(entry=>{
+        const tr = document.createElement("tr");
+        const cells = [
+          formatAuditUser(entry),
+          formatAuditTrace(entry),
+          formatAuditAction(entry),
+          formatAuditDateTime(entry),
+          formatAuditDetails(entry)
+        ];
+        cells.forEach(val=>{
+          const td = document.createElement("td");
+          td.textContent = val || "";
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function loadAuditLog(){
+      const tbody = document.getElementById("tbl-admin-log");
+      if(!tbody) return;
+      try{
+        const entries = await fetchAuditLog();
+        renderAuditLog(entries);
+      }catch(err){
+        console.error("Failed to load audit log", err);
+        tbody.textContent = "";
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 5;
+        td.style.textAlign = "center";
+        td.style.color = "var(--overdue-fg)";
+        td.style.padding = "18px 12px";
+        td.textContent = "Unable to load audit log.";
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      }
     }
 
     // ====== SAVE HANDLERS ======
@@ -1028,6 +1259,8 @@
       closeDialogById("dlg-delete-user");
       alert("User deleted.");
     }));
+
+    loadAuditLog();
 
     // keep row colors consistent if DOM changes later
     // Watch for table updates (e.g., new rows inserted) so the status tinting
