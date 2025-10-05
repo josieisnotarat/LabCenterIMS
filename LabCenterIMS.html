@@ -21,25 +21,24 @@
       --overdue-bg:#fee2e2;  --overdue-fg:#b91c1c;
       --repair-bg:#fef3c7;   --repair-fg:#92400e;
       --returned-bg:#eef2ff; --returned-fg:#3730a3;
-      --ready-bg:#ecfdf5;    --ready-fg:#065f46; /* ready for pickup */
+      --ready-bg:#ecfdf5;    --ready-fg:#065f46;
 
       --radius:12px; --shadow:0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.06);
 
       /* Modal vars */
       --modal-backdrop: rgba(0,0,0,.36);
+      --focus:#2563eb;
     }
     *{box-sizing:border-box}
-
-    /* Desktop app frame */
     html, body { height:100%; min-width:1200px; }
     body{
       margin:0; background:var(--surface); color:var(--ink);
       font-family:Inter,system-ui,Arial,sans-serif;
-      display:grid; grid-template-rows:auto 1fr; /* header + content row */
-      overflow:hidden; /* only the center pane scrolls */
+      display:grid; grid-template-rows:auto 1fr;
+      overflow:hidden;
     }
 
-    /* Header (fixed row) */
+    /* Header (fixed) */
     header{
       display:flex; justify-content:space-between; align-items:center; gap:16px;
       padding:14px 18px; background:var(--bg); border-bottom:1px solid var(--line);
@@ -50,23 +49,21 @@
     .hdr-right{display:flex; align-items:center; gap:12px}
     .logo{height:24px; width:auto; display:block}
 
-    /* App shell: fixed sidebar + scrollable main */
+    /* App shell */
     .shell{
       display:grid;
       grid-template-columns:260px minmax(0,1fr);
       height:100%; min-height:0; width:100%;
-      overflow:hidden; /* sidebar + main contained */
+      overflow:hidden;
     }
     aside{
       background:var(--bg); border-right:1px solid var(--line); padding:14px;
       display:flex; flex-direction:column; gap:8px;
-      height:100%; overflow:hidden; /* sidebar never scrolls */
-      position:sticky; top:56px; /* lock relative to header height */
-      align-self:start;
+      height:100%; overflow:hidden; position:sticky; top:56px; align-self:start;
     }
     main{
       min-width:0; padding:18px;
-      height:100%; overflow:auto; /* ONLY this scrolls */
+      height:100%; overflow:auto;
     }
 
     /* Sidebar */
@@ -74,30 +71,32 @@
     nav{display:grid; gap:8px}
     .nav-link{
       display:flex; align-items:center; gap:10px; padding:10px 12px;
-      border-radius:10px; color:#111827; text-decoration:none; border:1px solid transparent
+      border-radius:10px; color:#111827; text-decoration:none; border:1px solid transparent;
+      user-select:none; transition:background .15s ease,border-color .15s ease,transform .02s ease;
     }
     .nav-link:hover{background:var(--surface); border-color:var(--line)}
+    .nav-link:focus-visible{outline:2px solid var(--focus); outline-offset:2px}
+    .nav-link:active{transform:translateY(1px)}
     .nav-sep{height:1px; background:var(--line); margin:10px 0}
     .push-bottom{margin-top:auto}
 
-    /* Active link highlight using :has() */
+    /* Active link */
     body:has(#home.screen:target)      .nav-link[href="#home"],
     body:not(:has(.screen:target))     .nav-link[href="#home"]{ background:var(--surface); border-color:var(--line); }
     body:has(#borrowing.screen:target) .nav-link[href="#borrowing"]{ background:var(--surface); border-color:var(--line); }
     body:has(#service.screen:target)   .nav-link[href="#service"]{ background:var(--surface); border-color:var(--line); }
     body:has(#admin.screen:target)     .nav-link[href="#admin"]{ background:var(--surface); border-color:var(--line); }
 
-    /* Screens (CSS router) */
+    /* Screens (router) */
     .screen{display:none}
     .screen:target{display:block}
-    #home.screen{display:block} /* default */
+    #home.screen{display:block}
     body:has(.screen:target:not(#home)) #home{display:none}
 
     .wrapper{max-width:1200px; margin:0 auto}
 
     /* Cards / grid */
     .grid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
-
     .card{background:var(--bg); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden}
     .card h2{font-size:16px; margin:0; padding:12px 14px; border-bottom:1px solid var(--line)}
     .card .body{padding:14px}
@@ -108,10 +107,11 @@
     .stat .label{font-size:12px; color:var(--muted)}
     .stat .value{font-weight:700; font-size:20px}
 
-    /* universal pills (statuses) */
+    /* universal pills */
     .pill{
       display:inline-block; padding:4px 10px; border-radius:999px;
       font-size:12px; font-weight:700; border:1px solid transparent; white-space:nowrap;
+      user-select:none;
     }
     .pill.ok{        background:var(--ok-bg);       color:var(--ok-fg);       border-color:rgba(68,140,55,.25);}
     .pill.overdue{   background:var(--overdue-bg);  color:var(--overdue-fg);  border-color:#fecaca;}
@@ -127,18 +127,36 @@
     tbody td{padding:12px; border-bottom:1px solid var(--line); vertical-align:top}
     tr.clickable{cursor:pointer}
 
+    /* consistent row emphasis */
+    tr.is-overdue{background:#fff7f7}
+    tr.is-awaiting{background:#fffbeb}
+    tr.is-diagnosing{background:#fffbeb}
+    tr.is-ready{background:#f0fdf4}
+
     /* form bits */
     .toolbar{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px}
     .search{display:flex; align-items:center; gap:10px; background:var(--bg); border:1px solid var(--line); padding:8px 10px; border-radius:10px; flex:1 1 320px}
     .search input{border:0; outline:0; background:transparent; width:100%}
-    .btn{border:1px solid var(--line); background:var(--bg); padding:8px 10px; border-radius:10px; font-weight:600; text-decoration:none; color:var(--ink); display:inline-block}
+    .btn{
+      border:1px solid var(--line); background:var(--bg); padding:8px 10px;
+      border-radius:10px; font-weight:600; text-decoration:none; color:var(--ink);
+      display:inline-flex; align-items:center; gap:8px; user-select:none;
+      transition:transform .02s ease, background .15s ease, border-color .15s ease, opacity .15s ease;
+      cursor:pointer;
+    }
+    .btn:hover{background:var(--surface)}
+    .btn:focus-visible{outline:2px solid var(--focus); outline-offset:2px}
+    .btn:active{transform:translateY(1px)}
+    .btn[aria-busy="true"]{opacity:.7; pointer-events:none}
     .btn.primary{background:var(--brand); color:#fff; border-color:transparent}
-    .filters{display:flex; gap:8px; flex-wrap:wrap}
-    .chip{border:1px solid var(--line); padding:6px 10px; border-radius:999px; font-size:12px; background:var(--bg)}
+    .btn.primary:hover{filter:brightness(0.96)}
+    .spinner{width:14px;height:14px;border-radius:999px;border:2px solid #fff;border-top-color:transparent;display:none}
+    .btn[aria-busy="true"] .spinner{display:inline-block; animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
 
-    /* row emphasis */
-    tr.is-overdue{background:#fff7f7}
-    tr.is-awaiting{background:#fffbeb}
+    .filters{display:flex; gap:8px; flex-wrap:wrap}
+    .chip{border:1px solid var(--line); padding:6px 10px; border-radius:999px; font-size:12px; background:var(--bg); cursor:pointer; user-select:none}
+    .chip.active{background:var(--brand-weak); border-color:rgba(68,140,55,.35); font-weight:700}
 
     /* ====== Modals ====== */
     dialog{
@@ -155,7 +173,9 @@
     input, select, textarea{
       width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:#fff; font:inherit
     }
+    input:invalid, select:invalid, textarea:invalid{border-color:#fca5a5}
     textarea{min-height:96px; resize:vertical}
+    .hint{font-size:12px; color:var(--muted)}
   </style>
 </head>
 <body>
@@ -165,12 +185,12 @@
       <div class="title">Cincinnati State Lab Center — IMS</div>
     </div>
     <div class="hdr-right">
-      <a class="btn" href="#">Quick Help</a>
+      <button class="btn" data-open="dlg-help"><span>Quick Help</span></button>
     </div>
   </header>
 
   <div class="shell">
-    <!-- Sidebar (fixed/non-scrollable) -->
+    <!-- Sidebar -->
     <aside>
       <div class="nav-title">Main</div>
       <nav>
@@ -187,7 +207,7 @@
       </div>
     </aside>
 
-    <!-- Content (only this scrolls) -->
+    <!-- Content -->
     <main>
       <div class="wrapper">
 
@@ -197,10 +217,10 @@
             <h2 id="home-title">Quick Stats <span class="pill ok" style="margin-left:6px">Live</span></h2>
             <div class="body">
               <div class="stats" aria-live="polite">
-                <div class="stat"><div class="label">Checked Out Now</div><div class="value">27</div></div>
-                <div class="stat"><div class="label">Due Today</div><div class="value">6</div></div>
-                <div class="stat"><div class="label">In Repairs</div><div class="value">4</div></div>
-                <div class="stat"><div class="label">Overdue</div><div class="value">2</div></div>
+                <div class="stat"><div class="label">Checked Out Now</div><div class="value" data-stat="outNow">27</div></div>
+                <div class="stat"><div class="label">Due Today</div><div class="value" data-stat="dueToday">6</div></div>
+                <div class="stat"><div class="label">In Repairs</div><div class="value" data-stat="repairs">4</div></div>
+                <div class="stat"><div class="label">Overdue</div><div class="value" data-stat="overdue">2</div></div>
               </div>
               <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap">
                 <a class="btn" href="#borrowing">View Overdue</a>
@@ -234,7 +254,7 @@
                       <td>Raspberry Pi 5</td><td>Alex Smith</td><td>332211</td><td>ATLC 204</td>
                       <td>2025-10-06 12:00</td><td>40h</td><td><span class="pill ok">On Time</span></td>
                     </tr>
-                    <tr class="is-overdue clickable" data-kind="loan" data-id="1003">
+                    <tr class="clickable" data-kind="loan" data-id="1003">
                       <td>Scope Probe</td><td>Chris P.</td><td>778899</td><td>ATLC 120</td>
                       <td>2025-10-04 10:00</td><td>-3h</td><td><span class="pill overdue">Overdue</span></td>
                     </tr>
@@ -258,9 +278,9 @@
                   </thead>
                   <tbody id="tbl-home-repairs">
                     <tr class="clickable" data-kind="ticket" data-id="S-0192">
-                      <td>Multimeter #A12</td><td>Reads zero</td><td>j.wooldridge</td><td>2025-10-03 14:15</td><td><span class="pill">Diagnosing</span></td>
+                      <td>Multimeter #A12</td><td>Reads zero</td><td>j.wooldridge</td><td>2025-10-03 14:15</td><td><span class="pill diagnosing">Diagnosing</span></td>
                     </tr>
-                    <tr class="is-awaiting clickable" data-kind="ticket" data-id="S-0193">
+                    <tr class="clickable" data-kind="ticket" data-id="S-0193">
                       <td>Oscilloscope #S7</td><td>Display flicker</td><td>a.smith</td><td>2025-10-02 09:42</td><td><span class="pill repair">Awaiting Parts</span></td>
                     </tr>
                     <tr class="clickable" data-kind="ticket" data-id="S-0194">
@@ -280,15 +300,18 @@
             <div class="body">
               <div class="toolbar">
                 <div style="display:flex; gap:8px; flex-wrap:wrap">
-                  <button class="btn primary" data-open="dlg-new-customer">New Customer</button>
-                  <button class="btn" data-open="dlg-returning-borrow">Returning Customer</button>
+                  <button class="btn primary" data-open="dlg-new-customer"><span>New Customer</span><span class="spinner" aria-hidden="true"></span></button>
+                  <button class="btn" data-open="dlg-returning-borrow"><span>Returning Customer</span><span class="spinner" aria-hidden="true"></span></button>
                 </div>
-                <div class="search" role="search"><input type="text" placeholder="Search Customer, item, ID…" aria-label="Search"></div>
+                <div class="search" role="search">
+                  <input id="search-borrow" type="text" placeholder="Search Customer, item, ID…" aria-label="Search">
+                </div>
               </div>
-              <div class="filters">
-                <span class="chip">Status: All</span>
-                <span class="chip">Due: Any</span>
-                <span class="chip">Overdue</span>
+              <div class="filters" id="filters-borrow">
+                <span class="chip active" data-filter="all">Status: All</span>
+                <span class="chip" data-filter="Overdue">Overdue</span>
+                <span class="chip" data-filter="On Time">On Time</span>
+                <span class="chip" data-filter="Returned">Returned</span>
               </div>
             </div>
           </div>
@@ -309,10 +332,10 @@
                     <th scope="col">Status</th>
                   </tr>
                 </thead>
-                <tbody id="tbl-borrow" >
+                <tbody id="tbl-borrow">
                   <tr class="clickable" data-kind="loan" data-id="000251"><td>000251</td><td>RJ45 Crimper</td><td>Sam R.</td><td>445566</td><td>2025-10-04 09:10</td><td>2025-10-04 17:00</td><td>0h</td><td><span class="pill returned">Returned</span></td></tr>
                   <tr class="clickable" data-kind="loan" data-id="000252"><td>000252</td><td>Raspberry Pi 5</td><td>Alex S.</td><td>332211</td><td>2025-10-04 10:05</td><td>2025-10-06 12:00</td><td>40h</td><td><span class="pill ok">On Time</span></td></tr>
-                  <tr class="is-overdue clickable" data-kind="loan" data-id="000253"><td>000253</td><td>Scope Probe</td><td>Chris P.</td><td>778899</td><td>2025-10-03 08:30</td><td>2025-10-04 10:00</td><td>-3h</td><td><span class="pill overdue">Overdue</span></td></tr>
+                  <tr class="clickable" data-kind="loan" data-id="000253"><td>000253</td><td>Scope Probe</td><td>Chris P.</td><td>778899</td><td>2025-10-03 08:30</td><td>2025-10-04 10:00</td><td>-3h</td><td><span class="pill overdue">Overdue</span></td></tr>
                 </tbody>
               </table>
             </div>
@@ -326,16 +349,17 @@
             <div class="body">
               <div class="toolbar">
                 <div style="display:flex; gap:8px; flex-wrap:wrap">
-                  <button class="btn primary" data-open="dlg-new-service">New Customer</button>
-                  <button class="btn" data-open="dlg-returning-service">Returning Customer</button>
+                  <button class="btn primary" data-open="dlg-new-service"><span>New Customer</span><span class="spinner" aria-hidden="true"></span></button>
+                  <button class="btn" data-open="dlg-returning-service"><span>Returning Customer</span><span class="spinner" aria-hidden="true"></span></button>
                 </div>
-                <div class="search" role="search"><input type="text" placeholder="Search item, ticket, customer…" aria-label="Search"></div>
+                <div class="search" role="search"><input id="search-service" type="text" placeholder="Search item, ticket, customer…" aria-label="Search"></div>
               </div>
-              <div class="filters">
-                <span class="chip">Diagnosing</span>
-                <span class="chip">Awaiting Parts</span>
-                <span class="chip">Ready for Pickup</span>
-                <span class="chip">Status: All</span>
+              <div class="filters" id="filters-service">
+                <span class="chip active" data-filter="all">Status: All</span>
+                <span class="chip" data-filter="Diagnosing">Diagnosing</span>
+                <span class="chip" data-filter="Awaiting Parts">Awaiting Parts</span>
+                <span class="chip" data-filter="Ready for Pickup">Ready for Pickup</span>
+                <span class="chip" data-filter="Quarantined">Quarantined</span>
               </div>
             </div>
           </div>
@@ -355,7 +379,7 @@
                   </tr>
                 </thead>
                 <tbody id="tbl-service">
-                  <tr class="clickable" data-kind="ticket" data-id="S-0192"><td>S-0192</td><td>Multimeter #A12</td><td>Reads zero</td><td>2025-10-03 14:15</td><td>j.wooldridge</td><td><span class="pill">Diagnosing</span></td></tr>
+                  <tr class="clickable" data-kind="ticket" data-id="S-0192"><td>S-0192</td><td>Multimeter #A12</td><td>Reads zero</td><td>2025-10-03 14:15</td><td>j.wooldridge</td><td><span class="pill diagnosing">Diagnosing</span></td></tr>
                   <tr class="clickable" data-kind="ticket" data-id="S-0193"><td>S-0193</td><td>Oscilloscope #S7</td><td>Display flicker</td><td>2025-10-02 09:42</td><td>a.smith</td><td><span class="pill repair">Awaiting Parts</span></td></tr>
                   <tr class="clickable" data-kind="ticket" data-id="S-0194"><td>S-0194</td><td>Lab Laptop 15</td><td>Battery swell</td><td>2025-10-01 11:22</td><td>k.jones</td><td><span class="pill ready">Ready for Pickup</span></td></tr>
                 </tbody>
@@ -371,10 +395,10 @@
             <div class="body">
               <div class="toolbar" style="justify-content:space-between">
                 <div style="display:flex; gap:8px; flex-wrap:wrap">
-                  <a class="btn" href="#">Create User</a>
-                  <a class="btn" href="#">Delete User</a>
+                  <button class="btn" data-open="dlg-create-user"><span>Create User</span></button>
+                  <button class="btn" data-open="dlg-delete-user"><span>Delete User</span></button>
                 </div>
-                <div class="search" role="search"><input type="text" placeholder="Search user or action…" aria-label="Search"></div>
+                <div class="search" role="search"><input id="search-admin" type="text" placeholder="Search user or action…" aria-label="Search"></div>
               </div>
             </div>
           </div>
@@ -392,7 +416,7 @@
                     <th scope="col">Details</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody id="tbl-admin-log">
                   <tr><td>j.wooldridge</td><td>000251</td><td>Checkout</td><td>2025-10-04 09:10</td><td>RJ45 Crimper to Sam R. (445566)</td></tr>
                   <tr><td>a.smith</td><td>000246</td><td>Check-in</td><td>2025-10-04 16:05</td><td>USB-C Cable (1m) from Jane Doe</td></tr>
                   <tr><td>k.jones</td><td>S-0194</td><td>Service Update</td><td>2025-10-01 11:40</td><td>Quarantined Laptop 15</td></tr>
@@ -408,9 +432,30 @@
 
   <!-- =============== MODALS =============== -->
 
+  <!-- Quick Help -->
+  <dialog id="dlg-help">
+    <form method="dialog">
+      <div class="modal-hd">
+        <strong>Quick Help</strong>
+        <button class="btn" value="close">Close</button>
+      </div>
+      <div class="modal-bd">
+        <p class="hint">Use the sidebar to navigate. Rows open details. Filters restrict visible rows. All saves are stubbed unless backend is enabled.</p>
+        <ul class="hint">
+          <li>Borrowing: New vs Returning handles different required fields.</li>
+          <li>Service: Diagnose → Awaiting Parts → Ready for Pickup.</li>
+          <li>Admin: Create/Delete Users with role: <em>inventory</em>, <em>order</em>, <em>runner</em>.</li>
+        </ul>
+      </div>
+      <div class="modal-ft">
+        <button class="btn primary" value="close">Got it</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- New Customer (Borrow or Service) -->
   <dialog id="dlg-new-customer">
-    <form method="dialog">
+    <form method="dialog" id="form-new-customer" novalidate>
       <div class="modal-hd">
         <strong>New Customer</strong>
         <button class="btn" value="close">Close</button>
@@ -427,11 +472,13 @@
           </div>
           <div>
             <label>School/Faculty ID (optional)</label>
-            <input id="nc-schoolid" placeholder="e.g., 1234567">
+            <input id="nc-schoolid" pattern="\\d{5,10}" placeholder="e.g., 1234567">
+            <div class="hint">5–10 digits</div>
           </div>
           <div>
             <label>Phone</label>
-            <input id="nc-phone" placeholder="(555) 555-5555">
+            <input id="nc-phone" placeholder="(555) 555-5555" pattern="^\\(\\d{3}\\) \\d{3}-\\d{4}$">
+            <div class="hint">Format: (###) ###-####</div>
           </div>
           <div>
             <label>Room</label>
@@ -445,9 +492,9 @@
             <label>Department</label>
             <select id="nc-dept">
               <option value="">(optional)</option>
-              <option value="1">Electrical Engineering Tech</option>
-              <option value="2">IT / Software</option>
-              <option value="3">Media</option>
+              <option value="EET">Electrical Engineering Tech</option>
+              <option value="ITS">IT / Software</option>
+              <option value="MED">Media</option>
             </select>
           </div>
 
@@ -471,6 +518,7 @@
           <div data-bind="borrow">
             <label>Due (local)</label>
             <input id="nc-due" type="datetime-local">
+            <div class="hint">Must be in the future</div>
           </div>
 
           <!-- Service specifics -->
@@ -486,14 +534,16 @@
       </div>
       <div class="modal-ft">
         <button class="btn" value="close">Cancel</button>
-        <button class="btn primary" id="nc-save">Save & Continue</button>
+        <button class="btn primary" id="nc-save">
+          <span>Save & Continue</span><span class="spinner" aria-hidden="true"></span>
+        </button>
       </div>
     </form>
   </dialog>
 
-  <!-- Returning Customer (Borrowing) -> only ID/name + item -->
+  <!-- Returning Customer (Borrowing) -->
   <dialog id="dlg-returning-borrow">
-    <form method="dialog">
+    <form method="dialog" id="form-returning-borrow" novalidate>
       <div class="modal-hd">
         <strong>Returning Customer — Borrow</strong>
         <button class="btn" value="close">Close</button>
@@ -502,7 +552,7 @@
         <div class="form-grid">
           <div>
             <label>School/Faculty ID</label>
-            <input id="rb-id" placeholder="or leave blank & use name lookup">
+            <input id="rb-id" placeholder="or leave blank & use name lookup" pattern="\\d{5,10}">
           </div>
           <div>
             <label>Name Lookup</label>
@@ -510,28 +560,29 @@
           </div>
           <div class="full">
             <label>Item (name or number)</label>
-            <input id="rb-item" placeholder="e.g., Raspberry Pi 5 or #S7">
+            <input id="rb-item" required placeholder="e.g., Raspberry Pi 5 or #S7">
           </div>
           <div>
             <label>Due (local)</label>
-            <input id="rb-due" type="datetime-local">
+            <input id="rb-due" type="datetime-local" required>
           </div>
           <div>
             <label>Checkout Notes</label>
             <input id="rb-notes" placeholder="optional">
           </div>
         </div>
+        <div class="hint">Provide either ID or Name (one is required).</div>
       </div>
       <div class="modal-ft">
         <button class="btn" value="close">Cancel</button>
-        <button class="btn primary" id="rb-save">Checkout</button>
+        <button class="btn primary" id="rb-save"><span>Checkout</span><span class="spinner" aria-hidden="true"></span></button>
       </div>
     </form>
   </dialog>
 
-  <!-- Returning Customer (Service) -> only ID/name + item/issue -->
+  <!-- Returning Customer (Service) -->
   <dialog id="dlg-returning-service">
-    <form method="dialog">
+    <form method="dialog" id="form-returning-service" novalidate>
       <div class="modal-hd">
         <strong>Returning Customer — Service</strong>
         <button class="btn" value="close">Close</button>
@@ -540,7 +591,7 @@
         <div class="form-grid">
           <div>
             <label>School/Faculty ID</label>
-            <input id="rs-id" placeholder="or name lookup">
+            <input id="rs-id" placeholder="or name lookup" pattern="\\d{5,10}">
           </div>
           <div>
             <label>Name Lookup</label>
@@ -548,24 +599,25 @@
           </div>
           <div class="full">
             <label>Item Being Serviced</label>
-            <input id="rs-item" placeholder="e.g., Multimeter #A12">
+            <input id="rs-item" required placeholder="e.g., Multimeter #A12">
           </div>
           <div class="full">
             <label>Issue</label>
-            <textarea id="rs-issue" placeholder="Describe the problem…"></textarea>
+            <textarea id="rs-issue" required placeholder="Describe the problem…"></textarea>
           </div>
         </div>
+        <div class="hint">Provide either ID or Name (one is required).</div>
       </div>
       <div class="modal-ft">
         <button class="btn" value="close">Cancel</button>
-        <button class="btn primary" id="rs-save">Create Ticket</button>
+        <button class="btn primary" id="rs-save"><span>Create Ticket</span><span class="spinner" aria-hidden="true"></span></button>
       </div>
     </form>
   </dialog>
 
   <!-- Detail viewer (Loan or Ticket) -->
   <dialog id="dlg-detail">
-    <form method="dialog">
+    <form method="dialog" id="form-detail" novalidate>
       <div class="modal-hd">
         <strong id="det-title">Details</strong>
         <button class="btn" value="close">Close</button>
@@ -595,23 +647,110 @@
       </div>
       <div class="modal-ft">
         <button class="btn" value="close">Cancel</button>
-        <button class="btn primary" id="det-save">Save Changes</button>
+        <button class="btn primary" id="det-save"><span>Save Changes</span><span class="spinner" aria-hidden="true"></span></button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Admin: Create User -->
+  <dialog id="dlg-create-user">
+    <form method="dialog" id="form-create-user" novalidate>
+      <div class="modal-hd">
+        <strong>Create User</strong>
+        <button class="btn" value="close">Close</button>
+      </div>
+      <div class="modal-bd">
+        <div class="form-grid">
+          <div><label>Username</label><input id="cu-username" required></div>
+          <div><label>Display Name</label><input id="cu-display" required></div>
+          <div class="full">
+            <label>Role</label>
+            <select id="cu-role" required>
+              <option value="">Select…</option>
+              <option value="inventory">Inventory</option>
+              <option value="order">Order Management</option>
+              <option value="runner">Runner</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+        </div>
+        <div class="hint">Users of this program are “Users.” Borrowing = “Customer”.</div>
+      </div>
+      <div class="modal-ft">
+        <button class="btn" value="close">Cancel</button>
+        <button class="btn primary" id="cu-save"><span>Create</span><span class="spinner" aria-hidden="true"></span></button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Admin: Delete User -->
+  <dialog id="dlg-delete-user">
+    <form method="dialog" id="form-delete-user" novalidate>
+      <div class="modal-hd">
+        <strong>Delete User</strong>
+        <button class="btn" value="close">Close</button>
+      </div>
+      <div class="modal-bd">
+        <label>Username</label>
+        <input id="du-username" required placeholder="j.wooldridge">
+        <p class="hint">This action writes to the audit log with a trace #.</p>
+      </div>
+      <div class="modal-ft">
+        <button class="btn" value="close">Cancel</button>
+        <button class="btn primary" id="du-delete"><span>Delete</span><span class="spinner" aria-hidden="true"></span></button>
       </div>
     </form>
   </dialog>
 
   <script>
-    // Simple modal opener/closer
-    document.querySelectorAll("[data-open]").forEach(btn=>{
+    // ====== CONFIG ======
+    const USE_BACKEND = false; // flip to true when your API is running
+    const API_BASE = "/api";
+
+    // ====== UTIL ======
+    const $ = (sel, root=document) => root.querySelector(sel);
+    const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+    const setBusy = (btn, busy=true) => btn.setAttribute('aria-busy', busy ? 'true' : 'false');
+
+    // Dialog openers
+    $$( "[data-open]" ).forEach(btn=>{
       btn.addEventListener("click", ()=>{
         const id = btn.getAttribute("data-open");
         const dlg = document.getElementById(id);
-        if (!dlg) return;
-        dlg.showModal();
+        if (dlg) dlg.showModal();
       });
     });
 
-    // New customer action-type toggle
+    // ====== BUTTON FEEDBACK ======
+    // add brief "pressed" visual handled via :active (already) + busy spinner while "saving"
+    function withAsyncBusy(btn, fn){
+      return async (e)=>{
+        e.preventDefault();
+        setBusy(btn,true);
+        try { await fn(); } finally { setBusy(btn,false); }
+      }
+    }
+
+    // ====== STATUS → ROW COLOR (global) ======
+    function applyRowStatusStyles(){
+      const statusMap = {
+        "Overdue": "is-overdue",
+        "Awaiting Parts": "is-awaiting",
+        "Diagnosing": "is-diagnosing",
+        "Ready for Pickup": "is-ready"
+      };
+      $$("tbody tr").forEach(tr=>{
+        tr.classList.remove("is-overdue","is-awaiting","is-diagnosing","is-ready");
+        const pill = tr.querySelector(".pill");
+        if(!pill) return;
+        const text = pill.textContent.trim();
+        const cls = statusMap[text];
+        if(cls) tr.classList.add(cls);
+      });
+    }
+    applyRowStatusStyles();
+
+    // ====== NEW CUSTOMER action-type toggle ======
     (function(){
       const dlg = document.getElementById("dlg-new-customer");
       const sel = dlg.querySelector("#nc-action");
@@ -624,20 +763,19 @@
       toggle();
     })();
 
-    // Row click -> detail modal
+    // ====== TABLE ROW → DETAILS ======
     const openDetail = (kind, id, primary, status) => {
       const dlg = document.getElementById("dlg-detail");
-      document.getElementById("det-title").textContent = kind === "loan" ? "Borrow Log Details" : "Service Ticket Details";
-      document.getElementById("det-type").value = kind === "loan" ? "Loan" : "Service Ticket";
-      document.getElementById("det-id").value = id;
-      document.getElementById("det-primary").value = primary || "";
-      const sel = document.getElementById("det-status");
+      $("#det-title").textContent = kind === "loan" ? "Borrow Log Details" : "Service Ticket Details";
+      $("#det-type").value = kind === "loan" ? "Loan" : "Service Ticket";
+      $("#det-id").value = id;
+      $("#det-primary").value = primary || "";
+      const sel = $("#det-status");
       Array.from(sel.options).forEach(o => { if (o.text === status) sel.value = o.text; });
-      document.getElementById("det-note").value = "";
+      $("#det-note").value = "";
       dlg.showModal();
     };
 
-    // Attach to all clickable rows
     function attachRowClicks(scopeId){
       const tbody = document.getElementById(scopeId);
       if (!tbody) return;
@@ -646,10 +784,8 @@
         if (!tr) return;
         const kind = tr.dataset.kind;
         const id   = tr.dataset.id;
-        // Build a primary summary from first two cells
         const cells = Array.from(tr.querySelectorAll("td")).map(td=>td.textContent.trim());
         const primary = (kind === "loan") ? `${cells[1]} — ${cells[0]}` : `${cells[1]} — ${cells[0]}`;
-        // Try to grab status label
         const pill = tr.querySelector(".pill");
         const status = pill ? pill.textContent.trim() : "On Time";
         openDetail(kind, id, primary, status);
@@ -657,32 +793,192 @@
     }
     ["tbl-home-out","tbl-home-repairs","tbl-borrow","tbl-service"].forEach(attachRowClicks);
 
-    // Save handlers (stub: wire to backend later)
-    document.getElementById("nc-save").addEventListener("click", (e)=>{
-      e.preventDefault();
-      // TODO: POST -> create borrower (TBorrowers), then either usp_CheckoutItem or usp_ServiceTicketCreate
+    // ====== FILTERS + SEARCH (client-side) ======
+    function hookFilters(chipsContainerId, tableBodyId, searchInputId){
+      const chips = $$("#"+chipsContainerId+" .chip");
+      const tbody = $("#"+tableBodyId);
+      const searchInput = searchInputId ? $("#"+searchInputId) : null;
+      let active = "all";
+      const setActive = (val)=>{
+        active = val;
+        chips.forEach(c=>c.classList.toggle("active", c.dataset.filter===val));
+        chips.forEach(c=>{ if(c.dataset.filter==="all") c.classList.toggle("active", val==="all") });
+        apply();
+      };
+      chips.forEach(c=>c.addEventListener("click", ()=> setActive(c.dataset.filter)));
+      if(searchInput){
+        searchInput.addEventListener("input", apply);
+      }
+      function apply(){
+        const q = (searchInput?.value || "").toLowerCase();
+        Array.from(tbody.rows).forEach(tr=>{
+          const pill = tr.querySelector(".pill");
+          const status = pill ? pill.textContent.trim() : "";
+          const matchesStatus = (active==="all") || status===active;
+          const text = tr.textContent.toLowerCase();
+          const matchesSearch = !q || text.includes(q);
+          tr.style.display = (matchesStatus && matchesSearch) ? "" : "none";
+        });
+      }
+    }
+    hookFilters("filters-borrow","tbl-borrow","search-borrow");
+    hookFilters("filters-service","tbl-service","search-service");
+
+    // ====== VALIDATION HELPERS ======
+    function must(cond, msg){ if(!cond) throw new Error(msg); }
+    function requireOne(valA, valB, msg){ must((valA && valA.trim()) || (valB && valB.trim()), msg); }
+    function future(dtStr){ const t = new Date(dtStr); return t > new Date(); }
+
+    // ====== DATA LAYER ======
+    async function api(path, opts){
+      if(!USE_BACKEND){
+        // stub fake latency
+        await new Promise(r=>setTimeout(r, 600));
+        return { ok:true, json: async()=>({ ok:true }) };
+      }
+      const res = await fetch(API_BASE+path, {
+        headers: { "Content-Type":"application/json" },
+        ...opts
+      });
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res;
+    }
+
+    // ====== SAVE HANDLERS ======
+    // New Customer (borrow/service)
+    $("#nc-save").addEventListener("click", withAsyncBusy($("#nc-save"), async ()=>{
+      const f = $("#form-new-customer");
+      const first = $("#nc-first").value.trim();
+      const last  = $("#nc-last").value.trim();
+      const action= $("#nc-action").value;
+      must(first && last, "First/Last required.");
+      if(action==="borrow"){
+        must($("#nc-item").value.trim(), "Item required.");
+        must($("#nc-due").value, "Due required.");
+        must(future($("#nc-due").value), "Due must be in the future.");
+      }else{
+        must($("#ns-item").value.trim(), "Service item required.");
+        must($("#ns-issue").value.trim(), "Issue required.");
+      }
+      // optional patterns
+      const id = $("#nc-schoolid").value;
+      if(id && !/^\d{5,10}$/.test(id)) throw new Error("ID must be 5–10 digits.");
+      const phone = $("#nc-phone").value;
+      if(phone && !/^\(\d{3}\) \d{3}-\d{4}$/.test(phone)) throw new Error("Phone format: (###) ###-####");
+
+      // create customer then action
+      await api("/customers", { method:"POST", body: JSON.stringify({
+        first,last, schoolId:id||null, phone:phone||null,
+        room:$("#nc-room").value||null, instructor:$("#nc-instructor").value||null,
+        dept:$("#nc-dept").value||null
+      })});
+      if(action==="borrow"){
+        await api("/loans/checkout", { method:"POST", body: JSON.stringify({
+          customerName:`${first} ${last}`, item:$("#nc-item").value.trim(),
+          dueLocal: $("#nc-due").value, notes: $("#nc-notes").value||null
+        })});
+      }else{
+        await api("/tickets", { method:"POST", body: JSON.stringify({
+          customerName:`${first} ${last}`, item:$("#ns-item").value.trim(),
+          issue: $("#ns-issue").value.trim()
+        })});
+      }
       document.getElementById("dlg-new-customer").close();
-      alert("Saved new customer + action (stub).");
-    });
-    document.getElementById("rb-save").addEventListener("click", (e)=>{
-      e.preventDefault();
-      // TODO: find borrower by ID or name, then usp_CheckoutItem with @dtmDueUTC
+      alert("Saved.");
+    }));
+
+    // Returning Borrow
+    $("#rb-save").addEventListener("click", withAsyncBusy($("#rb-save"), async ()=>{
+      const id = $("#rb-id").value.trim();
+      const name = $("#rb-name").value.trim();
+      requireOne(id,name,"Provide either School/Faculty ID or Name.");
+      must($("#rb-item").value.trim(), "Item required.");
+      must($("#rb-due").value, "Due required.");
+      must(future($("#rb-due").value), "Due must be in the future.");
+
+      await api("/loans/checkout", { method:"POST", body: JSON.stringify({
+        schoolId:id||null, name:name||null, item:$("#rb-item").value.trim(),
+        dueLocal: $("#rb-due").value, notes: $("#rb-notes").value||null
+      })});
       document.getElementById("dlg-returning-borrow").close();
-      alert("Checkout complete (stub).");
-    });
-    document.getElementById("rs-save").addEventListener("click", (e)=>{
-      e.preventDefault();
-      // TODO: find borrower by ID or name, then usp_ServiceTicketCreate
+      alert("Checkout complete.");
+    }));
+
+    // Returning Service
+    $("#rs-save").addEventListener("click", withAsyncBusy($("#rs-save"), async ()=>{
+      const id = $("#rs-id").value.trim();
+      const name = $("#rs-name").value.trim();
+      requireOne(id,name,"Provide either School/Faculty ID or Name.");
+      must($("#rs-item").value.trim(), "Item required.");
+      must($("#rs-issue").value.trim(), "Issue required.");
+
+      await api("/tickets", { method:"POST", body: JSON.stringify({
+        schoolId:id||null, name:name||null,
+        item: $("#rs-item").value.trim(), issue: $("#rs-issue").value.trim()
+      })});
       document.getElementById("dlg-returning-service").close();
-      alert("Service ticket created (stub).");
-    });
-    document.getElementById("det-save").addEventListener("click", (e)=>{
-      e.preventDefault();
-      // TODO: write note -> TItemLoanNotes/TServiceTicketNotes, update status where applicable
-      const status = document.getElementById("det-status").value;
+      alert("Service ticket created.");
+    }));
+
+    // Detail Save (status + note)
+    $("#det-save").addEventListener("click", withAsyncBusy($("#det-save"), async ()=>{
+      const id = $("#det-id").value;
+      const type = $("#det-type").value; // Loan / Service Ticket
+      const status = $("#det-status").value;
+      const note = $("#det-note").value.trim() || null;
+
+      await api("/status", { method:"POST", body: JSON.stringify({ id, type, status, note }) });
+
+      // Update row status visually if present in current lists
+      const row = document.querySelector(`[data-id="${CSS.escape(id)}"]`);
+      if(row){
+        const pill = row.querySelector(".pill");
+        if(pill){
+          pill.textContent = status;
+          pill.className = "pill"; // reset classes
+          // map status → pill classes
+          const map = {
+            "On Time":"ok",
+            "Overdue":"overdue",
+            "Returned":"returned",
+            "Awaiting Parts":"repair",
+            "Diagnosing":"diagnosing",
+            "Ready for Pickup":"ready",
+            "Quarantined":"quarantine"
+          };
+          const cls = map[status];
+          if(cls) pill.classList.add(cls);
+        }
+        applyRowStatusStyles();
+      }
+
       document.getElementById("dlg-detail").close();
-      alert("Saved status & note (stub): " + status);
-    });
+      alert("Saved status & note.");
+    }));
+
+    // Admin: Create User
+    $("#cu-save").addEventListener("click", withAsyncBusy($("#cu-save"), async ()=>{
+      const u = $("#cu-username").value.trim();
+      const d = $("#cu-display").value.trim();
+      const r = $("#cu-role").value;
+      must(u && d && r, "All fields required.");
+      await api("/users", { method:"POST", body: JSON.stringify({ username:u, display:d, role:r })});
+      document.getElementById("dlg-create-user").close();
+      alert("User created.");
+    }));
+
+    // Admin: Delete User
+    $("#du-delete").addEventListener("click", withAsyncBusy($("#du-delete"), async ()=>{
+      const u = $("#du-username").value.trim();
+      must(u, "Username required.");
+      await api(`/users/${encodeURIComponent(u)}`, { method:"DELETE" });
+      document.getElementById("dlg-delete-user").close();
+      alert("User deleted.");
+    }));
+
+    // keep row colors consistent if DOM changes later
+    const mo = new MutationObserver(applyRowStatusStyles);
+    mo.observe(document.body, { subtree:true, childList:true });
   </script>
 </body>
 </html>
