@@ -885,37 +885,34 @@ BEGIN
 
     DECLARE @Loan TABLE(intItemLoanID INT);
 
-    DECLARE @CableDueUTC DATETIME2(0) = DATEADD(HOUR,24,SYSUTCDATETIME());
     INSERT INTO @Loan
     EXEC dbo.usp_CheckoutItem
         @intItemID            = @CableID,
         @intBorrowerID        = @JaneID,
         @intCheckoutLabTechID = @JosieID,
-        @dtmDueUTC            = @CableDueUTC,
+        @dtmDueUTC            = DATEADD(HOUR,24,SYSUTCDATETIME()),
         @strCheckoutNotes     = 'Checked condition';
     DECLARE @LoanJane INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
     UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-6,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanJane;
 
     DELETE FROM @Loan;
-    DECLARE @PiDueUTC DATETIME2(0) = DATEADD(HOUR,40,SYSUTCDATETIME());
     INSERT INTO @Loan
     EXEC dbo.usp_CheckoutItem
         @intItemID            = @PiID,
         @intBorrowerID        = @AlexID,
         @intCheckoutLabTechID = @JosieID,
-        @dtmDueUTC            = @PiDueUTC,
+        @dtmDueUTC            = DATEADD(HOUR,40,SYSUTCDATETIME()),
         @strCheckoutNotes     = NULL;
     DECLARE @LoanAlex INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
     UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-10,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanAlex;
 
     DELETE FROM @Loan;
-    DECLARE @ProbeDueUTC DATETIME2(0) = DATEADD(HOUR,-3,SYSUTCDATETIME());
     INSERT INTO @Loan
     EXEC dbo.usp_CheckoutItem
         @intItemID            = @ProbeID,
         @intBorrowerID        = @ChrisID,
         @intCheckoutLabTechID = @AlexTechID,
-        @dtmDueUTC            = @ProbeDueUTC,
+        @dtmDueUTC            = DATEADD(HOUR,-3,SYSUTCDATETIME()),
         @strCheckoutNotes     = 'Handle with care';
     DECLARE @LoanChris INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
     UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-30,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanChris;
