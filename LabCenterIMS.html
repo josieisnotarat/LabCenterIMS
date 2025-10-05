@@ -247,20 +247,7 @@
                       <th scope="col">Status</th>
                     </tr>
                   </thead>
-                  <tbody id="tbl-home-out">
-                    <tr class="clickable" data-kind="loan" data-id="1001">
-                      <td>USB-C Cable (1m)</td><td>Jane Doe</td><td>123456</td><td>ATLC 102</td>
-                      <td>2025-10-05 17:00</td><td>22h</td><td><span class="pill ok">On Time</span></td>
-                    </tr>
-                    <tr class="clickable" data-kind="loan" data-id="1002">
-                      <td>Raspberry Pi 5</td><td>Alex Smith</td><td>332211</td><td>ATLC 204</td>
-                      <td>2025-10-06 12:00</td><td>40h</td><td><span class="pill ok">On Time</span></td>
-                    </tr>
-                    <tr class="clickable" data-kind="loan" data-id="1003">
-                      <td>Scope Probe</td><td>Chris P.</td><td>778899</td><td>ATLC 120</td>
-                      <td>2025-10-04 10:00</td><td>-3h</td><td><span class="pill overdue">Overdue</span></td>
-                    </tr>
-                  </tbody>
+                  <tbody id="tbl-home-out"></tbody>
                 </table>
               </div>
             </section>
@@ -278,17 +265,7 @@
                       <th scope="col">Status</th>
                     </tr>
                   </thead>
-                  <tbody id="tbl-home-repairs">
-                    <tr class="clickable" data-kind="ticket" data-id="S-0192">
-                      <td>Multimeter #A12</td><td>Reads zero</td><td>j.wooldridge</td><td>2025-10-03 14:15</td><td><span class="pill diagnosing">Diagnosing</span></td>
-                    </tr>
-                    <tr class="clickable" data-kind="ticket" data-id="S-0193">
-                      <td>Oscilloscope #S7</td><td>Display flicker</td><td>a.smith</td><td>2025-10-02 09:42</td><td><span class="pill repair">Awaiting Parts</span></td>
-                    </tr>
-                    <tr class="clickable" data-kind="ticket" data-id="S-0194">
-                      <td>Lab Laptop 15</td><td>Battery swell</td><td>k.jones</td><td>2025-10-01 11:22</td><td><span class="pill quarantine">Quarantined</span></td>
-                    </tr>
-                  </tbody>
+                  <tbody id="tbl-home-repairs"></tbody>
                 </table>
               </div>
             </section>
@@ -334,11 +311,7 @@
                     <th scope="col">Status</th>
                   </tr>
                 </thead>
-                <tbody id="tbl-borrow">
-                  <tr class="clickable" data-kind="loan" data-id="000251"><td>000251</td><td>RJ45 Crimper</td><td>Sam R.</td><td>445566</td><td>2025-10-04 09:10</td><td>2025-10-04 17:00</td><td>0h</td><td><span class="pill returned">Returned</span></td></tr>
-                  <tr class="clickable" data-kind="loan" data-id="000252"><td>000252</td><td>Raspberry Pi 5</td><td>Alex S.</td><td>332211</td><td>2025-10-04 10:05</td><td>2025-10-06 12:00</td><td>40h</td><td><span class="pill ok">On Time</span></td></tr>
-                  <tr class="clickable" data-kind="loan" data-id="000253"><td>000253</td><td>Scope Probe</td><td>Chris P.</td><td>778899</td><td>2025-10-03 08:30</td><td>2025-10-04 10:00</td><td>-3h</td><td><span class="pill overdue">Overdue</span></td></tr>
-                </tbody>
+                <tbody id="tbl-borrow"></tbody>
               </table>
             </div>
           </div>
@@ -380,11 +353,7 @@
                     <th scope="col">Status</th>
                   </tr>
                 </thead>
-                <tbody id="tbl-service">
-                  <tr class="clickable" data-kind="ticket" data-id="S-0192"><td>S-0192</td><td>Multimeter #A12</td><td>Reads zero</td><td>2025-10-03 14:15</td><td>j.wooldridge</td><td><span class="pill diagnosing">Diagnosing</span></td></tr>
-                  <tr class="clickable" data-kind="ticket" data-id="S-0193"><td>S-0193</td><td>Oscilloscope #S7</td><td>Display flicker</td><td>2025-10-02 09:42</td><td>a.smith</td><td><span class="pill repair">Awaiting Parts</span></td></tr>
-                  <tr class="clickable" data-kind="ticket" data-id="S-0194"><td>S-0194</td><td>Lab Laptop 15</td><td>Battery swell</td><td>2025-10-01 11:22</td><td>k.jones</td><td><span class="pill ready">Ready for Pickup</span></td></tr>
-                </tbody>
+                <tbody id="tbl-service"></tbody>
               </table>
             </div>
           </div>
@@ -706,7 +675,7 @@
 
   <script>
     // ====== CONFIG ======
-    const USE_BACKEND = false; // flip to true when your API is running
+    const USE_BACKEND = true; // flip to true when your API is running
     const API_BASE = "/api";
 
     // ====== UTIL ======
@@ -752,49 +721,77 @@
       NOTE_ADD: "Note Added"
     };
 
-    const DEMO_AUDIT_LOG = [
-      {
-        intTraceID: 251,
-        dtmEventUTC: "2025-10-04T13:10:00Z",
-        username: "j.wooldridge",
-        strAction: "CHECKOUT",
-        strDetails: JSON.stringify({
-          item: "RJ45 Crimper",
-          borrower: "Sam R.",
-          schoolId: "445566"
-        })
-      },
-      {
-        intTraceID: 246,
-        dtmEventUTC: "2025-10-04T20:05:00Z",
-        username: "a.smith",
-        strAction: "CHECKIN",
-        strDetails: JSON.stringify({
-          item: "USB-C Cable (1m)",
-          borrower: "Jane Doe"
-        })
-      },
-      {
-        intTraceID: 194,
-        dtmEventUTC: "2025-10-01T15:40:00Z",
-        username: "k.jones",
-        strAction: "TICKET_STATUS",
-        strDetails: JSON.stringify({
-          publicId: "S-0194",
-          status: "Ready for Pickup"
-        })
-      },
-      {
-        intTraceID: 195,
-        dtmEventUTC: "2025-10-01T16:10:00Z",
-        username: "k.jones",
-        strAction: "NOTE_ADD",
-        strDetails: "Updated diagnostics log with thermal test results."
-      }
-    ];
-
     const AUDIT_DATETIME_FORMAT = new Intl.DateTimeFormat([], { dateStyle: "medium", timeStyle: "short" });
     const AUDIT_DATE_FORMAT = new Intl.DateTimeFormat([], { dateStyle: "medium" });
+    const TABLE_DATETIME_FORMAT = new Intl.DateTimeFormat([], { dateStyle: "medium", timeStyle: "short" });
+
+    function createStatusPill(status){
+      const pill = document.createElement("span");
+      pill.className = "pill";
+      if(status){
+        const cls = STATUS_PILL_CLASS_MAP[status];
+        if(cls) pill.classList.add(cls);
+        pill.textContent = status;
+      }else{
+        pill.textContent = "";
+      }
+      return pill;
+    }
+
+    function showTableMessage(tbodyId, message, tone="muted"){
+      const tbody = document.getElementById(tbodyId);
+      if(!tbody) return;
+      tbody.textContent = "";
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      const table = tbody.closest("table");
+      td.colSpan = table ? table.querySelectorAll("thead th").length : 1;
+      td.textContent = message;
+      td.style.textAlign = "center";
+      td.style.padding = "18px 12px";
+      td.style.color = tone === "error" ? "var(--overdue-fg)" : "var(--muted)";
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    }
+
+    function appendCell(tr, content){
+      const td = document.createElement("td");
+      if(content instanceof Node){
+        td.appendChild(content);
+      }else if(content === null || content === undefined || content === ""){
+        td.textContent = "—";
+      }else{
+        td.textContent = content;
+      }
+      tr.appendChild(td);
+      return td;
+    }
+
+    function formatLocalDateTime(value){
+      if(!value) return "—";
+      const dt = new Date(value);
+      if(Number.isNaN(dt.getTime())) return "—";
+      return TABLE_DATETIME_FORMAT.format(dt);
+    }
+
+    function formatDueIn(loan){
+      if(!loan) return "—";
+      if(loan.status === "Returned" || loan.checkinUtc) return "—";
+      if(!loan.dueUtc) return "—";
+      const due = new Date(loan.dueUtc);
+      if(Number.isNaN(due.getTime())) return "—";
+      const diffMs = due.getTime() - Date.now();
+      const diffHours = diffMs / 3600000;
+      const isNegative = diffHours < 0;
+      const absHours = Math.abs(diffHours);
+      let value;
+      if(absHours >= 48){
+        value = Math.round(absHours / 24) + "d";
+      }else{
+        value = Math.round(absHours) + "h";
+      }
+      return (isNegative ? "-" : "") + value;
+    }
 
     /**
      * Utility helper to close a dialog by id. Prevents repeated DOM lookups
@@ -938,9 +935,179 @@
           tr.style.display = (matchesStatus && matchesSearch) ? "" : "none";
         });
       }
+      return { apply };
     }
-    hookFilters("filters-borrow","tbl-borrow","search-borrow");
-    hookFilters("filters-service","tbl-service","search-service");
+    const borrowFilterController = hookFilters("filters-borrow","tbl-borrow","search-borrow");
+    const serviceFilterController = hookFilters("filters-service","tbl-service","search-service");
+
+    // ====== DATA FETCH + RENDERING ======
+    async function fetchDashboardStats(){
+      const res = await api(`/dashboard-stats`, { method:"GET" });
+      return res.json();
+    }
+
+    async function fetchLoans(params={}){
+      const searchParams = new URLSearchParams();
+      if(params.top != null) searchParams.set("top", params.top);
+      if(params.status) searchParams.set("status", params.status);
+      if(params.search) searchParams.set("search", params.search);
+      const qs = searchParams.toString();
+      const res = await api(`/loans${qs ? `?${qs}` : ""}`, { method:"GET" });
+      const payload = await res.json();
+      if(Array.isArray(payload)) return payload;
+      if(Array.isArray(payload?.entries)) return payload.entries;
+      if(Array.isArray(payload?.data)) return payload.data;
+      return [];
+    }
+
+    async function fetchServiceTickets(params={}){
+      const searchParams = new URLSearchParams();
+      if(params.top != null) searchParams.set("top", params.top);
+      if(params.status) searchParams.set("status", params.status);
+      if(params.search) searchParams.set("search", params.search);
+      const qs = searchParams.toString();
+      const res = await api(`/service-tickets${qs ? `?${qs}` : ""}`, { method:"GET" });
+      const payload = await res.json();
+      if(Array.isArray(payload)) return payload;
+      if(Array.isArray(payload?.entries)) return payload.entries;
+      if(Array.isArray(payload?.data)) return payload.data;
+      return [];
+    }
+
+    function setStatsLoading(){
+      $$('[data-stat]').forEach(el=> el.textContent = "…");
+    }
+
+    function setStatsError(){
+      $$('[data-stat]').forEach(el=> el.textContent = "—");
+    }
+
+    function renderStats(stats){
+      if(!stats){
+        setStatsError();
+        return;
+      }
+      const map = {
+        outNow: stats.outNow ?? stats.checkedOut ?? 0,
+        dueToday: stats.dueToday ?? 0,
+        repairs: stats.repairs ?? stats.inRepairs ?? 0,
+        overdue: stats.overdue ?? 0
+      };
+      Object.entries(map).forEach(([key,val])=>{
+        const el = document.querySelector(`[data-stat="${key}"]`);
+        if(el) el.textContent = val;
+      });
+    }
+
+    function renderLoanRows(tbodyId, loans, mode){
+      const tbody = document.getElementById(tbodyId);
+      if(!tbody) return;
+      tbody.textContent = "";
+      if(!Array.isArray(loans) || loans.length === 0){
+        const message = mode === "home" ? "No items currently checked out." : "No loans found.";
+        showTableMessage(tbodyId, message);
+        return;
+      }
+      loans.forEach(loan=>{
+        const tr = document.createElement("tr");
+        tr.classList.add("clickable");
+        tr.dataset.kind = "loan";
+        tr.dataset.id = loan.id ?? loan.traceNumber ?? "";
+        if(mode === "home"){
+          appendCell(tr, loan.itemName || "—");
+          appendCell(tr, loan.borrowerName || "—");
+          appendCell(tr, loan.borrowerSchoolId || "—");
+          appendCell(tr, loan.room || "—");
+          appendCell(tr, formatLocalDateTime(loan.dueUtc));
+          appendCell(tr, formatDueIn(loan));
+        }else{
+          appendCell(tr, loan.traceNumber || loan.id || "—");
+          appendCell(tr, loan.itemName || "—");
+          appendCell(tr, loan.borrowerName || "—");
+          appendCell(tr, loan.borrowerSchoolId || "—");
+          appendCell(tr, formatLocalDateTime(loan.checkoutUtc));
+          appendCell(tr, formatLocalDateTime(loan.dueUtc));
+          appendCell(tr, formatDueIn(loan));
+        }
+        appendCell(tr, createStatusPill(loan.status || ""));
+        tbody.appendChild(tr);
+      });
+      applyRowStatusStyles();
+    }
+
+    function renderTicketRows(tbodyId, tickets, mode){
+      const tbody = document.getElementById(tbodyId);
+      if(!tbody) return;
+      tbody.textContent = "";
+      if(!Array.isArray(tickets) || tickets.length === 0){
+        const message = mode === "home" ? "No active service tickets." : "No service tickets found.";
+        showTableMessage(tbodyId, message);
+        return;
+      }
+      tickets.forEach(ticket=>{
+        const tr = document.createElement("tr");
+        tr.classList.add("clickable");
+        tr.dataset.kind = "ticket";
+        tr.dataset.id = ticket.publicId || ticket.id || "";
+        if(mode === "home"){
+          appendCell(tr, ticket.itemName || "—");
+          appendCell(tr, ticket.issue || "—");
+          appendCell(tr, ticket.loggedByName || ticket.assignedName || "—");
+          appendCell(tr, formatLocalDateTime(ticket.loggedUtc));
+        }else{
+          appendCell(tr, ticket.publicId || "—");
+          appendCell(tr, ticket.itemName || "—");
+          appendCell(tr, ticket.issue || "—");
+          appendCell(tr, formatLocalDateTime(ticket.loggedUtc));
+          appendCell(tr, ticket.assignedName || "—");
+        }
+        appendCell(tr, createStatusPill(ticket.status || ""));
+        tbody.appendChild(tr);
+      });
+      applyRowStatusStyles();
+    }
+
+    async function loadHomeData(){
+      try{
+        const [stats, loans, tickets] = await Promise.all([
+          fetchDashboardStats(),
+          fetchLoans({ top: 10 }),
+          fetchServiceTickets({ top: 10 })
+        ]);
+        renderStats(stats);
+        const activeLoans = loans.filter(loan=> loan.status !== "Returned").slice(0,5);
+        renderLoanRows("tbl-home-out", activeLoans, "home");
+        const activeTickets = tickets.filter(ticket=> !["Completed","Cancelled"].includes(ticket.status)).slice(0,5);
+        renderTicketRows("tbl-home-repairs", activeTickets, "home");
+      }catch(err){
+        console.error("Failed to load dashboard data", err);
+        setStatsError();
+        showTableMessage("tbl-home-out", "Unable to load current checkouts.", "error");
+        showTableMessage("tbl-home-repairs", "Unable to load service tickets.", "error");
+      }
+    }
+
+    async function loadBorrowingData(){
+      try{
+        const loans = await fetchLoans({ top: 50 });
+        renderLoanRows("tbl-borrow", loans, "borrow");
+        borrowFilterController?.apply();
+      }catch(err){
+        console.error("Failed to load loan records", err);
+        showTableMessage("tbl-borrow", "Unable to load loans.", "error");
+      }
+    }
+
+    async function loadServiceData(){
+      try{
+        const tickets = await fetchServiceTickets({ top: 50 });
+        renderTicketRows("tbl-service", tickets, "service");
+        serviceFilterController?.apply();
+      }catch(err){
+        console.error("Failed to load service tickets", err);
+        showTableMessage("tbl-service", "Unable to load service tickets.", "error");
+      }
+    }
 
     // ====== VALIDATION HELPERS ======
     // Tiny validation helpers shared by multiple forms.
@@ -954,20 +1121,22 @@
      * USE_BACKEND is false. When a backend is provided this funnels through
      * fetch() and raises if the response is not ok.
      */
-    async function api(path, opts){
+    async function api(path, opts={}){
       if(!USE_BACKEND){
-        // stub fake latency
-        await new Promise(r=>setTimeout(r, 600));
-        if(path.startsWith("/audit-log")){
-          return { ok:true, json: async()=>({ entries: DEMO_AUDIT_LOG }) };
-        }
-        return { ok:true, json: async()=>({ ok:true }) };
+        throw new Error("Backend integration is disabled. Enable USE_BACKEND to load live data.");
       }
       const res = await fetch(API_BASE+path, {
-        headers: { "Content-Type":"application/json" },
-        ...opts
+        ...opts,
+        headers: {
+          "Content-Type":"application/json",
+          ...(opts.headers || {})
+        }
       });
-      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      if(!res.ok){
+        let detail;
+        try{ detail = await res.text(); }catch{ detail = null; }
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
       return res;
     }
 
@@ -1260,6 +1429,16 @@
       alert("User deleted.");
     }));
 
+    setStatsLoading();
+    showTableMessage("tbl-home-out", "Loading current checkouts…");
+    showTableMessage("tbl-home-repairs", "Loading service tickets…");
+    showTableMessage("tbl-borrow", "Loading recent loans…");
+    showTableMessage("tbl-service", "Loading service tickets…");
+    showTableMessage("tbl-admin-log", "Loading activity…");
+
+    loadHomeData();
+    loadBorrowingData();
+    loadServiceData();
     loadAuditLog();
 
     // keep row colors consistent if DOM changes later
