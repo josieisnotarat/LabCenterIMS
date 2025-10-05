@@ -890,7 +890,7 @@ BEGIN
         @intItemID            = @CableID,
         @intBorrowerID        = @JaneID,
         @intCheckoutLabTechID = @JosieID,
-        @dtmDueUTC            = DATEADD(HOUR,24,SYSUTCDATETIME()),
+        @dtmDueUTC            = '2024-02-01T18:00:00',
         @strCheckoutNotes     = 'Checked condition';
     DECLARE @LoanJane INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
     UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-6,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanJane;
@@ -901,7 +901,7 @@ BEGIN
         @intItemID            = @PiID,
         @intBorrowerID        = @AlexID,
         @intCheckoutLabTechID = @JosieID,
-        @dtmDueUTC            = DATEADD(HOUR,40,SYSUTCDATETIME()),
+        @dtmDueUTC            = '2024-02-03T12:00:00',
         @strCheckoutNotes     = NULL;
     DECLARE @LoanAlex INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
     UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-10,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanAlex;
@@ -912,7 +912,7 @@ BEGIN
         @intItemID            = @ProbeID,
         @intBorrowerID        = @ChrisID,
         @intCheckoutLabTechID = @AlexTechID,
-        @dtmDueUTC            = DATEADD(HOUR,-3,SYSUTCDATETIME()),
+        @dtmDueUTC            = '2024-01-15T09:30:00',
         @strCheckoutNotes     = 'Handle with care';
     DECLARE @LoanChris INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
     UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-30,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanChris;
