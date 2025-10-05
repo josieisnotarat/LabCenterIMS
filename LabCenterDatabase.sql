@@ -1,5 +1,5 @@
 /* ============================================================================
-   Cincinnati State Lab Center — Inventory & Check-In/Out Database
+   Cincinnati State Lab Center  Inventory & Check-In/Out Database
    RDBMS: Microsoft SQL Server (T-SQL)
    Notes:
      - Tables prefixed with T*
@@ -63,6 +63,7 @@ CREATE TABLE dbo.TBorrowers
 );
 CREATE INDEX IX_TBorrowers_Name ON dbo.TBorrowers(strLastName, strFirstName);
 CREATE INDEX IX_TBorrowers_SchoolID ON dbo.TBorrowers(strSchoolIDNumber);
+CREATE UNIQUE INDEX UQ_TBorrowers_SchoolID ON dbo.TBorrowers(strSchoolIDNumber) WHERE strSchoolIDNumber IS NOT NULL;
 
 CREATE TABLE dbo.TItems
 (
@@ -114,8 +115,9 @@ CREATE INDEX IX_TItemLoans_Item ON dbo.TItemLoans(intItemID, dtmCheckinUTC);
 CREATE INDEX IX_TItemLoans_Borrower ON dbo.TItemLoans(intBorrowerID, dtmCheckinUTC);
 CREATE INDEX IX_TItemLoans_CheckoutTime ON dbo.TItemLoans(dtmCheckoutUTC);
 CREATE INDEX IX_TItemLoans_DueTime ON dbo.TItemLoans(dtmDueUTC);
+CREATE INDEX IX_TItemLoans_Status ON dbo.TItemLoans(dtmCheckinUTC, dtmDueUTC);
 
--- Per-loan notes (for “add note” in detail modal)
+-- Per-loan notes (for "add note" in detail modal)
 CREATE TABLE dbo.TItemLoanNotes
 (
     intItemLoanNoteID   INT IDENTITY(1,1) PRIMARY KEY,
@@ -143,6 +145,7 @@ CREATE TABLE dbo.TServiceTickets
        CHECK (strStatus IN ('Diagnosing','Awaiting Parts','Ready for Pickup','Quarantined','Completed','Cancelled'))
 );
 CREATE INDEX IX_TServiceTickets_Status ON dbo.TServiceTickets(strStatus, dtmLoggedUTC DESC);
+CREATE INDEX IX_TServiceTickets_Assigned ON dbo.TServiceTickets(intAssignedLabTechID, strStatus);
 
 -- Per-ticket notes
 CREATE TABLE dbo.TServiceTicketNotes
@@ -323,6 +326,37 @@ BEGIN
 END
 GO
 
+-- Update borrower profile
+IF OBJECT_ID('dbo.usp_UpdateBorrower','P') IS NOT NULL DROP PROCEDURE dbo.usp_UpdateBorrower;
+GO
+CREATE PROCEDURE dbo.usp_UpdateBorrower
+  @intBorrowerID       INT,
+  @strFirstName        VARCHAR(50),
+  @strLastName         VARCHAR(50),
+  @strSchoolIDNumber   VARCHAR(50) = NULL,
+  @strPhoneNumber      VARCHAR(25) = NULL,
+  @strRoomNumber       VARCHAR(25) = NULL,
+  @strInstructor       VARCHAR(100) = NULL,
+  @intDepartmentID     INT = NULL
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  UPDATE dbo.TBorrowers
+  SET strFirstName = @strFirstName,
+      strLastName = @strLastName,
+      strSchoolIDNumber = @strSchoolIDNumber,
+      strPhoneNumber = @strPhoneNumber,
+      strRoomNumber = @strRoomNumber,
+      strInstructor = @strInstructor,
+      intDepartmentID = @intDepartmentID
+  WHERE intBorrowerID = @intBorrowerID;
+
+  IF @@ROWCOUNT = 0
+    RAISERROR('Borrower not found.', 16, 1);
+END
+GO
+
 -- Checkout
 IF OBJECT_ID('dbo.usp_CheckoutItem','P') IS NOT NULL DROP PROCEDURE dbo.usp_CheckoutItem;
 GO
@@ -387,6 +421,27 @@ BEGIN
 END
 GO
 
+-- Update due date or checkout metadata
+IF OBJECT_ID('dbo.usp_UpdateLoanDue','P') IS NOT NULL DROP PROCEDURE dbo.usp_UpdateLoanDue;
+GO
+CREATE PROCEDURE dbo.usp_UpdateLoanDue
+  @intItemLoanID INT,
+  @dtmDueUTC     DATETIME2(0) = NULL,
+  @strCheckoutNotes VARCHAR(400) = NULL
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  UPDATE dbo.TItemLoans
+  SET dtmDueUTC = @dtmDueUTC,
+      strCheckoutNotes = @strCheckoutNotes
+  WHERE intItemLoanID = @intItemLoanID;
+
+  IF @@ROWCOUNT = 0
+    RAISERROR('Loan not found.', 16, 1);
+END
+GO
+
 -- Checkin
 IF OBJECT_ID('dbo.usp_CheckinItem','P') IS NOT NULL DROP PROCEDURE dbo.usp_CheckinItem;
 GO
@@ -407,6 +462,45 @@ BEGIN
 
   IF @@ROWCOUNT = 0
     RAISERROR('Loan not found or already checked in.', 16, 1);
+END
+GO
+
+-- Add / update inventory item
+IF OBJECT_ID('dbo.usp_SaveItem','P') IS NOT NULL DROP PROCEDURE dbo.usp_SaveItem;
+GO
+CREATE PROCEDURE dbo.usp_SaveItem
+  @intItemID       INT = NULL,
+  @strItemName     VARCHAR(120),
+  @strItemNumber   VARCHAR(60) = NULL,
+  @blnIsSchoolOwned BIT,
+  @intDepartmentID INT = NULL,
+  @strDescription  VARCHAR(400) = NULL,
+  @blnIsActive     BIT = 1
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  IF @intItemID IS NULL
+  BEGIN
+    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,blnIsActive)
+    VALUES (@strItemName,@strItemNumber,@blnIsSchoolOwned,@intDepartmentID,@strDescription,@blnIsActive);
+
+    SELECT SCOPE_IDENTITY() AS intItemID;
+  END
+  ELSE
+  BEGIN
+    UPDATE dbo.TItems
+    SET strItemName = @strItemName,
+        strItemNumber = @strItemNumber,
+        blnIsSchoolOwned = @blnIsSchoolOwned,
+        intDepartmentID = @intDepartmentID,
+        strDescription = @strDescription,
+        blnIsActive = @blnIsActive
+    WHERE intItemID = @intItemID;
+
+    IF @@ROWCOUNT = 0
+      RAISERROR('Item not found.', 16, 1);
+  END
 END
 GO
 
@@ -448,6 +542,33 @@ BEGIN
 END
 GO
 
+-- Reassign or update ticket metadata
+IF OBJECT_ID('dbo.usp_ServiceTicketUpdate','P') IS NOT NULL DROP PROCEDURE dbo.usp_ServiceTicketUpdate;
+GO
+CREATE PROCEDURE dbo.usp_ServiceTicketUpdate
+  @intServiceTicketID INT,
+  @intAssignedLabTechID INT = NULL,
+  @intItemID           INT = NULL,
+  @intBorrowerID       INT = NULL,
+  @strItemLabel        VARCHAR(120) = NULL,
+  @strIssue            VARCHAR(1000) = NULL
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  UPDATE dbo.TServiceTickets
+  SET intAssignedLabTechID = @intAssignedLabTechID,
+      intItemID = @intItemID,
+      intBorrowerID = @intBorrowerID,
+      strItemLabel = @strItemLabel,
+      strIssue = ISNULL(@strIssue, strIssue)
+  WHERE intServiceTicketID = @intServiceTicketID;
+
+  IF @@ROWCOUNT = 0
+    RAISERROR('Service ticket not found.', 16, 1);
+END
+GO
+
 -- Update service ticket status
 IF OBJECT_ID('dbo.usp_ServiceTicketSetStatus','P') IS NOT NULL DROP PROCEDURE dbo.usp_ServiceTicketSetStatus;
 GO
@@ -486,6 +607,208 @@ END
 GO
 
 /* =========================
+   Stored Procedures (reporting/search)
+   ========================= */
+
+-- Dashboard counters
+IF OBJECT_ID('dbo.usp_GetDashboardStats','P') IS NOT NULL DROP PROCEDURE dbo.usp_GetDashboardStats;
+GO
+CREATE PROCEDURE dbo.usp_GetDashboardStats
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  DECLARE @today DATE = CONVERT(date, SYSUTCDATETIME());
+  DECLARE @startOfDay DATETIME2(0) = CAST(@today AS DATETIME2(0));
+  DECLARE @endOfDay DATETIME2(0) = DATEADD(DAY, 1, @startOfDay);
+
+  SELECT
+      outNow   = COALESCE(SUM(CASE WHEN dtmCheckinUTC IS NULL THEN 1 ELSE 0 END),0),
+      dueToday = COALESCE(SUM(CASE WHEN dtmCheckinUTC IS NULL AND dtmDueUTC >= @startOfDay AND dtmDueUTC < @endOfDay THEN 1 ELSE 0 END),0),
+      repairs  = (SELECT COUNT(*) FROM dbo.TServiceTickets WHERE strStatus IN ('Diagnosing','Awaiting Parts','Ready for Pickup','Quarantined')),
+      overdue  = COALESCE(SUM(CASE WHEN dtmCheckinUTC IS NULL AND dtmDueUTC IS NOT NULL AND dtmDueUTC < SYSUTCDATETIME() THEN 1 ELSE 0 END),0)
+  FROM dbo.TItemLoans;
+END
+GO
+
+-- Recent loans with optional filters
+IF OBJECT_ID('dbo.usp_GetRecentLoans','P') IS NOT NULL DROP PROCEDURE dbo.usp_GetRecentLoans;
+GO
+CREATE PROCEDURE dbo.usp_GetRecentLoans
+  @Top INT = 50,
+  @StatusFilter VARCHAR(30) = NULL,
+  @Search NVARCHAR(120) = NULL
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  ;WITH LoanCTE AS (
+    SELECT TOP (@Top)
+        il.intItemLoanID,
+        il.intItemID,
+        il.intBorrowerID,
+        il.dtmCheckoutUTC,
+        il.dtmDueUTC,
+        il.dtmCheckinUTC,
+        il.strCheckoutNotes,
+        il.snapBorrowerFirstName,
+        il.snapBorrowerLastName,
+        il.snapSchoolIDNumber,
+        il.snapRoomNumber,
+        il.snapItemName,
+        il.snapItemNumber,
+        il.snapDepartmentName,
+        CASE
+          WHEN il.dtmCheckinUTC IS NOT NULL THEN 'Returned'
+          WHEN il.dtmDueUTC IS NOT NULL AND il.dtmDueUTC < SYSUTCDATETIME() THEN 'Overdue'
+          ELSE 'On Time'
+        END AS LoanStatus
+    FROM dbo.TItemLoans il
+    ORDER BY il.dtmCheckoutUTC DESC, il.intItemLoanID DESC
+  )
+  SELECT *
+  FROM LoanCTE
+  WHERE (@StatusFilter IS NULL OR LoanStatus = @StatusFilter OR (@StatusFilter = 'All'))
+    AND (
+      @Search IS NULL OR @Search = '' OR
+      LoanCTE.snapBorrowerFirstName LIKE N'%' + @Search + N'%' OR
+      LoanCTE.snapBorrowerLastName LIKE N'%' + @Search + N'%' OR
+      LoanCTE.snapSchoolIDNumber LIKE N'%' + @Search + N'%' OR
+      LoanCTE.snapItemName LIKE N'%' + @Search + N'%' OR
+      LoanCTE.snapItemNumber LIKE N'%' + @Search + N'%'
+    )
+  ORDER BY LoanCTE.dtmCheckoutUTC DESC;
+END
+GO
+
+-- Service ticket listings
+IF OBJECT_ID('dbo.usp_GetServiceTickets','P') IS NOT NULL DROP PROCEDURE dbo.usp_GetServiceTickets;
+GO
+CREATE PROCEDURE dbo.usp_GetServiceTickets
+  @Top INT = 50,
+  @StatusFilter VARCHAR(30) = NULL,
+  @Search NVARCHAR(120) = NULL
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  ;WITH TicketCTE AS (
+    SELECT TOP (@Top)
+        st.intServiceTicketID,
+        st.strPublicTicketID,
+        st.intItemID,
+        st.intBorrowerID,
+        st.strItemLabel,
+        st.strIssue,
+        st.dtmLoggedUTC,
+        st.intAssignedLabTechID,
+        st.strStatus,
+        bt.strFirstName AS borrowerFirstName,
+        bt.strLastName  AS borrowerLastName,
+        it.strItemName,
+        lt.strFirstName AS assignedFirstName,
+        lt.strLastName  AS assignedLastName
+    FROM dbo.TServiceTickets st
+    LEFT JOIN dbo.TBorrowers bt ON bt.intBorrowerID = st.intBorrowerID
+    LEFT JOIN dbo.TItems it      ON it.intItemID = st.intItemID
+    LEFT JOIN dbo.TLabTechs lt   ON lt.intLabTechID = st.intAssignedLabTechID
+    ORDER BY st.dtmLoggedUTC DESC, st.intServiceTicketID DESC
+  )
+  SELECT *
+  FROM TicketCTE
+  WHERE (@StatusFilter IS NULL OR strStatus = @StatusFilter OR (@StatusFilter = 'all') OR (@StatusFilter = 'All'))
+    AND (
+      @Search IS NULL OR @Search = '' OR
+      strPublicTicketID LIKE N'%' + @Search + N'%' OR
+      COALESCE(strItemName, strItemLabel, N'') LIKE N'%' + @Search + N'%' OR
+      COALESCE(borrowerFirstName,N'') LIKE N'%' + @Search + N'%' OR
+      COALESCE(borrowerLastName,N'') LIKE N'%' + @Search + N'%' OR
+      COALESCE(assignedFirstName,N'') LIKE N'%' + @Search + N'%' OR
+      COALESCE(assignedLastName,N'') LIKE N'%' + @Search + N'%'
+    )
+  ORDER BY TicketCTE.dtmLoggedUTC DESC;
+END
+GO
+
+-- Borrower lookup helper
+IF OBJECT_ID('dbo.usp_FindBorrowers','P') IS NOT NULL DROP PROCEDURE dbo.usp_FindBorrowers;
+GO
+CREATE PROCEDURE dbo.usp_FindBorrowers
+  @Search NVARCHAR(120),
+  @Top INT = 20
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  SELECT TOP (@Top)
+      b.intBorrowerID,
+      b.strFirstName,
+      b.strLastName,
+      b.strSchoolIDNumber,
+      b.strPhoneNumber,
+      b.strRoomNumber,
+      b.strInstructor,
+      d.strDepartmentName
+  FROM dbo.TBorrowers b
+  LEFT JOIN dbo.TDepartments d ON d.intDepartmentID = b.intDepartmentID
+  WHERE b.strFirstName LIKE N'%' + @Search + N'%'
+     OR b.strLastName LIKE N'%' + @Search + N'%'
+     OR ISNULL(b.strSchoolIDNumber,N'') LIKE N'%' + @Search + N'%'
+  ORDER BY b.strLastName, b.strFirstName;
+END
+GO
+
+-- Item lookup helper
+IF OBJECT_ID('dbo.usp_FindItems','P') IS NOT NULL DROP PROCEDURE dbo.usp_FindItems;
+GO
+CREATE PROCEDURE dbo.usp_FindItems
+  @Search NVARCHAR(120),
+  @Top INT = 20
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  SELECT TOP (@Top)
+      i.intItemID,
+      i.strItemName,
+      i.strItemNumber,
+      i.blnIsSchoolOwned,
+      d.strDepartmentName,
+      i.blnIsActive
+  FROM dbo.TItems i
+  LEFT JOIN dbo.TDepartments d ON d.intDepartmentID = i.intDepartmentID
+  WHERE i.strItemName LIKE N'%' + @Search + N'%'
+     OR ISNULL(i.strItemNumber,N'') LIKE N'%' + @Search + N'%'
+  ORDER BY i.strItemName;
+END
+GO
+
+-- Latest audit log entries
+IF OBJECT_ID('dbo.usp_GetAuditLog','P') IS NOT NULL DROP PROCEDURE dbo.usp_GetAuditLog;
+GO
+CREATE PROCEDURE dbo.usp_GetAuditLog
+  @Top INT = 100
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  SELECT TOP (@Top)
+      a.intTraceID,
+      a.dtmEventUTC,
+      a.intLabTechID,
+      lt.strFirstName,
+      lt.strLastName,
+      a.strAction,
+      a.strEntity,
+      a.intEntityPK,
+      a.strDetails
+  FROM dbo.TAuditLog a
+  LEFT JOIN dbo.TLabTechs lt ON lt.intLabTechID = a.intLabTechID
+  ORDER BY a.dtmEventUTC DESC;
+END
+GO
+
+/* =========================
    Example queries
    =========================
 -- Items currently checked out
@@ -500,3 +823,108 @@ GO
 -- Latest activity
 -- SELECT TOP 200 * FROM dbo.TAuditLog ORDER BY dtmEventUTC DESC;
 */
+
+GO
+
+/* =========================
+   Demo seed data
+   ========================= */
+IF NOT EXISTS (SELECT 1 FROM dbo.TBorrowers)
+BEGIN
+    INSERT dbo.TBorrowers(strFirstName,strLastName,strSchoolIDNumber,strPhoneNumber,strRoomNumber,strInstructor,intDepartmentID)
+    SELECT 'Jane','Doe','123456','513-555-1010','ATLC 102','Prof. Carter',d.intDepartmentID
+    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
+
+    INSERT dbo.TBorrowers(strFirstName,strLastName,strSchoolIDNumber,strPhoneNumber,strRoomNumber,strInstructor,intDepartmentID)
+    SELECT 'Alex','Smith','332211','513-555-2020','ATLC 204','Dr. Nguyen',d.intDepartmentID
+    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'IT / Software';
+
+    INSERT dbo.TBorrowers(strFirstName,strLastName,strSchoolIDNumber,strPhoneNumber,strRoomNumber,strInstructor,intDepartmentID)
+    SELECT 'Chris','Patel','778899','513-555-3030','ATLC 120','Prof. Rivera',d.intDepartmentID
+    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
+END
+
+IF NOT EXISTS (SELECT 1 FROM dbo.TItems)
+BEGIN
+    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription)
+    SELECT 'USB-C Cable (1m)','CAB-UC-001',1,d.intDepartmentID,'Standard USB-C charging/data cable'
+    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
+
+    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription)
+    SELECT 'Raspberry Pi 5','DEV-RPI-005',1,d.intDepartmentID,'Single-board computer kit with PSU'
+    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'IT / Software';
+
+    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription)
+    SELECT 'Scope Probe','OSC-SCP-07',1,d.intDepartmentID,'Oscilloscope probe replacement'
+    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
+
+    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription)
+    SELECT 'Lab Laptop 15','LAP-015',1,d.intDepartmentID,'15" Windows laptop for student checkout'
+    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Media';
+
+    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription)
+    SELECT 'Multimeter #A12','MM-A12',1,d.intDepartmentID,'Digital multimeter used in circuits lab'
+    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
+
+    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription)
+    SELECT 'Oscilloscope #S7','OSC-S7',1,d.intDepartmentID,'Bench oscilloscope station'
+    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
+END
+
+IF NOT EXISTS (SELECT 1 FROM dbo.TItemLoans)
+BEGIN
+    DECLARE @JaneID INT = (SELECT intBorrowerID FROM dbo.TBorrowers WHERE strFirstName='Jane' AND strLastName='Doe');
+    DECLARE @AlexID INT = (SELECT intBorrowerID FROM dbo.TBorrowers WHERE strFirstName='Alex' AND strLastName='Smith');
+    DECLARE @ChrisID INT = (SELECT intBorrowerID FROM dbo.TBorrowers WHERE strFirstName='Chris' AND strLastName='Patel');
+    DECLARE @JosieID INT = (SELECT intLabTechID FROM dbo.TLabTechs WHERE strFirstName='Josie');
+    DECLARE @AlexTechID INT = (SELECT intLabTechID FROM dbo.TLabTechs WHERE strFirstName='Alex');
+
+    DECLARE @CableID INT = (SELECT intItemID FROM dbo.TItems WHERE strItemName='USB-C Cable (1m)');
+    DECLARE @PiID INT = (SELECT intItemID FROM dbo.TItems WHERE strItemName='Raspberry Pi 5');
+    DECLARE @ProbeID INT = (SELECT intItemID FROM dbo.TItems WHERE strItemName='Scope Probe');
+
+    DECLARE @Loan TABLE(intItemLoanID INT);
+
+    INSERT INTO @Loan EXEC dbo.usp_CheckoutItem @CableID,@JaneID,@JosieID,DATEADD(HOUR,24,SYSUTCDATETIME()),'Checked condition';
+    DECLARE @LoanJane INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
+    UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-6,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanJane;
+
+    DELETE FROM @Loan;
+    INSERT INTO @Loan EXEC dbo.usp_CheckoutItem @PiID,@AlexID,@JosieID,DATEADD(HOUR,40,SYSUTCDATETIME()),NULL;
+    DECLARE @LoanAlex INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
+    UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-10,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanAlex;
+
+    DELETE FROM @Loan;
+    INSERT INTO @Loan EXEC dbo.usp_CheckoutItem @ProbeID,@ChrisID,@AlexTechID,DATEADD(HOUR,-3,SYSUTCDATETIME()),'Handle with care';
+    DECLARE @LoanChris INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
+    UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-30,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanChris;
+END
+
+IF NOT EXISTS (SELECT 1 FROM dbo.TServiceTickets)
+BEGIN
+    DECLARE @JaneID2 INT = (SELECT intBorrowerID FROM dbo.TBorrowers WHERE strFirstName='Jane' AND strLastName='Doe');
+    DECLARE @AlexID2 INT = (SELECT intBorrowerID FROM dbo.TBorrowers WHERE strFirstName='Alex' AND strLastName='Smith');
+    DECLARE @ChrisID2 INT = (SELECT intBorrowerID FROM dbo.TBorrowers WHERE strFirstName='Chris' AND strLastName='Patel');
+    DECLARE @LaptopID INT = (SELECT intItemID FROM dbo.TItems WHERE strItemName='Lab Laptop 15');
+    DECLARE @MultimeterID INT = (SELECT intItemID FROM dbo.TItems WHERE strItemName='Multimeter #A12');
+    DECLARE @OscID INT = (SELECT intItemID FROM dbo.TItems WHERE strItemName='Oscilloscope #S7');
+    DECLARE @JosieID2 INT = (SELECT intLabTechID FROM dbo.TLabTechs WHERE strFirstName='Josie');
+    DECLARE @AlexTechID2 INT = (SELECT intLabTechID FROM dbo.TLabTechs WHERE strFirstName='Alex');
+    DECLARE @KrisID INT = (SELECT intLabTechID FROM dbo.TLabTechs WHERE strFirstName='Kris');
+
+    DECLARE @Ticket TABLE(intServiceTicketID INT);
+
+    INSERT INTO @Ticket EXEC dbo.usp_ServiceTicketCreate 'S-0192', @JaneID2, @MultimeterID, NULL, 'Reads zero', @JosieID2;
+    DECLARE @TicketMultimeter INT = (SELECT TOP 1 intServiceTicketID FROM @Ticket ORDER BY intServiceTicketID DESC);
+    UPDATE dbo.TServiceTickets SET dtmLoggedUTC = DATEADD(DAY,-2,SYSUTCDATETIME()), strStatus='Diagnosing' WHERE intServiceTicketID = @TicketMultimeter;
+
+    DELETE FROM @Ticket;
+    INSERT INTO @Ticket EXEC dbo.usp_ServiceTicketCreate 'S-0193', @AlexID2, @OscID, NULL, 'Display flicker', @AlexTechID2;
+    DECLARE @TicketOsc INT = (SELECT TOP 1 intServiceTicketID FROM @Ticket ORDER BY intServiceTicketID DESC);
+    UPDATE dbo.TServiceTickets SET dtmLoggedUTC = DATEADD(DAY,-3,SYSUTCDATETIME()), strStatus='Awaiting Parts' WHERE intServiceTicketID = @TicketOsc;
+
+    DELETE FROM @Ticket;
+    INSERT INTO @Ticket EXEC dbo.usp_ServiceTicketCreate 'S-0194', @ChrisID2, @LaptopID, NULL, 'Battery swell', @KrisID;
+    DECLARE @TicketLaptop INT = (SELECT TOP 1 intServiceTicketID FROM @Ticket ORDER BY intServiceTicketID DESC);
+    UPDATE dbo.TServiceTickets SET dtmLoggedUTC = DATEADD(DAY,-4,SYSUTCDATETIME()), strStatus='Ready for Pickup' WHERE intServiceTicketID = @TicketLaptop;
+END
