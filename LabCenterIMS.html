@@ -712,6 +712,43 @@
     const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
     const setBusy = (btn, busy=true) => btn.setAttribute('aria-busy', busy ? 'true' : 'false');
 
+    /**
+     * Mapping of business statuses to the visual pill classes we support.
+     * Keeping the relationship centralized avoids subtle mismatches between
+     * copy/paste blocks later in the file.
+     */
+    const STATUS_PILL_CLASS_MAP = {
+      "On Time": "ok",
+      "Overdue": "overdue",
+      "Returned": "returned",
+      "Awaiting Parts": "repair",
+      "Diagnosing": "diagnosing",
+      "Ready for Pickup": "ready",
+      "Quarantined": "quarantine"
+    };
+
+    /**
+     * Table rows use a slightly different set of classes to tint the entire
+     * line. That mapping lives here so styling logic can lean on a single
+     * source of truth.
+     */
+    const STATUS_ROW_CLASS_MAP = {
+      "Overdue": "is-overdue",
+      "Awaiting Parts": "is-awaiting",
+      "Diagnosing": "is-diagnosing",
+      "Ready for Pickup": "is-ready"
+    };
+    const ROW_STATUS_CLASSNAMES = Object.values(STATUS_ROW_CLASS_MAP);
+
+    /**
+     * Utility helper to close a dialog by id. Prevents repeated DOM lookups
+     * and makes intent clear at the call site.
+     */
+    function closeDialogById(id){
+      const dlg = document.getElementById(id);
+      if(dlg) dlg.close();
+    }
+
     // Dialog openers
     $$( "[data-open]" ).forEach(btn=>{
       btn.addEventListener("click", ()=>{
@@ -727,24 +764,44 @@
       return async (e)=>{
         e.preventDefault();
         setBusy(btn,true);
-        try { await fn(); } finally { setBusy(btn,false); }
+        try {
+          await fn();
+        } catch(err){
+          // Surface validation/network errors to the user right away.
+          console.error(err);
+          alert(err?.message || err);
+        } finally {
+          setBusy(btn,false);
+        }
       }
+    }
+
+    /**
+     * Update both the pill and its parent row so that status changes are
+     * reflected consistently in every table. This is used when saving details
+     * from the modal.
+     */
+    function updateRowVisualState(row, status){
+      const pill = row.querySelector(".pill");
+      if(!pill) return;
+      pill.textContent = status;
+      pill.className = "pill"; // reset base classes first
+      const pillClass = STATUS_PILL_CLASS_MAP[status];
+      if(pillClass) pill.classList.add(pillClass);
+
+      row.classList.remove(...ROW_STATUS_CLASSNAMES);
+      const rowClass = STATUS_ROW_CLASS_MAP[status];
+      if(rowClass) row.classList.add(rowClass);
     }
 
     // ====== STATUS → ROW COLOR (global) ======
     function applyRowStatusStyles(){
-      const statusMap = {
-        "Overdue": "is-overdue",
-        "Awaiting Parts": "is-awaiting",
-        "Diagnosing": "is-diagnosing",
-        "Ready for Pickup": "is-ready"
-      };
       $$("tbody tr").forEach(tr=>{
-        tr.classList.remove("is-overdue","is-awaiting","is-diagnosing","is-ready");
+        tr.classList.remove(...ROW_STATUS_CLASSNAMES);
         const pill = tr.querySelector(".pill");
         if(!pill) return;
         const text = pill.textContent.trim();
-        const cls = statusMap[text];
+        const cls = STATUS_ROW_CLASS_MAP[text];
         if(cls) tr.classList.add(cls);
       });
     }
@@ -794,6 +851,11 @@
     ["tbl-home-out","tbl-home-repairs","tbl-borrow","tbl-service"].forEach(attachRowClicks);
 
     // ====== FILTERS + SEARCH (client-side) ======
+    /**
+     * Wire up the filter chips + optional search box to a table body. Each
+     * call creates an isolated controller so the Borrowing and Service tables
+     * can share the exact same behavior without duplicating the logic.
+     */
     function hookFilters(chipsContainerId, tableBodyId, searchInputId){
       const chips = $$("#"+chipsContainerId+" .chip");
       const tbody = $("#"+tableBodyId);
@@ -825,11 +887,17 @@
     hookFilters("filters-service","tbl-service","search-service");
 
     // ====== VALIDATION HELPERS ======
+    // Tiny validation helpers shared by multiple forms.
     function must(cond, msg){ if(!cond) throw new Error(msg); }
     function requireOne(valA, valB, msg){ must((valA && valA.trim()) || (valB && valB.trim()), msg); }
     function future(dtStr){ const t = new Date(dtStr); return t > new Date(); }
 
     // ====== DATA LAYER ======
+    /**
+     * Lightweight data access wrapper that optionally stubs network calls when
+     * USE_BACKEND is false. When a backend is provided this funnels through
+     * fetch() and raises if the response is not ok.
+     */
     async function api(path, opts){
       if(!USE_BACKEND){
         // stub fake latency
@@ -883,7 +951,7 @@
           issue: $("#ns-issue").value.trim()
         })});
       }
-      document.getElementById("dlg-new-customer").close();
+      closeDialogById("dlg-new-customer");
       alert("Saved.");
     }));
 
@@ -900,7 +968,7 @@
         schoolId:id||null, name:name||null, item:$("#rb-item").value.trim(),
         dueLocal: $("#rb-due").value, notes: $("#rb-notes").value||null
       })});
-      document.getElementById("dlg-returning-borrow").close();
+      closeDialogById("dlg-returning-borrow");
       alert("Checkout complete.");
     }));
 
@@ -916,7 +984,7 @@
         schoolId:id||null, name:name||null,
         item: $("#rs-item").value.trim(), issue: $("#rs-issue").value.trim()
       })});
-      document.getElementById("dlg-returning-service").close();
+      closeDialogById("dlg-returning-service");
       alert("Service ticket created.");
     }));
 
@@ -932,27 +1000,10 @@
       // Update row status visually if present in current lists
       const row = document.querySelector(`[data-id="${CSS.escape(id)}"]`);
       if(row){
-        const pill = row.querySelector(".pill");
-        if(pill){
-          pill.textContent = status;
-          pill.className = "pill"; // reset classes
-          // map status → pill classes
-          const map = {
-            "On Time":"ok",
-            "Overdue":"overdue",
-            "Returned":"returned",
-            "Awaiting Parts":"repair",
-            "Diagnosing":"diagnosing",
-            "Ready for Pickup":"ready",
-            "Quarantined":"quarantine"
-          };
-          const cls = map[status];
-          if(cls) pill.classList.add(cls);
-        }
-        applyRowStatusStyles();
+        updateRowVisualState(row, status);
       }
 
-      document.getElementById("dlg-detail").close();
+      closeDialogById("dlg-detail");
       alert("Saved status & note.");
     }));
 
@@ -963,7 +1014,7 @@
       const r = $("#cu-role").value;
       must(u && d && r, "All fields required.");
       await api("/users", { method:"POST", body: JSON.stringify({ username:u, display:d, role:r })});
-      document.getElementById("dlg-create-user").close();
+      closeDialogById("dlg-create-user");
       alert("User created.");
     }));
 
@@ -972,11 +1023,13 @@
       const u = $("#du-username").value.trim();
       must(u, "Username required.");
       await api(`/users/${encodeURIComponent(u)}`, { method:"DELETE" });
-      document.getElementById("dlg-delete-user").close();
+      closeDialogById("dlg-delete-user");
       alert("User deleted.");
     }));
 
     // keep row colors consistent if DOM changes later
+    // Watch for table updates (e.g., new rows inserted) so the status tinting
+    // stays in sync even when other scripts mutate the DOM in the future.
     const mo = new MutationObserver(applyRowStatusStyles);
     mo.observe(document.body, { subtree:true, childList:true });
   </script>
