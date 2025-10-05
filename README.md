@@ -21,20 +21,12 @@ The front-end now expects to communicate with a lightweight Node/Express API tha
    npm install
    ```
 
-2. Provide SQL Server connection settings via environment variables (for example by creating a `.env` file):
-
-   ```ini
-   DB_SERVER=localhost
-   DB_PORT=1433
-   DB_USER=sa
-   DB_PASSWORD=yourStrong(!)Password
-   DB_NAME=dbLabCenter
-   ```
-
-3. Start the API server:
+2. Start the API server:
 
    ```bash
    npm start
    ```
+
+The Node server already contains the default SQL Server credentials (`sa` / `yourStrong(!)Password`) and points to `localhost:1433` with the `dbLabCenter` database. Update `server.js` directly if you need different connection details.
 
 The app serves both the API under `/api/*` and the static UI. Visit `http://localhost:3000/` after the server is running to see the dashboard populated with live data from SQL Server.

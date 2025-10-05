@@ -1,31 +1,26 @@
 const path = require('path');
 const express = require('express');
 const sql = require('mssql');
-require('dotenv').config();
 
 const app = express();
 app.use(express.json());
 
 const dbConfig = {
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  server: process.env.DB_SERVER || 'localhost',
-  database: process.env.DB_NAME || 'dbLabCenter',
-  port: Number.parseInt(process.env.DB_PORT || '1433', 10),
+  user: 'sa',
+  password: 'yourStrong(!)Password',
+  server: 'localhost',
+  database: 'dbLabCenter',
+  port: 1433,
   options: {
-    encrypt: process.env.DB_ENCRYPT === 'true',
-    trustServerCertificate: process.env.DB_TRUST_CERT !== 'false'
+    encrypt: false,
+    trustServerCertificate: true
   },
   pool: {
-    max: Number.parseInt(process.env.DB_POOL_MAX || '10', 10),
+    max: 10,
     min: 0,
-    idleTimeoutMillis: Number.parseInt(process.env.DB_POOL_IDLE || '30000', 10)
+    idleTimeoutMillis: 30000
   }
 };
-
-if(!dbConfig.user || !dbConfig.password){
-  console.warn('Warning: DB_USER or DB_PASSWORD environment variables are not set.');
-}
 
 let pool;
 
@@ -173,7 +168,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal Server Error', detail: err.message });
 });
 
-const PORT = Number.parseInt(process.env.PORT || '3000', 10);
+const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`Lab Center IMS API listening on http://localhost:${PORT}`);
 });
