@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1280, initial-scale=1.0" />
+  <title>Lab Center IMS — Desktop UI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#ffffff; --surface:#f7f8f8; --ink:#0b0f0e; --muted:#6b7280; --line:#e5e7eb;
+
+      /* Brand accents (updated) */
+      --brand:#448C37;                  /* accent green */
+      --brand-weak:#e6f3e3;             /* soft bg for brand states */
+
+      /* Status palette (consistent everywhere) */
+      --ok-bg:var(--brand-weak);
+      --ok-fg:var(--brand);
+      --overdue-bg:#fee2e2;  --overdue-fg:#b91c1c;
+      --repair-bg:#fef3c7;   --repair-fg:#92400e;
+      --returned-bg:#eef2ff; --returned-fg:#3730a3;
+      --ready-bg:#ecfdf5;    --ready-fg:#065f46; /* ready for pickup */
+
+      --radius:12px; --shadow:0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.06);
+
+      /* Modal vars */
+      --modal-backdrop: rgba(0,0,0,.36);
+    }
+    *{box-sizing:border-box}
+
+    /* Desktop app frame */
+    html, body { height:100%; min-width:1200px; }
+    body{
+      margin:0; background:var(--surface); color:var(--ink);
+      font-family:Inter,system-ui,Arial,sans-serif;
+      display:grid; grid-template-rows:auto 1fr; /* header + content row */
+      overflow:hidden; /* only the center pane scrolls */
+    }
+
+    /* Header (fixed row) */
+    header{
+      display:flex; justify-content:space-between; align-items:center; gap:16px;
+      padding:14px 18px; background:var(--bg); border-bottom:1px solid var(--line);
+      position:sticky; top:0; z-index:100;
+    }
+    .brand{display:flex; align-items:center; gap:10px}
+    .title{font-weight:700}
+    .hdr-right{display:flex; align-items:center; gap:12px}
+    .logo{height:24px; width:auto; display:block}
+
+    /* App shell: fixed sidebar + scrollable main */
+    .shell{
+      display:grid;
+      grid-template-columns:260px minmax(0,1fr);
+      height:100%; min-height:0; width:100%;
+      overflow:hidden; /* sidebar + main contained */
+    }
+    aside{
+      background:var(--bg); border-right:1px solid var(--line); padding:14px;
+      display:flex; flex-direction:column; gap:8px;
+      height:100%; overflow:hidden; /* sidebar never scrolls */
+      position:sticky; top:56px; /* lock relative to header height */
+      align-self:start;
+    }
+    main{
+      min-width:0; padding:18px;
+      height:100%; overflow:auto; /* ONLY this scrolls */
+    }
+
+    /* Sidebar */
+    .nav-title{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.12em; margin:10px 0 6px}
+    nav{display:grid; gap:8px}
+    .nav-link{
+      display:flex; align-items:center; gap:10px; padding:10px 12px;
+      border-radius:10px; color:#111827; text-decoration:none; border:1px solid transparent
+    }
+    .nav-link:hover{background:var(--surface); border-color:var(--line)}
+    .nav-sep{height:1px; background:var(--line); margin:10px 0}
+    .push-bottom{margin-top:auto}
+
+    /* Active link highlight using :has() */
+    body:has(#home.screen:target)      .nav-link[href="#home"],
+    body:not(:has(.screen:target))     .nav-link[href="#home"]{ background:var(--surface); border-color:var(--line); }
+    body:has(#borrowing.screen:target) .nav-link[href="#borrowing"]{ background:var(--surface); border-color:var(--line); }
+    body:has(#service.screen:target)   .nav-link[href="#service"]{ background:var(--surface); border-color:var(--line); }
+    body:has(#admin.screen:target)     .nav-link[href="#admin"]{ background:var(--surface); border-color:var(--line); }
+
+    /* Screens (CSS router) */
+    .screen{display:none}
+    .screen:target{display:block}
+    #home.screen{display:block} /* default */
+    body:has(.screen:target:not(#home)) #home{display:none}
+
+    .wrapper{max-width:1200px; margin:0 auto}
+
+    /* Cards / grid */
+    .grid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+
+    .card{background:var(--bg); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden}
+    .card h2{font-size:16px; margin:0; padding:12px 14px; border-bottom:1px solid var(--line)}
+    .card .body{padding:14px}
+
+    /* stat chips */
+    .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:12px}
+    .stat{background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:12px}
+    .stat .label{font-size:12px; color:var(--muted)}
+    .stat .value{font-weight:700; font-size:20px}
+
+    /* universal pills (statuses) */
+    .pill{
+      display:inline-block; padding:4px 10px; border-radius:999px;
+      font-size:12px; font-weight:700; border:1px solid transparent; white-space:nowrap;
+    }
+    .pill.ok{        background:var(--ok-bg);       color:var(--ok-fg);       border-color:rgba(68,140,55,.25);}
+    .pill.overdue{   background:var(--overdue-bg);  color:var(--overdue-fg);  border-color:#fecaca;}
+    .pill.repair{    background:var(--repair-bg);   color:var(--repair-fg);   border-color:#fde68a;}
+    .pill.returned{  background:var(--returned-bg); color:var(--returned-fg); border-color:#e0e7ff;}
+    .pill.ready{     background:var(--ready-bg);    color:var(--ready-fg);    border-color:#a7f3d0;}
+    .pill.quarantine{background:#fde2ff;            color:#86198f;            border-color:#f5d0fe;}
+
+    /* table */
+    .table{overflow:hidden; border-radius:var(--radius); border:1px solid var(--line); background:var(--bg)}
+    table{width:100%; border-collapse:separate; border-spacing:0; font-size:14px}
+    thead th{background:var(--surface); text-align:left; padding:10px 12px; color:var(--muted); border-bottom:1px solid var(--line)}
+    tbody td{padding:12px; border-bottom:1px solid var(--line); vertical-align:top}
+    tr.clickable{cursor:pointer}
+
+    /* form bits */
+    .toolbar{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px}
+    .search{display:flex; align-items:center; gap:10px; background:var(--bg); border:1px solid var(--line); padding:8px 10px; border-radius:10px; flex:1 1 320px}
+    .search input{border:0; outline:0; background:transparent; width:100%}
+    .btn{border:1px solid var(--line); background:var(--bg); padding:8px 10px; border-radius:10px; font-weight:600; text-decoration:none; color:var(--ink); display:inline-block}
+    .btn.primary{background:var(--brand); color:#fff; border-color:transparent}
+    .filters{display:flex; gap:8px; flex-wrap:wrap}
+    .chip{border:1px solid var(--line); padding:6px 10px; border-radius:999px; font-size:12px; background:var(--bg)}
+
+    /* row emphasis */
+    tr.is-overdue{background:#fff7f7}
+    tr.is-awaiting{background:#fffbeb}
+
+    /* ====== Modals ====== */
+    dialog{
+      width:720px; max-width:90vw; border:1px solid var(--line);
+      border-radius:14px; padding:0; box-shadow:var(--shadow); background:var(--bg);
+    }
+    dialog::backdrop{background:var(--modal-backdrop)}
+    .modal-hd{display:flex; align-items:center; justify-content:space-between; padding:14px; border-bottom:1px solid var(--line)}
+    .modal-bd{padding:14px}
+    .modal-ft{display:flex; gap:8px; justify-content:flex-end; padding:14px; border-top:1px solid var(--line)}
+    .form-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+    .form-grid .full{grid-column:1/-1}
+    label{font-size:12px; color:var(--muted); display:block; margin-bottom:6px}
+    input, select, textarea{
+      width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:#fff; font:inherit
+    }
+    textarea{min-height:96px; resize:vertical}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <img class="logo" src="action_mark_green.avif" alt="Lab Center Logo">
+      <div class="title">Cincinnati State Lab Center — IMS</div>
+    </div>
+    <div class="hdr-right">
+      <a class="btn" href="#">Quick Help</a>
+    </div>
+  </header>
+
+  <div class="shell">
+    <!-- Sidebar (fixed/non-scrollable) -->
+    <aside>
+      <div class="nav-title">Main</div>
+      <nav>
+        <a class="nav-link" href="#home">Home</a>
+        <a class="nav-link" href="#borrowing">Borrowing</a>
+        <a class="nav-link" href="#service">Service Log</a>
+      </nav>
+      <div class="nav-sep" aria-hidden="true"></div>
+      <div class="push-bottom">
+        <div class="nav-title">Admin</div>
+        <nav>
+          <a class="nav-link" href="#admin">Admin Options</a>
+        </nav>
+      </div>
+    </aside>
+
+    <!-- Content (only this scrolls) -->
+    <main>
+      <div class="wrapper">
+
+        <!-- HOME -->
+        <section id="home" class="screen" aria-labelledby="home-title">
+          <div class="card" style="margin-bottom:14px">
+            <h2 id="home-title">Quick Stats <span class="pill ok" style="margin-left:6px">Live</span></h2>
+            <div class="body">
+              <div class="stats" aria-live="polite">
+                <div class="stat"><div class="label">Checked Out Now</div><div class="value">27</div></div>
+                <div class="stat"><div class="label">Due Today</div><div class="value">6</div></div>
+                <div class="stat"><div class="label">In Repairs</div><div class="value">4</div></div>
+                <div class="stat"><div class="label">Overdue</div><div class="value">2</div></div>
+              </div>
+              <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap">
+                <a class="btn" href="#borrowing">View Overdue</a>
+                <a class="btn" href="#service">Log New Repair</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid">
+            <section class="card" aria-labelledby="out-title">
+              <h2 id="out-title">Currently Checked Out</h2>
+              <div class="body table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Item</th>
+                      <th scope="col">Customer</th>
+                      <th scope="col">ID</th>
+                      <th scope="col">Room</th>
+                      <th scope="col">Due</th>
+                      <th scope="col">Due in</th>
+                      <th scope="col">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbl-home-out">
+                    <tr class="clickable" data-kind="loan" data-id="1001">
+                      <td>USB-C Cable (1m)</td><td>Jane Doe</td><td>123456</td><td>ATLC 102</td>
+                      <td>2025-10-05 17:00</td><td>22h</td><td><span class="pill ok">On Time</span></td>
+                    </tr>
+                    <tr class="clickable" data-kind="loan" data-id="1002">
+                      <td>Raspberry Pi 5</td><td>Alex Smith</td><td>332211</td><td>ATLC 204</td>
+                      <td>2025-10-06 12:00</td><td>40h</td><td><span class="pill ok">On Time</span></td>
+                    </tr>
+                    <tr class="is-overdue clickable" data-kind="loan" data-id="1003">
+                      <td>Scope Probe</td><td>Chris P.</td><td>778899</td><td>ATLC 120</td>
+                      <td>2025-10-04 10:00</td><td>-3h</td><td><span class="pill overdue">Overdue</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="repair-title">
+              <h2 id="repair-title">Items Checked In for Repair</h2>
+              <div class="body table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Item</th>
+                      <th scope="col">Issue</th>
+                      <th scope="col">Logged By</th>
+                      <th scope="col">Date</th>
+                      <th scope="col">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbl-home-repairs">
+                    <tr class="clickable" data-kind="ticket" data-id="S-0192">
+                      <td>Multimeter #A12</td><td>Reads zero</td><td>j.wooldridge</td><td>2025-10-03 14:15</td><td><span class="pill">Diagnosing</span></td>
+                    </tr>
+                    <tr class="is-awaiting clickable" data-kind="ticket" data-id="S-0193">
+                      <td>Oscilloscope #S7</td><td>Display flicker</td><td>a.smith</td><td>2025-10-02 09:42</td><td><span class="pill repair">Awaiting Parts</span></td>
+                    </tr>
+                    <tr class="clickable" data-kind="ticket" data-id="S-0194">
+                      <td>Lab Laptop 15</td><td>Battery swell</td><td>k.jones</td><td>2025-10-01 11:22</td><td><span class="pill quarantine">Quarantined</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <!-- BORROWING -->
+        <section id="borrowing" class="screen" aria-labelledby="borrow-title">
+          <div class="card" style="margin-bottom:14px">
+            <h2 id="borrow-title">Borrowing</h2>
+            <div class="body">
+              <div class="toolbar">
+                <div style="display:flex; gap:8px; flex-wrap:wrap">
+                  <button class="btn primary" data-open="dlg-new-customer">New Customer</button>
+                  <button class="btn" data-open="dlg-returning-borrow">Returning Customer</button>
+                </div>
+                <div class="search" role="search"><input type="text" placeholder="Search Customer, item, ID…" aria-label="Search"></div>
+              </div>
+              <div class="filters">
+                <span class="chip">Status: All</span>
+                <span class="chip">Due: Any</span>
+                <span class="chip">Overdue</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2 style="border-bottom:1px solid var(--line); padding:12px 14px; margin:0">Recent Borrowed Items</h2>
+            <div class="body table">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Trace #</th>
+                    <th scope="col">Item</th>
+                    <th scope="col">Customer</th>
+                    <th scope="col">ID</th>
+                    <th scope="col">Out</th>
+                    <th scope="col">Due</th>
+                    <th scope="col">Due in</th>
+                    <th scope="col">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="tbl-borrow" >
+                  <tr class="clickable" data-kind="loan" data-id="000251"><td>000251</td><td>RJ45 Crimper</td><td>Sam R.</td><td>445566</td><td>2025-10-04 09:10</td><td>2025-10-04 17:00</td><td>0h</td><td><span class="pill returned">Returned</span></td></tr>
+                  <tr class="clickable" data-kind="loan" data-id="000252"><td>000252</td><td>Raspberry Pi 5</td><td>Alex S.</td><td>332211</td><td>2025-10-04 10:05</td><td>2025-10-06 12:00</td><td>40h</td><td><span class="pill ok">On Time</span></td></tr>
+                  <tr class="is-overdue clickable" data-kind="loan" data-id="000253"><td>000253</td><td>Scope Probe</td><td>Chris P.</td><td>778899</td><td>2025-10-03 08:30</td><td>2025-10-04 10:00</td><td>-3h</td><td><span class="pill overdue">Overdue</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- SERVICE LOG -->
+        <section id="service" class="screen" aria-labelledby="service-title">
+          <div class="card" style="margin-bottom:14px">
+            <h2 id="service-title">Service Log</h2>
+            <div class="body">
+              <div class="toolbar">
+                <div style="display:flex; gap:8px; flex-wrap:wrap">
+                  <button class="btn primary" data-open="dlg-new-service">New Customer</button>
+                  <button class="btn" data-open="dlg-returning-service">Returning Customer</button>
+                </div>
+                <div class="search" role="search"><input type="text" placeholder="Search item, ticket, customer…" aria-label="Search"></div>
+              </div>
+              <div class="filters">
+                <span class="chip">Diagnosing</span>
+                <span class="chip">Awaiting Parts</span>
+                <span class="chip">Ready for Pickup</span>
+                <span class="chip">Status: All</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2 style="border-bottom:1px solid var(--line); padding:12px 14px; margin:0">Recent Service Tickets</h2>
+            <div class="body table">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Ticket</th>
+                    <th scope="col">Item</th>
+                    <th scope="col">Issue</th>
+                    <th scope="col">Logged</th>
+                    <th scope="col">Assigned</th>
+                    <th scope="col">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="tbl-service">
+                  <tr class="clickable" data-kind="ticket" data-id="S-0192"><td>S-0192</td><td>Multimeter #A12</td><td>Reads zero</td><td>2025-10-03 14:15</td><td>j.wooldridge</td><td><span class="pill">Diagnosing</span></td></tr>
+                  <tr class="clickable" data-kind="ticket" data-id="S-0193"><td>S-0193</td><td>Oscilloscope #S7</td><td>Display flicker</td><td>2025-10-02 09:42</td><td>a.smith</td><td><span class="pill repair">Awaiting Parts</span></td></tr>
+                  <tr class="clickable" data-kind="ticket" data-id="S-0194"><td>S-0194</td><td>Lab Laptop 15</td><td>Battery swell</td><td>2025-10-01 11:22</td><td>k.jones</td><td><span class="pill ready">Ready for Pickup</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ADMIN -->
+        <section id="admin" class="screen" aria-labelledby="admin-title">
+          <div class="card" style="margin-bottom:14px">
+            <h2 id="admin-title">Admin Options</h2>
+            <div class="body">
+              <div class="toolbar" style="justify-content:space-between">
+                <div style="display:flex; gap:8px; flex-wrap:wrap">
+                  <a class="btn" href="#">Create User</a>
+                  <a class="btn" href="#">Delete User</a>
+                </div>
+                <div class="search" role="search"><input type="text" placeholder="Search user or action…" aria-label="Search"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2 style="border-bottom:1px solid var(--line); padding:12px 14px; margin:0">User Action Log</h2>
+            <div class="body table">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">User</th>
+                    <th scope="col">Trace #</th>
+                    <th scope="col">Action</th>
+                    <th scope="col">Date/Time</th>
+                    <th scope="col">Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>j.wooldridge</td><td>000251</td><td>Checkout</td><td>2025-10-04 09:10</td><td>RJ45 Crimper to Sam R. (445566)</td></tr>
+                  <tr><td>a.smith</td><td>000246</td><td>Check-in</td><td>2025-10-04 16:05</td><td>USB-C Cable (1m) from Jane Doe</td></tr>
+                  <tr><td>k.jones</td><td>S-0194</td><td>Service Update</td><td>2025-10-01 11:40</td><td>Quarantined Laptop 15</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- =============== MODALS =============== -->
+
+  <!-- New Customer (Borrow or Service) -->
+  <dialog id="dlg-new-customer">
+    <form method="dialog">
+      <div class="modal-hd">
+        <strong>New Customer</strong>
+        <button class="btn" value="close">Close</button>
+      </div>
+      <div class="modal-bd">
+        <div class="form-grid">
+          <div>
+            <label>First Name</label>
+            <input id="nc-first" required>
+          </div>
+          <div>
+            <label>Last Name</label>
+            <input id="nc-last" required>
+          </div>
+          <div>
+            <label>School/Faculty ID (optional)</label>
+            <input id="nc-schoolid" placeholder="e.g., 1234567">
+          </div>
+          <div>
+            <label>Phone</label>
+            <input id="nc-phone" placeholder="(555) 555-5555">
+          </div>
+          <div>
+            <label>Room</label>
+            <input id="nc-room" placeholder="ATLC 102">
+          </div>
+          <div>
+            <label>Instructor</label>
+            <input id="nc-instructor" placeholder="e.g., Prof. Smith">
+          </div>
+          <div class="full">
+            <label>Department</label>
+            <select id="nc-dept">
+              <option value="">(optional)</option>
+              <option value="1">Electrical Engineering Tech</option>
+              <option value="2">IT / Software</option>
+              <option value="3">Media</option>
+            </select>
+          </div>
+
+          <div class="full">
+            <label>Action Type</label>
+            <select id="nc-action">
+              <option value="borrow">Borrow Item</option>
+              <option value="service">Service Check-in</option>
+            </select>
+          </div>
+
+          <!-- Borrow specifics -->
+          <div class="full" data-bind="borrow">
+            <label>Item (name or number)</label>
+            <input id="nc-item" placeholder="e.g., Oscilloscope #S7">
+          </div>
+          <div data-bind="borrow">
+            <label>Checkout Notes</label>
+            <input id="nc-notes" placeholder="Condition notes / instructions">
+          </div>
+          <div data-bind="borrow">
+            <label>Due (local)</label>
+            <input id="nc-due" type="datetime-local">
+          </div>
+
+          <!-- Service specifics -->
+          <div class="full" data-bind="service" style="display:none">
+            <label>Item Being Serviced</label>
+            <input id="ns-item" placeholder="e.g., Lab Laptop 15">
+          </div>
+          <div class="full" data-bind="service" style="display:none">
+            <label>Issue Description</label>
+            <textarea id="ns-issue" placeholder="Describe the problem…"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-ft">
+        <button class="btn" value="close">Cancel</button>
+        <button class="btn primary" id="nc-save">Save & Continue</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Returning Customer (Borrowing) -> only ID/name + item -->
+  <dialog id="dlg-returning-borrow">
+    <form method="dialog">
+      <div class="modal-hd">
+        <strong>Returning Customer — Borrow</strong>
+        <button class="btn" value="close">Close</button>
+      </div>
+      <div class="modal-bd">
+        <div class="form-grid">
+          <div>
+            <label>School/Faculty ID</label>
+            <input id="rb-id" placeholder="or leave blank & use name lookup">
+          </div>
+          <div>
+            <label>Name Lookup</label>
+            <input id="rb-name" placeholder="Jane Doe">
+          </div>
+          <div class="full">
+            <label>Item (name or number)</label>
+            <input id="rb-item" placeholder="e.g., Raspberry Pi 5 or #S7">
+          </div>
+          <div>
+            <label>Due (local)</label>
+            <input id="rb-due" type="datetime-local">
+          </div>
+          <div>
+            <label>Checkout Notes</label>
+            <input id="rb-notes" placeholder="optional">
+          </div>
+        </div>
+      </div>
+      <div class="modal-ft">
+        <button class="btn" value="close">Cancel</button>
+        <button class="btn primary" id="rb-save">Checkout</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Returning Customer (Service) -> only ID/name + item/issue -->
+  <dialog id="dlg-returning-service">
+    <form method="dialog">
+      <div class="modal-hd">
+        <strong>Returning Customer — Service</strong>
+        <button class="btn" value="close">Close</button>
+      </div>
+      <div class="modal-bd">
+        <div class="form-grid">
+          <div>
+            <label>School/Faculty ID</label>
+            <input id="rs-id" placeholder="or name lookup">
+          </div>
+          <div>
+            <label>Name Lookup</label>
+            <input id="rs-name" placeholder="Alex Smith">
+          </div>
+          <div class="full">
+            <label>Item Being Serviced</label>
+            <input id="rs-item" placeholder="e.g., Multimeter #A12">
+          </div>
+          <div class="full">
+            <label>Issue</label>
+            <textarea id="rs-issue" placeholder="Describe the problem…"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-ft">
+        <button class="btn" value="close">Cancel</button>
+        <button class="btn primary" id="rs-save">Create Ticket</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Detail viewer (Loan or Ticket) -->
+  <dialog id="dlg-detail">
+    <form method="dialog">
+      <div class="modal-hd">
+        <strong id="det-title">Details</strong>
+        <button class="btn" value="close">Close</button>
+      </div>
+      <div class="modal-bd">
+        <div class="form-grid">
+          <div><label>Type</label><input id="det-type" readonly></div>
+          <div><label>ID</label><input id="det-id" readonly></div>
+          <div class="full"><label>Primary</label><input id="det-primary" readonly></div>
+          <div class="full">
+            <label>Status</label>
+            <select id="det-status">
+              <option>On Time</option>
+              <option>Overdue</option>
+              <option>Returned</option>
+              <option>Diagnosing</option>
+              <option>Awaiting Parts</option>
+              <option>Ready for Pickup</option>
+              <option>Quarantined</option>
+            </select>
+          </div>
+          <div class="full">
+            <label>Add Note</label>
+            <textarea id="det-note" placeholder="This appends to the log…"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-ft">
+        <button class="btn" value="close">Cancel</button>
+        <button class="btn primary" id="det-save">Save Changes</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    // Simple modal opener/closer
+    document.querySelectorAll("[data-open]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const id = btn.getAttribute("data-open");
+        const dlg = document.getElementById(id);
+        if (!dlg) return;
+        dlg.showModal();
+      });
+    });
+
+    // New customer action-type toggle
+    (function(){
+      const dlg = document.getElementById("dlg-new-customer");
+      const sel = dlg.querySelector("#nc-action");
+      const toggle = () => {
+        const isBorrow = sel.value === "borrow";
+        dlg.querySelectorAll('[data-bind="borrow"]').forEach(el=> el.style.display = isBorrow ? "" : "none");
+        dlg.querySelectorAll('[data-bind="service"]').forEach(el=> el.style.display = isBorrow ? "none" : "");
+      };
+      sel.addEventListener("change", toggle);
+      toggle();
+    })();
+
+    // Row click -> detail modal
+    const openDetail = (kind, id, primary, status) => {
+      const dlg = document.getElementById("dlg-detail");
+      document.getElementById("det-title").textContent = kind === "loan" ? "Borrow Log Details" : "Service Ticket Details";
+      document.getElementById("det-type").value = kind === "loan" ? "Loan" : "Service Ticket";
+      document.getElementById("det-id").value = id;
+      document.getElementById("det-primary").value = primary || "";
+      const sel = document.getElementById("det-status");
+      Array.from(sel.options).forEach(o => { if (o.text === status) sel.value = o.text; });
+      document.getElementById("det-note").value = "";
+      dlg.showModal();
+    };
+
+    // Attach to all clickable rows
+    function attachRowClicks(scopeId){
+      const tbody = document.getElementById(scopeId);
+      if (!tbody) return;
+      tbody.addEventListener("click", (e)=>{
+        const tr = e.target.closest("tr.clickable");
+        if (!tr) return;
+        const kind = tr.dataset.kind;
+        const id   = tr.dataset.id;
+        // Build a primary summary from first two cells
+        const cells = Array.from(tr.querySelectorAll("td")).map(td=>td.textContent.trim());
+        const primary = (kind === "loan") ? `${cells[1]} — ${cells[0]}` : `${cells[1]} — ${cells[0]}`;
+        // Try to grab status label
+        const pill = tr.querySelector(".pill");
+        const status = pill ? pill.textContent.trim() : "On Time";
+        openDetail(kind, id, primary, status);
+      });
+    }
+    ["tbl-home-out","tbl-home-repairs","tbl-borrow","tbl-service"].forEach(attachRowClicks);
+
+    // Save handlers (stub: wire to backend later)
+    document.getElementById("nc-save").addEventListener("click", (e)=>{
+      e.preventDefault();
+      // TODO: POST -> create borrower (TBorrowers), then either usp_CheckoutItem or usp_ServiceTicketCreate
+      document.getElementById("dlg-new-customer").close();
+      alert("Saved new customer + action (stub).");
+    });
+    document.getElementById("rb-save").addEventListener("click", (e)=>{
+      e.preventDefault();
+      // TODO: find borrower by ID or name, then usp_CheckoutItem with @dtmDueUTC
+      document.getElementById("dlg-returning-borrow").close();
+      alert("Checkout complete (stub).");
+    });
+    document.getElementById("rs-save").addEventListener("click", (e)=>{
+      e.preventDefault();
+      // TODO: find borrower by ID or name, then usp_ServiceTicketCreate
+      document.getElementById("dlg-returning-service").close();
+      alert("Service ticket created (stub).");
+    });
+    document.getElementById("det-save").addEventListener("click", (e)=>{
+      e.preventDefault();
+      // TODO: write note -> TItemLoanNotes/TServiceTicketNotes, update status where applicable
+      const status = document.getElementById("det-status").value;
+      document.getElementById("dlg-detail").close();
+      alert("Saved status & note (stub): " + status);
+    });
+  </script>
+</body>
+</html>
