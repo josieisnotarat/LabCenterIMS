@@ -128,6 +128,62 @@ app.get('/api/service-tickets', asyncHandler(async (req, res) => {
   res.json({ entries });
 }));
 
+app.get('/api/loans/:id/notes', asyncHandler(async (req, res) => {
+  const loanId = Number.parseInt(req.params.id, 10);
+  if(!Number.isFinite(loanId)){
+    return res.status(400).json({ error: 'Invalid loan id.' });
+  }
+
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('LoanID', sql.Int, loanId)
+    .query(`
+      SELECT n.intItemLoanNoteID, n.dtmNoteUTC, n.strNote,
+             lt.strFirstName, lt.strLastName
+      FROM dbo.TItemLoanNotes AS n
+      LEFT JOIN dbo.TLabTechs AS lt ON lt.intLabTechID = n.intLabTechID
+      WHERE n.intItemLoanID = @LoanID
+      ORDER BY n.dtmNoteUTC DESC;
+    `);
+
+  const entries = result.recordset?.map(row => ({
+    id: row.intItemLoanNoteID ?? null,
+    note: row.strNote || '',
+    timestamp: toIso(row.dtmNoteUTC),
+    author: formatName(row.strFirstName, row.strLastName)
+  })) || [];
+
+  res.json({ entries });
+}));
+
+app.get('/api/service-tickets/:id/notes', asyncHandler(async (req, res) => {
+  const pool = await getPool();
+  const ticketId = await resolveServiceTicketId(pool, req.params.id);
+  if(!ticketId){
+    return res.status(404).json({ error: 'Service ticket not found.' });
+  }
+
+  const result = await pool.request()
+    .input('TicketId', sql.Int, ticketId)
+    .query(`
+      SELECT n.intServiceTicketNoteID, n.dtmNoteUTC, n.strNote,
+             lt.strFirstName, lt.strLastName
+      FROM dbo.TServiceTicketNotes AS n
+      LEFT JOIN dbo.TLabTechs AS lt ON lt.intLabTechID = n.intLabTechID
+      WHERE n.intServiceTicketID = @TicketId
+      ORDER BY n.dtmNoteUTC DESC;
+    `);
+
+  const entries = result.recordset?.map(row => ({
+    id: row.intServiceTicketNoteID ?? null,
+    note: row.strNote || '',
+    timestamp: toIso(row.dtmNoteUTC),
+    author: formatName(row.strFirstName, row.strLastName)
+  })) || [];
+
+  res.json({ entries });
+}));
+
 app.get('/api/audit-log', asyncHandler(async (req, res) => {
   const pool = await getPool();
   const top = Number.parseInt(req.query.top || '50', 10);
@@ -151,6 +207,21 @@ app.get('/api/audit-log', asyncHandler(async (req, res) => {
 function normalizeString(value){
   if(typeof value !== 'string') return '';
   return value.trim();
+}
+
+async function resolveServiceTicketId(pool, identifier){
+  const numericId = Number.parseInt(identifier, 10);
+  const request = pool.request();
+  request.input('TicketId', sql.Int, Number.isFinite(numericId) ? numericId : null);
+  request.input('PublicId', sql.VarChar(20), normalizeString(identifier) || null);
+  const result = await request.query(`
+    SELECT TOP (1) intServiceTicketID
+    FROM dbo.TServiceTickets
+    WHERE (@TicketId IS NOT NULL AND intServiceTicketID = @TicketId)
+       OR (strPublicTicketID = @PublicId)
+    ORDER BY intServiceTicketID DESC;
+  `);
+  return result.recordset?.[0]?.intServiceTicketID ?? null;
 }
 
 async function ensureDepartment(pool, name){
@@ -540,21 +611,10 @@ app.post('/api/status', asyncHandler(async (req, res) => {
     if(!TICKET_STATUS_SET.has(statusText)){
       return res.status(400).json({ error: `Unsupported service ticket status: ${statusText}` });
     }
-    const numericId = Number.parseInt(id, 10);
-    const request = pool.request();
-    request.input('TicketId', sql.Int, Number.isFinite(numericId) ? numericId : null);
-    request.input('PublicId', sql.VarChar(20), normalizeString(id));
-    const ticketResult = await request.query(`
-      SELECT TOP (1) intServiceTicketID
-      FROM dbo.TServiceTickets
-      WHERE (@TicketId IS NOT NULL AND intServiceTicketID = @TicketId)
-         OR (strPublicTicketID = @PublicId)
-      ORDER BY intServiceTicketID DESC;
-    `);
-    if(!ticketResult.recordset?.length){
+    const ticketId = await resolveServiceTicketId(pool, id);
+    if(!ticketId){
       return res.status(404).json({ error: 'Service ticket not found.' });
     }
-    const ticketId = ticketResult.recordset[0].intServiceTicketID;
 
     const statusReq = pool.request();
     statusReq.input('intServiceTicketID', sql.Int, ticketId);
