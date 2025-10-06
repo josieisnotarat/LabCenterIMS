@@ -6,8 +6,8 @@ const app = express();
 app.use(express.json());
 
 const dbConfig = {
-  user: 'sa',
-  password: 'yourStrong(!)Password',
+  user: 'sa1',
+  password: '',
   server: 'localhost',
   database: 'dbLabCenter',
   port: 1433,
