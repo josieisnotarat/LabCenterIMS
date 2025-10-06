@@ -982,10 +982,10 @@
               <label>School/Faculty ID (optional)</label>
               <input
                 id="nc-schoolid"
-                pattern="\\d{5,10}"
-                placeholder="e.g., 1234567"
+                pattern="\\d{5,8}"
+                placeholder="e.g., 0234567"
               />
-              <div class="hint">5–10 digits</div>
+              <div class="hint">5–7 digits, 0 as first digit.</div>
             </div>
             <div>
               <label>Phone</label>
@@ -1003,23 +1003,7 @@
               <label>Instructor</label>
               <input id="nc-instructor" placeholder="e.g., Prof. Smith" />
             </div>
-            <div class="full">
-              <label>Department</label>
-              <select id="nc-dept">
-                <option value="">(optional)</option>
-                <option value="EET">Electrical Engineering Tech</option>
-                <option value="ITS">IT / Software</option>
-                <option value="MED">Media</option>
-              </select>
-            </div>
-
-            <div class="full">
-              <label>Action Type</label>
-              <select id="nc-action">
-                <option value="borrow">Borrow Item</option>
-                <option value="service">Service Check-in</option>
-              </select>
-            </div>
+            
 
             <!-- Borrow specifics -->
             <div class="full" data-bind="borrow">
