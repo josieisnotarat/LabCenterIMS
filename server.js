@@ -128,6 +128,25 @@ app.get('/api/service-tickets', asyncHandler(async (req, res) => {
   res.json({ entries });
 }));
 
+app.get('/api/borrowers/search', asyncHandler(async (req, res) => {
+  const query = normalizeString(req.query.query || req.query.q || req.query.term);
+  if(!query || query.length < 2){
+    return res.json({ entries: [] });
+  }
+  const top = Number.parseInt(req.query.top || '8', 10);
+  const pool = await getPool();
+  const request = pool.request();
+  request.input('SearchTerm', sql.NVarChar(120), query);
+  request.input('Top', sql.Int, Number.isFinite(top) ? top : 8);
+  const result = await request.execute('dbo.usp_SearchBorrowers');
+  const entries = result.recordset?.map(row => ({
+    id: row.intBorrowerID ?? null,
+    name: formatName(row.strFirstName, row.strLastName),
+    schoolId: row.strSchoolIDNumber || null
+  })) || [];
+  res.json({ entries });
+}));
+
 app.get('/api/loans/:id/notes', asyncHandler(async (req, res) => {
   const loanId = Number.parseInt(req.params.id, 10);
   if(!Number.isFinite(loanId)){
@@ -207,6 +226,120 @@ app.get('/api/audit-log', asyncHandler(async (req, res) => {
 function normalizeString(value){
   if(typeof value !== 'string') return '';
   return value.trim();
+}
+
+function toIntOrNull(value){
+  if(value == null || value === '') return null;
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+function toTimeParts(value){
+  if(!value) return null;
+  if(typeof value === 'string'){
+    const trimmed = value.trim();
+    const match = trimmed.match(/^(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?$/);
+    if(!match) return null;
+    const [, h, m = '0', s = '0'] = match;
+    const hour = Math.min(23, Math.max(0, Number.parseInt(h, 10) || 0));
+    const minute = Math.min(59, Math.max(0, Number.parseInt(m, 10) || 0));
+    const second = Math.min(59, Math.max(0, Number.parseInt(s, 10) || 0));
+    return { hour, minute, second };
+  }
+  if(value instanceof Date){
+    return { hour: value.getHours(), minute: value.getMinutes(), second: value.getSeconds() };
+  }
+  if(typeof value === 'object' && value !== null){
+    const hour = toIntOrNull(value.hour);
+    if(hour == null) return null;
+    const minute = toIntOrNull(value.minute) ?? 0;
+    const second = toIntOrNull(value.second) ?? 0;
+    return { hour: Math.min(23, Math.max(0, hour)), minute: Math.min(59, Math.max(0, minute)), second: Math.min(59, Math.max(0, second)) };
+  }
+  return null;
+}
+
+function normalizeTimeForSql(value){
+  const parts = toTimeParts(value);
+  if(!parts) return null;
+  return `${parts.hour.toString().padStart(2, '0')}:${parts.minute.toString().padStart(2, '0')}:${parts.second.toString().padStart(2, '0')}`;
+}
+
+async function getItemDueSettings(pool, itemId){
+  const result = await pool.request()
+    .input('ItemID', sql.Int, itemId)
+    .query(`
+      SELECT intItemID, strItemName, strItemNumber, strDuePolicy,
+             intDueDaysOffset, intDueHoursOffset, tDueTime, dtmFixedDueLocal
+      FROM dbo.TItems
+      WHERE intItemID = @ItemID;
+    `);
+  return result.recordset?.[0] || null;
+}
+
+function describeOffset(days, hours, timeParts){
+  const parts = [];
+  if(Number.isInteger(days)) parts.push(`${days} day${days === 1 ? '' : 's'}`);
+  if(timeParts){
+    parts.push(`at ${timeParts.hour.toString().padStart(2, '0')}:${timeParts.minute.toString().padStart(2, '0')}`);
+  }else if(Number.isInteger(hours) && hours){
+    parts.push(`+${hours} hour${hours === 1 ? '' : 's'}`);
+  }
+  return parts.join(' ');
+}
+
+function computeDueFromPolicy(row){
+  if(!row) return null;
+  const policy = (row.strDuePolicy || 'NEXT_DAY_6PM').toUpperCase();
+  const now = new Date();
+  let due = null;
+  let description = '';
+
+  if(policy === 'SEMESTER' || policy === 'FIXED'){
+    if(row.dtmFixedDueLocal){
+      const fixed = new Date(row.dtmFixedDueLocal);
+      if(!Number.isNaN(fixed.getTime())){
+        due = fixed;
+        description = 'Semester due';
+      }else{
+        description = 'Semester due date not configured';
+      }
+    }else{
+      description = 'Semester due date not configured';
+    }
+  }else{
+    const days = Number.isInteger(row.intDueDaysOffset) ? row.intDueDaysOffset : (policy === 'NEXT_DAY_6PM' ? 1 : 0);
+    const hours = Number.isInteger(row.intDueHoursOffset) ? row.intDueHoursOffset : 0;
+    const timeParts = toTimeParts(row.tDueTime);
+    due = new Date(now.getTime());
+    if(days) due.setDate(due.getDate() + days);
+    if(timeParts){
+      due.setHours(timeParts.hour, timeParts.minute, timeParts.second, 0);
+    }else if(hours){
+      due.setHours(due.getHours() + hours);
+    }
+    if(policy === 'NEXT_DAY_6PM'){
+      description = 'Next day at 6:00 PM';
+    }else{
+      const desc = describeOffset(days, hours, timeParts);
+      description = desc ? `Offset ${desc}` : 'Custom offset';
+    }
+  }
+
+  const dueUtc = due ? due.toISOString() : null;
+  return {
+    dueUtc,
+    policy,
+    description: description || policy,
+    itemName: row.strItemName || null,
+    itemNumber: row.strItemNumber || null
+  };
+}
+
+async function resolveItemDue(pool, itemId){
+  const settings = await getItemDueSettings(pool, itemId);
+  if(!settings) return null;
+  return computeDueFromPolicy(settings);
 }
 
 async function resolveServiceTicketId(pool, identifier){
@@ -470,10 +603,38 @@ app.post('/api/customers', asyncHandler(async (req, res) => {
   }
 }));
 
+app.get('/api/items/due-preview', asyncHandler(async (req, res) => {
+  const raw = req.query.item || req.query.q || '';
+  const itemQuery = normalizeString(raw);
+  if(!itemQuery){
+    return res.json({ message: 'Provide an item to preview.' });
+  }
+
+  const pool = await getPool();
+  const itemId = await findItemId(pool, itemQuery);
+  if(!itemId){
+    return res.json({ message: 'Item not found.' });
+  }
+
+  const dueInfo = await resolveItemDue(pool, itemId);
+  if(!dueInfo){
+    return res.json({ message: 'No due policy configured for this item.', itemId });
+  }
+
+  res.json({
+    itemId,
+    itemName: dueInfo.itemName || null,
+    itemNumber: dueInfo.itemNumber || null,
+    dueUtc: dueInfo.dueUtc,
+    policy: dueInfo.policy,
+    policyDescription: dueInfo.description
+  });
+}));
+
 app.post('/api/loans/checkout', asyncHandler(async (req, res) => {
-  const { item, dueLocal, notes } = req.body || {};
-  if(!item || !dueLocal){
-    return res.status(400).json({ error: 'Item and due date are required.' });
+  const { item, notes } = req.body || {};
+  if(!item){
+    return res.status(400).json({ error: 'Item is required.' });
   }
 
   const pool = await getPool();
@@ -487,10 +648,8 @@ app.post('/api/loans/checkout', asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'Item not found.' });
   }
 
-  const dueDate = parseLocalDateTime(dueLocal);
-  if(!dueDate){
-    return res.status(400).json({ error: 'Invalid due date.' });
-  }
+  const dueInfo = await resolveItemDue(pool, itemId);
+  const dueDate = dueInfo?.dueUtc ? new Date(dueInfo.dueUtc) : null;
 
   const labTechId = await getDefaultLabTechId(pool);
 
@@ -504,7 +663,13 @@ app.post('/api/loans/checkout', asyncHandler(async (req, res) => {
   const result = await request.execute('dbo.usp_CheckoutItem');
   const loanId = result.recordset?.[0]?.intItemLoanID ?? null;
   const traceNumber = typeof loanId === 'number' ? loanId.toString().padStart(6, '0') : null;
-  res.status(201).json({ loanId, traceNumber });
+  res.status(201).json({
+    loanId,
+    traceNumber,
+    dueUtc: dueInfo?.dueUtc ?? null,
+    dueDescription: dueInfo?.description ?? null,
+    duePolicy: dueInfo?.policy ?? null
+  });
 }));
 
 app.post('/api/tickets', asyncHandler(async (req, res) => {
@@ -533,6 +698,45 @@ app.post('/api/tickets', asyncHandler(async (req, res) => {
   const result = await request.execute('dbo.usp_ServiceTicketCreate');
   const ticketId = result.recordset?.[0]?.intServiceTicketID ?? null;
   res.status(201).json({ ticketId, publicId });
+}));
+
+app.post('/api/items', asyncHandler(async (req, res) => {
+  const { name, number, department, schoolOwned, description, duePolicy, offsetDays, offsetHours, dueTime, fixedDue } = req.body || {};
+  const itemName = normalizeString(name);
+  if(!itemName){
+    return res.status(400).json({ error: 'Item name is required.' });
+  }
+
+  const policy = (normalizeString(duePolicy) || 'NEXT_DAY_6PM').toUpperCase();
+  const pool = await getPool();
+  const departmentId = await ensureDepartment(pool, department);
+
+  const days = toIntOrNull(offsetDays);
+  const hours = toIntOrNull(offsetHours);
+  const timeSql = normalizeTimeForSql(dueTime);
+  const fixedDueDate = parseLocalDateTime(fixedDue);
+
+  try {
+    const request = pool.request();
+    request.input('strItemName', sql.VarChar(120), itemName);
+    request.input('strItemNumber', sql.VarChar(60), normalizeString(number) || null);
+    request.input('blnIsSchoolOwned', sql.Bit, schoolOwned === false ? 0 : 1);
+    request.input('intDepartmentID', sql.Int, departmentId ?? null);
+    request.input('strDescription', sql.VarChar(400), normalizeString(description) || null);
+    request.input('strDuePolicy', sql.VarChar(30), policy);
+    request.input('intDueDaysOffset', sql.Int, (policy === 'OFFSET' || policy === 'NEXT_DAY_6PM') ? days : null);
+    request.input('intDueHoursOffset', sql.Int, policy === 'OFFSET' ? hours : null);
+    request.input('tDueTime', sql.Time, (policy === 'OFFSET' || policy === 'NEXT_DAY_6PM') ? (timeSql || null) : null);
+    request.input('dtmFixedDueLocal', sql.DateTime2, (policy === 'SEMESTER' || policy === 'FIXED') ? fixedDueDate : null);
+    const result = await request.execute('dbo.usp_CreateItem');
+    const itemId = result.recordset?.[0]?.intItemID ?? null;
+    res.status(201).json({ itemId });
+  } catch(err){
+    if(err && (err.number === 2627 || err.number === 2601)){
+      return res.status(409).json({ error: 'An item with that number already exists.' });
+    }
+    throw err;
+  }
 }));
 
 const LOAN_STATUS_SET = new Set(['On Time', 'Overdue', 'Returned']);
