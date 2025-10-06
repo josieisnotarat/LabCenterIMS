@@ -73,10 +73,16 @@ CREATE TABLE dbo.TItems
     blnIsSchoolOwned        BIT          NOT NULL,
     intDepartmentID         INT          NULL REFERENCES dbo.TDepartments(intDepartmentID),
     strDescription          VARCHAR(400) NULL,
+    strDuePolicy            VARCHAR(30)  NOT NULL CONSTRAINT DF_TItems_DuePolicy DEFAULT ('NEXT_DAY_6PM'),
+    intDueDaysOffset        INT          NULL,
+    intDueHoursOffset       INT          NULL,
+    tDueTime                TIME(0)      NULL,
+    dtmFixedDueLocal        DATETIME2(0) NULL,
     blnIsActive             BIT          NOT NULL CONSTRAINT DF_TItems_IsActive DEFAULT (1),
     dtmCreated              DATETIME2(0) NOT NULL CONSTRAINT DF_TItems_Created  DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT UQ_TItems_ItemNumber UNIQUE (strItemNumber)
 );
+ALTER TABLE dbo.TItems ADD CONSTRAINT CK_TItems_DuePolicy CHECK (strDuePolicy IN ('NEXT_DAY_6PM','OFFSET','FIXED','SEMESTER'));
 CREATE INDEX IX_TItems_Name ON dbo.TItems(strItemName);
 
 CREATE TABLE dbo.TItemLoans
@@ -323,6 +329,104 @@ BEGIN
   VALUES (@strFirstName,@strLastName,@strSchoolIDNumber,@strPhoneNumber,@strRoomNumber,@strInstructor,@intDepartmentID);
 
   SELECT SCOPE_IDENTITY() AS intBorrowerID;
+END
+GO
+
+-- Borrower lookup for live search
+IF OBJECT_ID('dbo.usp_SearchBorrowers','P') IS NOT NULL DROP PROCEDURE dbo.usp_SearchBorrowers;
+GO
+CREATE PROCEDURE dbo.usp_SearchBorrowers
+  @SearchTerm NVARCHAR(120),
+  @Top INT = 8
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  DECLARE @Term NVARCHAR(120) = LTRIM(RTRIM(ISNULL(@SearchTerm, N'')));
+  IF (@Term = N'')
+  BEGIN
+      SELECT TOP (0)
+             b.intBorrowerID,
+             b.strFirstName,
+             b.strLastName,
+             b.strSchoolIDNumber
+      FROM dbo.TBorrowers AS b;
+      RETURN;
+  END;
+
+  DECLARE @Like NVARCHAR(130) = N'%' + @Term + N'%';
+
+  SELECT TOP (@Top)
+         b.intBorrowerID,
+         b.strFirstName,
+         b.strLastName,
+         b.strSchoolIDNumber
+  FROM dbo.TBorrowers AS b
+  WHERE b.strFirstName LIKE @Like
+     OR b.strLastName LIKE @Like
+     OR (b.strFirstName + N' ' + b.strLastName) LIKE @Like
+     OR ISNULL(b.strSchoolIDNumber, N'') LIKE @Like
+  ORDER BY b.strLastName, b.strFirstName, b.intBorrowerID DESC;
+END
+GO
+
+-- Create inventory item with due policy metadata
+IF OBJECT_ID('dbo.usp_CreateItem','P') IS NOT NULL DROP PROCEDURE dbo.usp_CreateItem;
+GO
+CREATE PROCEDURE dbo.usp_CreateItem
+  @strItemName        VARCHAR(120),
+  @strItemNumber      VARCHAR(60) = NULL,
+  @blnIsSchoolOwned   BIT,
+  @intDepartmentID    INT = NULL,
+  @strDescription     VARCHAR(400) = NULL,
+  @strDuePolicy       VARCHAR(30) = 'NEXT_DAY_6PM',
+  @intDueDaysOffset   INT = NULL,
+  @intDueHoursOffset  INT = NULL,
+  @tDueTime           TIME(0) = NULL,
+  @dtmFixedDueLocal   DATETIME2(0) = NULL
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  DECLARE @Policy VARCHAR(30) = UPPER(LTRIM(RTRIM(ISNULL(@strDuePolicy, 'NEXT_DAY_6PM'))));
+  IF (@Policy NOT IN ('NEXT_DAY_6PM','OFFSET','FIXED','SEMESTER'))
+      SET @Policy = 'NEXT_DAY_6PM';
+
+  IF (@Policy = 'NEXT_DAY_6PM')
+  BEGIN
+      IF (@intDueDaysOffset IS NULL) SET @intDueDaysOffset = 1;
+      IF (@intDueHoursOffset IS NULL) SET @intDueHoursOffset = 0;
+      IF (@tDueTime IS NULL) SET @tDueTime = '18:00';
+  END;
+
+  INSERT dbo.TItems
+  (
+    strItemName,
+    strItemNumber,
+    blnIsSchoolOwned,
+    intDepartmentID,
+    strDescription,
+    strDuePolicy,
+    intDueDaysOffset,
+    intDueHoursOffset,
+    tDueTime,
+    dtmFixedDueLocal
+  )
+  VALUES
+  (
+    @strItemName,
+    @strItemNumber,
+    @blnIsSchoolOwned,
+    @intDepartmentID,
+    @strDescription,
+    @Policy,
+    @intDueDaysOffset,
+    @intDueHoursOffset,
+    @tDueTime,
+    @dtmFixedDueLocal
+  );
+
+  SELECT SCOPE_IDENTITY() AS intItemID;
 END
 GO
 
@@ -846,28 +950,28 @@ END
 
 IF NOT EXISTS (SELECT 1 FROM dbo.TItems)
 BEGIN
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription)
-    SELECT 'USB-C Cable (1m)','CAB-UC-001',1,d.intDepartmentID,'Standard USB-C charging/data cable'
+    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,strDuePolicy,intDueDaysOffset,intDueHoursOffset,tDueTime,dtmFixedDueLocal)
+    SELECT 'USB-C Cable (1m)','CAB-UC-001',1,d.intDepartmentID,'Standard USB-C charging/data cable','NEXT_DAY_6PM',1,0,'18:00',NULL
     FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
 
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription)
-    SELECT 'Raspberry Pi 5','DEV-RPI-005',1,d.intDepartmentID,'Single-board computer kit with PSU'
+    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,strDuePolicy,intDueDaysOffset,intDueHoursOffset,tDueTime,dtmFixedDueLocal)
+    SELECT 'Raspberry Pi 5','DEV-RPI-005',1,d.intDepartmentID,'Single-board computer kit with PSU','OFFSET',3,0,'12:00',NULL
     FROM dbo.TDepartments d WHERE d.strDepartmentName = 'IT / Software';
 
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription)
-    SELECT 'Scope Probe','OSC-SCP-07',1,d.intDepartmentID,'Oscilloscope probe replacement'
+    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,strDuePolicy,intDueDaysOffset,intDueHoursOffset,tDueTime,dtmFixedDueLocal)
+    SELECT 'Scope Probe','OSC-SCP-07',1,d.intDepartmentID,'Oscilloscope probe replacement','OFFSET',7,0,'09:30',NULL
     FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
 
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription)
-    SELECT 'Lab Laptop 15','LAP-015',1,d.intDepartmentID,'15" Windows laptop for student checkout'
+    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,strDuePolicy,intDueDaysOffset,intDueHoursOffset,tDueTime,dtmFixedDueLocal)
+    SELECT 'Lab Laptop 15','LAP-015',1,d.intDepartmentID,'15" Windows laptop for student checkout','SEMESTER',NULL,NULL,NULL,'2024-05-10T18:00:00'
     FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Media';
 
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription)
-    SELECT 'Multimeter #A12','MM-A12',1,d.intDepartmentID,'Digital multimeter used in circuits lab'
+    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,strDuePolicy,intDueDaysOffset,intDueHoursOffset,tDueTime,dtmFixedDueLocal)
+    SELECT 'Multimeter #A12','MM-A12',1,d.intDepartmentID,'Digital multimeter used in circuits lab','NEXT_DAY_6PM',1,0,'18:00',NULL
     FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
 
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription)
-    SELECT 'Oscilloscope #S7','OSC-S7',1,d.intDepartmentID,'Bench oscilloscope station'
+    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,strDuePolicy,intDueDaysOffset,intDueHoursOffset,tDueTime,dtmFixedDueLocal)
+    SELECT 'Oscilloscope #S7','OSC-S7',1,d.intDepartmentID,'Bench oscilloscope station','SEMESTER',NULL,NULL,NULL,'2024-05-10T18:00:00'
     FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
 END
 

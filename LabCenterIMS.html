@@ -193,6 +193,32 @@
     input:invalid, select:invalid, textarea:invalid{border-color:#fca5a5}
     textarea{min-height:96px; resize:vertical}
     .hint{font-size:12px; color:var(--muted)}
+    .lookup{position:relative}
+    .lookup-menu{
+      position:absolute;
+      left:0; right:0;
+      top:calc(100% + 4px);
+      background:var(--bg);
+      border:1px solid var(--line);
+      border-radius:10px;
+      box-shadow:var(--shadow);
+      padding:4px 0;
+      margin:0;
+      list-style:none;
+      max-height:220px;
+      overflow:auto;
+      display:none;
+      z-index:40;
+    }
+    .lookup-menu.show{display:block}
+    .lookup-item{padding:8px 12px; cursor:pointer}
+    .lookup-item:hover,.lookup-item.active{background:var(--surface)}
+    .lookup-item strong{display:block; font-weight:600}
+    .lookup-item .sub{font-size:12px; color:var(--muted)}
+    .lookup-empty{padding:8px 12px; color:var(--muted)}
+    .due-preview{font-size:12px; color:var(--muted); min-height:18px}
+    .due-config{display:none}
+    .due-config.active{display:block}
   </style>
 </head>
 <body>
@@ -381,6 +407,7 @@
             <div class="body">
               <div class="toolbar" style="justify-content:space-between">
                 <div style="display:flex; gap:8px; flex-wrap:wrap">
+                  <button class="btn" data-open="dlg-create-item"><span>Add Inventory Item</span></button>
                   <button class="btn" data-open="dlg-create-user"><span>Create User</span></button>
                   <button class="btn" data-open="dlg-delete-user"><span>Delete User</span></button>
                 </div>
@@ -495,16 +522,14 @@
           <!-- Borrow specifics -->
           <div class="full" data-bind="borrow">
             <label>Item (name or number)</label>
-            <input id="nc-item" placeholder="e.g., Oscilloscope #S7">
+            <input id="nc-item" placeholder="e.g., Oscilloscope #S7" autocomplete="off">
+          </div>
+          <div class="full due-preview" data-bind="borrow" id="nc-due-preview" aria-live="polite">
+            Due date will be assigned automatically from the item's policy.
           </div>
           <div data-bind="borrow">
             <label>Checkout Notes</label>
             <input id="nc-notes" placeholder="Condition notes / instructions">
-          </div>
-          <div data-bind="borrow">
-            <label>Due (local)</label>
-            <input id="nc-due" type="datetime-local">
-            <div class="hint">Must be in the future</div>
           </div>
 
           <!-- Service specifics -->
@@ -536,22 +561,23 @@
       </div>
       <div class="modal-bd">
         <div class="form-grid">
+          <input type="hidden" id="rb-borrower-id">
           <div>
             <label>School/Faculty ID</label>
             <input id="rb-id" placeholder="or leave blank & use name lookup" pattern="\\d{5,10}">
           </div>
           <div>
             <label>Name Lookup</label>
-            <input id="rb-name" placeholder="Jane Doe">
+            <div class="lookup">
+              <input id="rb-name" placeholder="Jane Doe" autocomplete="off" aria-expanded="false" aria-haspopup="listbox">
+              <ul class="lookup-menu" id="rb-name-menu" role="listbox" aria-label="Matching borrowers"></ul>
+            </div>
           </div>
           <div class="full">
             <label>Item (name or number)</label>
             <input id="rb-item" required placeholder="e.g., Raspberry Pi 5 or #S7">
           </div>
-          <div>
-            <label>Due (local)</label>
-            <input id="rb-due" type="datetime-local" required>
-          </div>
+          <div class="full due-preview" id="rb-due-preview" aria-live="polite">Due date will be assigned automatically from the item's policy.</div>
           <div>
             <label>Checkout Notes</label>
             <input id="rb-notes" placeholder="optional">
@@ -575,13 +601,17 @@
       </div>
       <div class="modal-bd">
         <div class="form-grid">
+          <input type="hidden" id="rs-borrower-id">
           <div>
             <label>School/Faculty ID</label>
             <input id="rs-id" placeholder="or name lookup" pattern="\\d{5,10}">
           </div>
           <div>
             <label>Name Lookup</label>
-            <input id="rs-name" placeholder="Alex Smith">
+            <div class="lookup">
+              <input id="rs-name" placeholder="Alex Smith" autocomplete="off" aria-expanded="false" aria-haspopup="listbox">
+              <ul class="lookup-menu" id="rs-name-menu" role="listbox" aria-label="Matching borrowers"></ul>
+            </div>
           </div>
           <div class="full">
             <label>Item Being Serviced</label>
@@ -638,6 +668,72 @@
       <div class="modal-ft">
         <button class="btn" value="close">Cancel</button>
         <button class="btn primary" id="det-save"><span>Save Changes</span><span class="spinner" aria-hidden="true"></span></button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Admin: Create Item -->
+  <dialog id="dlg-create-item">
+    <form method="dialog" id="form-create-item" novalidate>
+      <div class="modal-hd">
+        <strong>Add Inventory Item</strong>
+        <button class="btn" value="close">Close</button>
+      </div>
+      <div class="modal-bd">
+        <div class="form-grid">
+          <div class="full">
+            <label>Item Name</label>
+            <input id="ci-name" required placeholder="e.g., Trainer #34">
+          </div>
+          <div>
+            <label>Item Number</label>
+            <input id="ci-number" placeholder="optional">
+          </div>
+          <div>
+            <label>Department</label>
+            <input id="ci-dept" placeholder="e.g., Electrical Engineering Tech">
+          </div>
+          <div>
+            <label>Ownership</label>
+            <select id="ci-owned">
+              <option value="school" selected>School-owned</option>
+              <option value="external">External / donated</option>
+            </select>
+          </div>
+          <div class="full">
+            <label>Description</label>
+            <textarea id="ci-description" placeholder="optional"></textarea>
+          </div>
+          <div class="full">
+            <label>Due Policy</label>
+            <select id="ci-due-policy">
+              <option value="NEXT_DAY_6PM" selected>Next day at 6:00 PM</option>
+              <option value="OFFSET">Custom offset</option>
+              <option value="SEMESTER">Semester / fixed date</option>
+            </select>
+          </div>
+          <div class="due-config" data-policy="OFFSET">
+            <label>Offset (days)</label>
+            <input id="ci-offset-days" type="number" min="0" value="1">
+          </div>
+          <div class="due-config" data-policy="OFFSET">
+            <label>Offset (hours)</label>
+            <input id="ci-offset-hours" type="number" min="0" value="0">
+          </div>
+          <div class="due-config" data-policy="OFFSET">
+            <label>Due Time (local)</label>
+            <input id="ci-offset-time" type="time" value="18:00">
+          </div>
+          <div class="due-config full" data-policy="SEMESTER">
+            <label>Fixed Due (local)</label>
+            <input id="ci-fixed-due" type="datetime-local">
+            <div class="hint">Set the semester end date/time for this item.</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-ft">
+        <button class="btn" value="close">Cancel</button>
+        <button class="btn primary" id="ci-save"><span>Save Item</span><span class="spinner" aria-hidden="true"></span></button>
       </div>
     </form>
   </dialog>
@@ -822,7 +918,7 @@
     }
 
     // Dialog openers
-    $$( "[data-open]" ).forEach(btn=>{
+    $$("[data-open]").forEach(btn=>{
       btn.addEventListener("click", ()=>{
         const id = btn.getAttribute("data-open");
         const dlg = document.getElementById(id);
@@ -834,6 +930,44 @@
             sel.value = action;
             sel.dispatchEvent(new Event("change"));
           }
+        }
+        if(id === "dlg-returning-borrow"){
+          const form = document.getElementById("form-returning-borrow");
+          form?.reset();
+          const preview = document.getElementById("rb-due-preview");
+          if(preview){
+            const msg = preview.dataset.defaultMessage || 'Due date will be assigned automatically from the item\'s policy.';
+            preview.textContent = msg;
+          }
+          const nameInput = document.getElementById("rb-name");
+          if(nameInput){
+            nameInput.dataset.borrowerId = '';
+          }
+          requestAnimationFrame(()=>{
+            const focusTarget = document.getElementById("rb-id");
+            if(focusTarget){
+              focusTarget.focus();
+              focusTarget.select?.();
+            }
+          });
+        }else if(id === "dlg-returning-service"){
+          const form = document.getElementById("form-returning-service");
+          form?.reset();
+          const nameInput = document.getElementById("rs-name");
+          if(nameInput){
+            nameInput.dataset.borrowerId = '';
+          }
+          requestAnimationFrame(()=>{
+            const focusTarget = document.getElementById("rs-id");
+            if(focusTarget){
+              focusTarget.focus();
+              focusTarget.select?.();
+            }
+          });
+        }else if(id === "dlg-create-item"){
+          const form = document.getElementById("form-create-item");
+          form?.reset();
+          updateItemDuePolicyVisibility();
         }
         dlg.showModal();
       });
@@ -1287,7 +1421,274 @@
     // Tiny validation helpers shared by multiple forms.
     function must(cond, msg){ if(!cond) throw new Error(msg); }
     function requireOne(valA, valB, msg){ must((valA && valA.trim()) || (valB && valB.trim()), msg); }
-    function future(dtStr){ const t = new Date(dtStr); return t > new Date(); }
+
+    function debounce(fn, wait=200){
+      let timeout;
+      return function(...args){
+        if(timeout) clearTimeout(timeout);
+        timeout = setTimeout(()=> fn.apply(this, args), wait);
+      };
+    }
+
+    function normalizeDueText(value){
+      if(!value) return null;
+      const formatted = formatLocalDateTime(value);
+      return formatted && formatted !== "—" ? formatted : null;
+    }
+
+    function formatCheckoutConfirmation(payload){
+      if(!payload) return "Checkout complete.";
+      const dueText = normalizeDueText(payload.dueUtc || payload.dueUTC);
+      const description = payload.dueDescription || payload.policyDescription || payload.policyLabel || payload.policy || "";
+      if(dueText && description){
+        return `Checkout complete. Due ${dueText} (${description}).`;
+      }
+      if(dueText){
+        return `Checkout complete. Due ${dueText}.`;
+      }
+      if(description){
+        return `Checkout complete. ${description}`;
+      }
+      return "Checkout complete.";
+    }
+
+    function formatDuePreview(payload){
+      if(!payload) return "Unable to determine due date for that item.";
+      if(payload.message) return payload.message;
+      const dueText = normalizeDueText(payload.dueUtc || payload.dueUTC);
+      const description = payload.policyDescription || payload.policyLabel || payload.policy || "";
+      if(dueText && description){
+        return `Expected due ${dueText} (${description}).`;
+      }
+      if(dueText){
+        return `Expected due ${dueText}.`;
+      }
+      if(description){
+        return description;
+      }
+      return "Unable to determine due date for that item.";
+    }
+
+    function setupDuePreview(inputId, previewId){
+      const input = document.getElementById(inputId);
+      const preview = document.getElementById(previewId);
+      if(!input || !preview) return;
+      const defaultText = (preview.dataset.defaultMessage || preview.textContent || '').trim() || 'Due date will be assigned automatically from the item\'s policy.';
+      preview.dataset.defaultMessage = defaultText;
+      let token = 0;
+
+      const update = debounce(async ()=>{
+        const query = input.value.trim();
+        const currentToken = ++token;
+        if(!query){
+          preview.textContent = defaultText;
+          return;
+        }
+        try{
+          const res = await api(`/items/due-preview?item=${encodeURIComponent(query)}`, { method:"GET" });
+          const payload = await res.json();
+          if(currentToken !== token) return;
+          preview.textContent = formatDuePreview(payload);
+        }catch(err){
+          if(currentToken !== token) return;
+          console.warn('Due preview lookup failed', err);
+          preview.textContent = 'Unable to determine due date for that item.';
+        }
+      }, 250);
+
+      input.addEventListener('input', ()=>{
+        if(!input.value.trim()){
+          preview.textContent = defaultText;
+        }
+        update();
+      });
+      input.addEventListener('blur', ()=>{
+        setTimeout(update, 0);
+      });
+    }
+
+    function setupBorrowerLookup({ inputId, menuId, hiddenId, idFieldId }){
+      const input = document.getElementById(inputId);
+      const menu = document.getElementById(menuId);
+      const hidden = hiddenId ? document.getElementById(hiddenId) : null;
+      const idField = idFieldId ? document.getElementById(idFieldId) : null;
+      if(!input || !menu) return;
+
+      let results = [];
+      let activeIndex = -1;
+      let queryToken = 0;
+
+      const hideMenu = ()=>{
+        menu.classList.remove('show');
+        input.setAttribute('aria-expanded','false');
+        activeIndex = -1;
+        input.setAttribute('aria-activedescendant','');
+      };
+
+      const showMenu = ()=>{
+        if(menu.children.length){
+          menu.classList.add('show');
+          input.setAttribute('aria-expanded','true');
+        }
+      };
+
+      const resetSelection = ()=>{
+        if(hidden) hidden.value = '';
+        input.dataset.borrowerId = '';
+        input.setAttribute('aria-activedescendant','');
+      };
+
+      const render = (items, emptyMessage)=>{
+        menu.textContent = '';
+        results = Array.isArray(items) ? items : [];
+        activeIndex = -1;
+        if(!results.length){
+          if(emptyMessage){
+            const li = document.createElement('li');
+            li.className = 'lookup-empty';
+            li.textContent = emptyMessage;
+            menu.appendChild(li);
+            showMenu();
+          }else{
+            hideMenu();
+          }
+          return;
+        }
+        results.forEach((item, idx)=>{
+          const li = document.createElement('li');
+          li.className = 'lookup-item';
+          li.id = `${menuId}-opt-${idx}`;
+          li.setAttribute('role','option');
+          li.dataset.index = String(idx);
+          const name = item.name || [item.firstName, item.lastName].filter(Boolean).join(' ').trim() || 'Unknown';
+          const schoolId = item.schoolId || '';
+          li.innerHTML = `<strong>${name}</strong>${schoolId ? `<span class="sub">ID: ${schoolId}</span>` : ''}`;
+          li.addEventListener('mousedown', e=>{
+            e.preventDefault();
+            select(idx);
+          });
+          menu.appendChild(li);
+        });
+        showMenu();
+      };
+
+      const select = (idx)=>{
+        const item = results[idx];
+        if(!item) return;
+        const name = item.name || [item.firstName, item.lastName].filter(Boolean).join(' ').trim();
+        input.value = name;
+        input.dataset.borrowerId = item.id ?? '';
+        if(hidden) hidden.value = item.id ?? '';
+        if(idField && item.schoolId){
+          idField.value = item.schoolId;
+        }
+        hideMenu();
+      };
+
+      const setActiveIndex = (idx)=>{
+        const items = menu.querySelectorAll('.lookup-item');
+        if(!items.length) return;
+        activeIndex = ((idx % items.length) + items.length) % items.length;
+        items.forEach((el, index)=>{
+          if(index === activeIndex){
+            el.classList.add('active');
+            input.setAttribute('aria-activedescendant', el.id);
+            el.scrollIntoView({ block:'nearest' });
+          }else{
+            el.classList.remove('active');
+          }
+        });
+      };
+
+      const runSearch = async ()=>{
+        const term = input.value.trim();
+        resetSelection();
+        if(term.length < 2){
+          hideMenu();
+          menu.textContent = '';
+          return;
+        }
+        if(!USE_BACKEND){
+          render([], 'Enable backend to search names.');
+          return;
+        }
+        const token = ++queryToken;
+        render([], 'Searching…');
+        try{
+          const res = await api(`/borrowers/search?query=${encodeURIComponent(term)}`, { method:"GET" });
+          const payload = await res.json();
+          if(token !== queryToken) return;
+          const entries = Array.isArray(payload?.entries) ? payload.entries : Array.isArray(payload) ? payload : [];
+          const normalized = entries.map(item=>({
+            id: item.id ?? item.intBorrowerID ?? item.borrowerId ?? null,
+            name: item.name || [item.firstName || item.strFirstName, item.lastName || item.strLastName].filter(Boolean).join(' ').trim(),
+            schoolId: item.schoolId || item.strSchoolIDNumber || null
+          }));
+          render(normalized, normalized.length ? null : 'No matches found.');
+        }catch(err){
+          if(token !== queryToken) return;
+          console.error('Borrower lookup failed', err);
+          render([], 'Lookup failed.');
+        }
+      };
+
+      const debouncedSearch = debounce(runSearch, 200);
+
+      input.addEventListener('input', ()=>{
+        if(hidden) hidden.value = '';
+        input.dataset.borrowerId = '';
+        debouncedSearch();
+      });
+
+      input.addEventListener('focus', ()=>{
+        if(menu.children.length) showMenu();
+      });
+
+      input.addEventListener('blur', ()=>{
+        setTimeout(hideMenu, 120);
+      });
+
+      input.addEventListener('keydown', (event)=>{
+        if(!menu.classList.contains('show')) return;
+        if(event.key === 'ArrowDown' || event.key === 'Down'){
+          event.preventDefault();
+          setActiveIndex(activeIndex + 1);
+        }else if(event.key === 'ArrowUp' || event.key === 'Up'){
+          event.preventDefault();
+          setActiveIndex(activeIndex - 1);
+        }else if(event.key === 'Enter'){
+          if(activeIndex >= 0){
+            event.preventDefault();
+            select(activeIndex);
+          }
+        }else if(event.key === 'Escape'){
+          hideMenu();
+        }
+      });
+
+      if(idField){
+        idField.addEventListener('input', ()=>{
+          if(!idField.value){
+            resetSelection();
+          }
+        });
+      }
+    }
+
+    function updateItemDuePolicyVisibility(){
+      const select = document.getElementById('ci-due-policy');
+      const form = document.getElementById('form-create-item');
+      if(!select || !form) return;
+      const policy = select.value;
+      $$('.due-config', form).forEach(el=>{
+        const active = el.dataset.policy === policy;
+        if(active){
+          el.classList.add('active');
+        }else{
+          el.classList.remove('active');
+        }
+      });
+    }
 
     // ====== DATA LAYER ======
     /**
@@ -1491,15 +1892,12 @@
     // ====== SAVE HANDLERS ======
     // New Customer (borrow/service)
     $("#nc-save").addEventListener("click", withAsyncBusy($("#nc-save"), async ()=>{
-      const f = $("#form-new-customer");
       const first = $("#nc-first").value.trim();
       const last  = $("#nc-last").value.trim();
       const action= $("#nc-action").value;
       must(first && last, "First/Last required.");
       if(action==="borrow"){
         must($("#nc-item").value.trim(), "Item required.");
-        must($("#nc-due").value, "Due required.");
-        must(future($("#nc-due").value), "Due must be in the future.");
       }else{
         must($("#ns-item").value.trim(), "Service item required.");
         must($("#ns-issue").value.trim(), "Issue required.");
@@ -1510,58 +1908,120 @@
       const phone = $("#nc-phone").value;
       if(phone && !/^\(\d{3}\) \d{3}-\d{4}$/.test(phone)) throw new Error("Phone format: (###) ###-####");
 
-      // create customer then action
       await api("/customers", { method:"POST", body: JSON.stringify({
         first,last, schoolId:id||null, phone:phone||null,
         room:$("#nc-room").value||null, instructor:$("#nc-instructor").value||null,
         dept:$("#nc-dept").value||null
       })});
+
+      let message = "Saved.";
       if(action==="borrow"){
-        await api("/loans/checkout", { method:"POST", body: JSON.stringify({
-          customerName:`${first} ${last}`, item:$("#nc-item").value.trim(),
-          dueLocal: $("#nc-due").value, notes: $("#nc-notes").value||null
+        const checkoutRes = await api("/loans/checkout", { method:"POST", body: JSON.stringify({
+          customerName:`${first} ${last}`,
+          item:$("#nc-item").value.trim(),
+          notes: $("#nc-notes").value||null
         })});
+        const payload = await checkoutRes.json().catch(()=>({}));
+        message = formatCheckoutConfirmation(payload);
       }else{
         await api("/tickets", { method:"POST", body: JSON.stringify({
           customerName:`${first} ${last}`, item:$("#ns-item").value.trim(),
           issue: $("#ns-issue").value.trim()
         })});
+        message = "Service ticket created.";
       }
+
       closeDialogById("dlg-new-customer");
-      alert("Saved.");
+      alert(message);
     }));
 
     // Returning Borrow
     $("#rb-save").addEventListener("click", withAsyncBusy($("#rb-save"), async ()=>{
+      const borrowerId = $("#rb-borrower-id").value.trim();
       const id = $("#rb-id").value.trim();
       const name = $("#rb-name").value.trim();
-      requireOne(id,name,"Provide either School/Faculty ID or Name.");
+      if(!borrowerId){
+        requireOne(id,name,"Provide either School/Faculty ID or Name.");
+      }
       must($("#rb-item").value.trim(), "Item required.");
-      must($("#rb-due").value, "Due required.");
-      must(future($("#rb-due").value), "Due must be in the future.");
 
-      await api("/loans/checkout", { method:"POST", body: JSON.stringify({
-        schoolId:id||null, name:name||null, item:$("#rb-item").value.trim(),
-        dueLocal: $("#rb-due").value, notes: $("#rb-notes").value||null
+      const checkoutRes = await api("/loans/checkout", { method:"POST", body: JSON.stringify({
+        borrowerId: borrowerId || null,
+        schoolId:id||null,
+        name:name||null,
+        item:$("#rb-item").value.trim(),
+        notes: $("#rb-notes").value||null
       })});
+      const payload = await checkoutRes.json().catch(()=>({}));
       closeDialogById("dlg-returning-borrow");
-      alert("Checkout complete.");
+      alert(formatCheckoutConfirmation(payload));
     }));
 
     // Returning Service
     $("#rs-save").addEventListener("click", withAsyncBusy($("#rs-save"), async ()=>{
+      const borrowerId = $("#rs-borrower-id").value.trim();
       const id = $("#rs-id").value.trim();
       const name = $("#rs-name").value.trim();
-      requireOne(id,name,"Provide either School/Faculty ID or Name.");
+      if(!borrowerId){
+        requireOne(id,name,"Provide either School/Faculty ID or Name.");
+      }
       must($("#rs-item").value.trim(), "Item required.");
       must($("#rs-issue").value.trim(), "Issue required.");
 
       await api("/tickets", { method:"POST", body: JSON.stringify({
+        borrowerId: borrowerId || null,
         schoolId:id||null, name:name||null,
         item: $("#rs-item").value.trim(), issue: $("#rs-issue").value.trim()
       })});
       closeDialogById("dlg-returning-service");
       alert("Service ticket created.");
+    }));
+
+    // Admin: Create Item
+    $("#ci-save").addEventListener("click", withAsyncBusy($("#ci-save"), async ()=>{
+      const form = document.getElementById("form-create-item");
+      const name = $("#ci-name").value.trim();
+      must(name, "Item name required.");
+      const number = $("#ci-number").value.trim();
+      const dept = $("#ci-dept").value.trim();
+      const owned = $("#ci-owned").value !== "external";
+      const description = $("#ci-description").value.trim();
+      const policy = $("#ci-due-policy").value;
+      must(policy, "Due policy required.");
+
+      const payload = {
+        name,
+        number: number || null,
+        department: dept || null,
+        schoolOwned: owned,
+        description: description || null,
+        duePolicy: policy
+      };
+
+      if(policy === "OFFSET"){
+        const daysVal = $("#ci-offset-days").value;
+        const hoursVal = $("#ci-offset-hours").value;
+        const timeVal = $("#ci-offset-time").value;
+        const days = Number.parseInt(daysVal, 10);
+        const hours = hoursVal === '' ? 0 : Number.parseInt(hoursVal, 10);
+        must(Number.isInteger(days) && days >= 0, "Offset days must be zero or greater.");
+        must(Number.isInteger(hours) && hours >= 0, "Offset hours must be zero or greater.");
+        must(timeVal, "Due time required.");
+        payload.offsetDays = days;
+        payload.offsetHours = hours;
+        payload.dueTime = timeVal;
+      }else if(policy === "SEMESTER"){
+        const fixed = $("#ci-fixed-due").value;
+        must(fixed, "Fixed due date/time required.");
+        payload.fixedDue = fixed;
+      }
+
+      const res = await api("/items", { method:"POST", body: JSON.stringify(payload) });
+      const data = await res.json().catch(()=>({}));
+      form?.reset();
+      closeDialogById("dlg-create-item");
+      updateItemDuePolicyVisibility();
+      alert(data?.message || (data?.itemId ? `Item saved (ID ${data.itemId}).` : "Item saved."));
     }));
 
     // Detail Save (status + note)
@@ -1608,6 +2068,17 @@
       closeDialogById("dlg-delete-user");
       alert("User deleted.");
     }));
+
+    setupDuePreview('nc-item','nc-due-preview');
+    setupDuePreview('rb-item','rb-due-preview');
+    setupBorrowerLookup({ inputId:'rb-name', menuId:'rb-name-menu', hiddenId:'rb-borrower-id', idFieldId:'rb-id' });
+    setupBorrowerLookup({ inputId:'rs-name', menuId:'rs-name-menu', hiddenId:'rs-borrower-id', idFieldId:'rs-id' });
+
+    const duePolicySelect = document.getElementById('ci-due-policy');
+    if(duePolicySelect){
+      duePolicySelect.addEventListener('change', updateItemDuePolicyVisibility);
+      updateItemDuePolicyVisibility();
+    }
 
     setStatsLoading();
     showTableMessage("tbl-home-out", "Loading current checkouts…");
