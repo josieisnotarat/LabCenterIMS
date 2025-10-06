@@ -56,46 +56,46 @@ function formatName(first, last){
 
 function mapAliasRow(row){
   return {
-    id: row.intBorrowerAliasID ?? null,
-    alias: row.strAlias || '',
-    createdUtc: toIso(row.dtmCreated)
+    id: row.BorrowerAliasID ?? null,
+    alias: row.Alias || '',
+    createdUtc: toIso(row.CreatedAt)
   };
 }
 
 function mapLoanRow(row){
-  const traceNumber = row.intItemLoanID != null
-    ? row.intItemLoanID.toString().padStart(6, '0')
+  const traceNumber = row.ItemLoanID != null
+    ? row.ItemLoanID.toString().padStart(6, '0')
     : null;
   return {
-    id: row.intItemLoanID ?? null,
+    id: row.ItemLoanID ?? null,
     traceNumber,
-    itemId: row.intItemID ?? null,
-    borrowerId: row.intBorrowerID ?? null,
-    itemName: row.snapItemName || null,
-    itemNumber: row.snapItemNumber || null,
-    borrowerName: formatName(row.snapBorrowerFirstName, row.snapBorrowerLastName),
-    borrowerSchoolId: row.snapSchoolIDNumber || null,
-    room: row.snapRoomNumber || null,
-    checkoutUtc: toIso(row.dtmCheckoutUTC),
-    dueUtc: toIso(row.dtmDueUTC),
-    checkinUtc: toIso(row.dtmCheckinUTC),
+    itemId: row.ItemID ?? null,
+    borrowerId: row.BorrowerID ?? null,
+    itemName: row.SnapshotItemName || null,
+    itemNumber: row.SnapshotItemNumber || null,
+    borrowerName: formatName(row.SnapshotBorrowerFirstName, row.SnapshotBorrowerLastName),
+    borrowerSchoolId: row.SnapshotSchoolIdNumber || null,
+    room: row.SnapshotRoomNumber || null,
+    checkoutUtc: toIso(row.CheckoutUtc),
+    dueUtc: toIso(row.DueUtc),
+    checkinUtc: toIso(row.CheckinUtc),
     status: row.LoanStatus || null
   };
 }
 
 function mapTicketRow(row){
-  const assignedName = formatName(row.assignedFirstName, row.assignedLastName);
+  const assignedName = formatName(row.AssignedFirstName, row.AssignedLastName);
   return {
-    id: row.intServiceTicketID ?? null,
-    publicId: row.strPublicTicketID || null,
-    itemId: row.intItemID ?? null,
-    borrowerId: row.intBorrowerID ?? null,
-    itemName: row.strItemName || row.strItemLabel || null,
-    issue: row.strIssue || null,
-    loggedUtc: toIso(row.dtmLoggedUTC),
+    id: row.ServiceTicketID ?? null,
+    publicId: row.PublicTicketID || null,
+    itemId: row.ItemID ?? null,
+    borrowerId: row.BorrowerID ?? null,
+    itemName: row.ItemName || row.ItemLabel || null,
+    issue: row.Issue || null,
+    loggedUtc: toIso(row.LoggedUtc),
     assignedName,
-    borrowerName: formatName(row.borrowerFirstName, row.borrowerLastName),
-    status: row.strStatus || null,
+    borrowerName: formatName(row.BorrowerFirstName, row.BorrowerLastName),
+    status: row.Status || null,
     loggedByName: assignedName
   };
 }
@@ -129,7 +129,7 @@ function mapUserRow(row){
 
 app.get('/api/dashboard-stats', asyncHandler(async (req, res) => {
   const pool = await getPool();
-  const result = await pool.request().execute('dbo.usp_GetDashboardStats');
+  const result = await pool.request().execute('dbo.spGetDashboardStats');
   const stats = result.recordset?.[0] || {};
   res.json({
     outNow: stats.outNow ?? 0,
@@ -146,7 +146,7 @@ app.get('/api/loans', asyncHandler(async (req, res) => {
   request.input('Top', sql.Int, Number.isFinite(top) ? top : 50);
   request.input('StatusFilter', sql.VarChar(30), req.query.status || null);
   request.input('Search', sql.NVarChar(120), req.query.search || null);
-  const result = await request.execute('dbo.usp_GetRecentLoans');
+  const result = await request.execute('dbo.spGetRecentLoans');
   const entries = result.recordset?.map(mapLoanRow) || [];
   res.json({ entries });
 }));
@@ -158,7 +158,7 @@ app.get('/api/service-tickets', asyncHandler(async (req, res) => {
   request.input('Top', sql.Int, Number.isFinite(top) ? top : 50);
   request.input('StatusFilter', sql.VarChar(30), req.query.status || null);
   request.input('Search', sql.NVarChar(120), req.query.search || null);
-  const result = await request.execute('dbo.usp_GetServiceTickets');
+  const result = await request.execute('dbo.spGetServiceTickets');
   const entries = result.recordset?.map(mapTicketRow) || [];
   res.json({ entries });
 }));
@@ -177,27 +177,27 @@ app.get('/api/borrowers/search', asyncHandler(async (req, res) => {
   const primaryRequest = pool.request();
   primaryRequest.input('SearchTerm', sql.NVarChar(120), query);
   primaryRequest.input('Top', sql.Int, limit);
-  const result = await primaryRequest.execute('dbo.usp_SearchBorrowers');
+  const result = await primaryRequest.execute('dbo.spSearchBorrowers');
   const rows = result.recordset || [];
 
   const entries = [];
   const seen = new Set();
 
   const appendRow = (row, aliasMatch = null) => {
-    const rawId = row.intBorrowerID ?? row.id ?? row.intBorrowerId ?? row.borrowerId;
+    const rawId = row.BorrowerID ?? row.id ?? row.borrowerId ?? row.BorrowerId;
     const parsedId = Number.parseInt(rawId, 10);
     if(!Number.isFinite(parsedId) || seen.has(parsedId)){
       return;
     }
     seen.add(parsedId);
-    const first = row.strFirstName || row.firstName;
-    const last = row.strLastName || row.lastName;
-    const alias = aliasMatch || row.MatchedAlias || row.matchedAlias || row.strAlias || row.alias || null;
+    const first = row.FirstName || row.firstName;
+    const last = row.LastName || row.lastName;
+    const alias = aliasMatch || row.MatchedAlias || row.matchedAlias || row.Alias || row.alias || null;
     const displayName = formatName(first, last) || alias || `Customer #${parsedId}`;
     entries.push({
       id: parsedId,
       name: displayName,
-      schoolId: row.strSchoolIDNumber || row.schoolId || null,
+      schoolId: row.SchoolIdNumber || row.schoolId || null,
       alias: alias || null
     });
   };
@@ -209,18 +209,18 @@ app.get('/api/borrowers/search', asyncHandler(async (req, res) => {
   aliasRequest.input('Search', sql.NVarChar(130), `%${query}%`);
   const aliasResult = await aliasRequest.query(`
     SELECT TOP (@Top)
-           b.intBorrowerID,
-           b.strFirstName,
-           b.strLastName,
-           b.strSchoolIDNumber,
-           a.strAlias,
-           a.intBorrowerAliasID
+           b.BorrowerID,
+           b.FirstName,
+           b.LastName,
+           b.SchoolIdNumber,
+           a.Alias,
+           a.BorrowerAliasID
     FROM dbo.TBorrowers AS b
-    INNER JOIN dbo.TBorrowerAliases AS a ON a.intBorrowerID = b.intBorrowerID
-    WHERE a.strAlias LIKE @Search
-    ORDER BY a.intBorrowerAliasID DESC;
+    INNER JOIN dbo.TBorrowerAliases AS a ON a.BorrowerID = b.BorrowerID
+    WHERE a.Alias LIKE @Search
+    ORDER BY a.BorrowerAliasID DESC;
   `);
-  aliasResult.recordset?.forEach(row => appendRow(row, row.strAlias));
+  aliasResult.recordset?.forEach(row => appendRow(row, row.Alias));
 
   res.json({ entries: entries.slice(0, limit) });
 }));
@@ -235,19 +235,19 @@ app.get('/api/loans/:id/notes', asyncHandler(async (req, res) => {
   const result = await pool.request()
     .input('LoanID', sql.Int, loanId)
     .query(`
-      SELECT n.intItemLoanNoteID, n.dtmNoteUTC, n.strNote,
-             lt.strFirstName, lt.strLastName
+      SELECT n.ItemLoanNoteID, n.NoteUtc, n.Note,
+             lt.FirstName, lt.LastName
       FROM dbo.TItemLoanNotes AS n
-      LEFT JOIN dbo.TLabTechs AS lt ON lt.intLabTechID = n.intLabTechID
-      WHERE n.intItemLoanID = @LoanID
-      ORDER BY n.dtmNoteUTC DESC;
+      LEFT JOIN dbo.TLabTechs AS lt ON lt.LabTechID = n.LabTechID
+      WHERE n.ItemLoanID = @LoanID
+      ORDER BY n.NoteUtc DESC;
     `);
 
   const entries = result.recordset?.map(row => ({
-    id: row.intItemLoanNoteID ?? null,
-    note: row.strNote || '',
-    timestamp: toIso(row.dtmNoteUTC),
-    author: formatName(row.strFirstName, row.strLastName)
+    id: row.ItemLoanNoteID ?? null,
+    note: row.Note || '',
+    timestamp: toIso(row.NoteUtc),
+    author: formatName(row.FirstName, row.LastName)
   })) || [];
 
   res.json({ entries });
@@ -263,19 +263,19 @@ app.get('/api/service-tickets/:id/notes', asyncHandler(async (req, res) => {
   const result = await pool.request()
     .input('TicketId', sql.Int, ticketId)
     .query(`
-      SELECT n.intServiceTicketNoteID, n.dtmNoteUTC, n.strNote,
-             lt.strFirstName, lt.strLastName
+      SELECT n.ServiceTicketNoteID, n.NoteUtc, n.Note,
+             lt.FirstName, lt.LastName
       FROM dbo.TServiceTicketNotes AS n
-      LEFT JOIN dbo.TLabTechs AS lt ON lt.intLabTechID = n.intLabTechID
-      WHERE n.intServiceTicketID = @TicketId
-      ORDER BY n.dtmNoteUTC DESC;
+      LEFT JOIN dbo.TLabTechs AS lt ON lt.LabTechID = n.LabTechID
+      WHERE n.ServiceTicketID = @TicketId
+      ORDER BY n.NoteUtc DESC;
     `);
 
   const entries = result.recordset?.map(row => ({
-    id: row.intServiceTicketNoteID ?? null,
-    note: row.strNote || '',
-    timestamp: toIso(row.dtmNoteUTC),
-    author: formatName(row.strFirstName, row.strLastName)
+    id: row.ServiceTicketNoteID ?? null,
+    note: row.Note || '',
+    timestamp: toIso(row.NoteUtc),
+    author: formatName(row.FirstName, row.LastName)
   })) || [];
 
   res.json({ entries });
@@ -286,17 +286,17 @@ app.get('/api/audit-log', asyncHandler(async (req, res) => {
   const top = Number.parseInt(req.query.top || '50', 10);
   const request = pool.request();
   request.input('Top', sql.Int, Number.isFinite(top) ? top : 50);
-  const result = await request.execute('dbo.usp_GetAuditLog');
+  const result = await request.execute('dbo.spGetAuditLog');
   const entries = result.recordset?.map(row => ({
-    intTraceID: row.intTraceID,
-    dtmEventUTC: toIso(row.dtmEventUTC),
-    intLabTechID: row.intLabTechID ?? null,
-    strFirstName: row.strFirstName || null,
-    strLastName: row.strLastName || null,
-    strAction: row.strAction || null,
-    strEntity: row.strEntity || null,
-    intEntityPK: row.intEntityPK ?? null,
-    strDetails: row.strDetails || null
+    TraceID: row.TraceID,
+    EventUtc: toIso(row.EventUtc),
+    LabTechID: row.LabTechID ?? null,
+    FirstName: row.FirstName || null,
+    LastName: row.LastName || null,
+    Action: row.Action || null,
+    Entity: row.Entity || null,
+    EntityPrimaryKey: row.EntityPrimaryKey ?? null,
+    Details: row.Details || null
   })) || [];
   res.json({ entries });
 }));
@@ -384,10 +384,10 @@ async function getItemDueSettings(pool, itemId){
   const result = await pool.request()
     .input('ItemID', sql.Int, itemId)
     .query(`
-      SELECT intItemID, strItemName, strItemNumber, strDuePolicy,
-             intDueDaysOffset, intDueHoursOffset, tDueTime, dtmFixedDueLocal
+      SELECT ItemID, ItemName, ItemNumber, DuePolicy,
+             DueDaysOffset, DueHoursOffset, DueTime, FixedDueLocal
       FROM dbo.TItems
-      WHERE intItemID = @ItemID;
+      WHERE ItemID = @ItemID;
     `);
   return result.recordset?.[0] || null;
 }
@@ -405,14 +405,14 @@ function describeOffset(days, hours, timeParts){
 
 function computeDueFromPolicy(row){
   if(!row) return null;
-  const policy = (row.strDuePolicy || 'NEXT_DAY_6PM').toUpperCase();
+  const policy = (row.DuePolicy || 'NEXT_DAY_6PM').toUpperCase();
   const now = new Date();
   let due = null;
   let description = '';
 
   if(policy === 'SEMESTER' || policy === 'FIXED'){
-    if(row.dtmFixedDueLocal){
-      const fixed = new Date(row.dtmFixedDueLocal);
+    if(row.FixedDueLocal){
+      const fixed = new Date(row.FixedDueLocal);
       if(!Number.isNaN(fixed.getTime())){
         due = fixed;
         description = 'Semester due';
@@ -423,9 +423,9 @@ function computeDueFromPolicy(row){
       description = 'Semester due date not configured';
     }
   }else{
-    const days = Number.isInteger(row.intDueDaysOffset) ? row.intDueDaysOffset : (policy === 'NEXT_DAY_6PM' ? 1 : 0);
-    const hours = Number.isInteger(row.intDueHoursOffset) ? row.intDueHoursOffset : 0;
-    const timeParts = toTimeParts(row.tDueTime);
+    const days = Number.isInteger(row.DueDaysOffset) ? row.DueDaysOffset : (policy === 'NEXT_DAY_6PM' ? 1 : 0);
+    const hours = Number.isInteger(row.DueHoursOffset) ? row.DueHoursOffset : 0;
+    const timeParts = toTimeParts(row.DueTime);
     due = new Date(now.getTime());
     if(days) due.setDate(due.getDate() + days);
     if(timeParts){
@@ -446,8 +446,8 @@ function computeDueFromPolicy(row){
     dueUtc,
     policy,
     description: description || policy,
-    itemName: row.strItemName || null,
-    itemNumber: row.strItemNumber || null
+    itemName: row.ItemName || null,
+    itemNumber: row.ItemNumber || null
   };
 }
 
@@ -463,13 +463,13 @@ async function resolveServiceTicketId(pool, identifier){
   request.input('TicketId', sql.Int, Number.isFinite(numericId) ? numericId : null);
   request.input('PublicId', sql.VarChar(20), normalizeString(identifier) || null);
   const result = await request.query(`
-    SELECT TOP (1) intServiceTicketID
+    SELECT TOP (1) ServiceTicketID
     FROM dbo.TServiceTickets
-    WHERE (@TicketId IS NOT NULL AND intServiceTicketID = @TicketId)
-       OR (strPublicTicketID = @PublicId)
-    ORDER BY intServiceTicketID DESC;
+    WHERE (@TicketId IS NOT NULL AND ServiceTicketID = @TicketId)
+       OR (PublicTicketID = @PublicId)
+    ORDER BY ServiceTicketID DESC;
   `);
-  return result.recordset?.[0]?.intServiceTicketID ?? null;
+  return result.recordset?.[0]?.ServiceTicketID ?? null;
 }
 
 async function ensureDepartment(pool, name){
@@ -479,34 +479,34 @@ async function ensureDepartment(pool, name){
   const lookup = await pool.request()
     .input('Name', sql.VarChar(100), deptName)
     .query(`
-      SELECT intDepartmentID
+      SELECT DepartmentID
       FROM dbo.TDepartments
-      WHERE LOWER(strDepartmentName) = LOWER(@Name);
+      WHERE LOWER(DepartmentName) = LOWER(@Name);
     `);
   if(lookup.recordset?.length){
-    return lookup.recordset[0].intDepartmentID;
+    return lookup.recordset[0].DepartmentID;
   }
 
   try {
     const insert = await pool.request()
       .input('Name', sql.VarChar(100), deptName)
       .query(`
-        INSERT dbo.TDepartments(strDepartmentName)
+        INSERT dbo.TDepartments(DepartmentName)
         VALUES (@Name);
-        SELECT SCOPE_IDENTITY() AS intDepartmentID;
+        SELECT SCOPE_IDENTITY() AS DepartmentID;
       `);
-    return insert.recordset?.[0]?.intDepartmentID ?? null;
+    return insert.recordset?.[0]?.DepartmentID ?? null;
   } catch(err){
     if(err && (err.number === 2601 || err.number === 2627)){
       const retry = await pool.request()
         .input('Name', sql.VarChar(100), deptName)
         .query(`
-          SELECT intDepartmentID
+          SELECT DepartmentID
           FROM dbo.TDepartments
-          WHERE LOWER(strDepartmentName) = LOWER(@Name);
+          WHERE LOWER(DepartmentName) = LOWER(@Name);
         `);
       if(retry.recordset?.length){
-        return retry.recordset[0].intDepartmentID;
+        return retry.recordset[0].DepartmentID;
       }
     }
     throw err;
@@ -519,13 +519,13 @@ async function ensureBorrowerAliasTable(pool){
     BEGIN
       CREATE TABLE dbo.TBorrowerAliases
       (
-        intBorrowerAliasID INT IDENTITY(1,1) PRIMARY KEY,
-        intBorrowerID      INT NOT NULL REFERENCES dbo.TBorrowers(intBorrowerID) ON DELETE CASCADE,
-        strAlias           NVARCHAR(120) NOT NULL,
-        dtmCreated         DATETIME2(0) NOT NULL CONSTRAINT DF_TBorrowerAliases_Created DEFAULT (SYSUTCDATETIME()),
-        CONSTRAINT UQ_TBorrowerAliases UNIQUE (intBorrowerID, strAlias)
+        BorrowerAliasID INT IDENTITY(1,1) PRIMARY KEY,
+        BorrowerID      INT NOT NULL REFERENCES dbo.TBorrowers(BorrowerID) ON DELETE CASCADE,
+        Alias           NVARCHAR(120) NOT NULL,
+        CreatedAt       DATETIME2(0) NOT NULL CONSTRAINT DF_TBorrowerAliases_Created DEFAULT (SYSUTCDATETIME()),
+        CONSTRAINT UQ_TBorrowerAliases UNIQUE (BorrowerID, Alias)
       );
-      CREATE INDEX IX_TBorrowerAliases_Alias ON dbo.TBorrowerAliases(strAlias);
+      CREATE INDEX IX_TBorrowerAliases_Alias ON dbo.TBorrowerAliases(Alias);
     END;
   `);
 }
@@ -552,18 +552,18 @@ async function loadAliasesForBorrowers(pool, borrowerIds){
   });
 
   const result = await request.query(`
-    SELECT intBorrowerAliasID, intBorrowerID, strAlias, dtmCreated
+    SELECT BorrowerAliasID, BorrowerID, Alias, CreatedAt
     FROM dbo.TBorrowerAliases
-    WHERE intBorrowerID IN (${params.join(',')})
-    ORDER BY strAlias;
+    WHERE BorrowerID IN (${params.join(',')})
+    ORDER BY Alias;
   `);
 
   const map = new Map();
   const rows = result.recordset || [];
   rows.forEach(row => {
-    const list = map.get(row.intBorrowerID) || [];
+    const list = map.get(row.BorrowerID) || [];
     list.push(mapAliasRow(row));
-    map.set(row.intBorrowerID, list);
+    map.set(row.BorrowerID, list);
   });
 
   return map;
@@ -574,12 +574,12 @@ async function getDefaultLabTechId(pool){
     return cachedLabTechId;
   }
   const result = await pool.request().query(`
-    SELECT TOP (1) intLabTechID
+    SELECT TOP (1) LabTechID
     FROM dbo.TLabTechs
-    WHERE blnIsActive = 1
-    ORDER BY intLabTechID;
+    WHERE IsActive = 1
+    ORDER BY LabTechID;
   `);
-  const id = result.recordset?.[0]?.intLabTechID;
+  const id = result.recordset?.[0]?.LabTechID;
   if(!id){
     throw new Error('No active lab tech available for checkout.');
   }
@@ -608,7 +608,7 @@ async function findBorrowerId(pool, payload){
     if(Number.isFinite(borrowerId)){
       const res = await pool.request()
         .input('BorrowerID', sql.Int, borrowerId)
-        .query('SELECT intBorrowerID FROM dbo.TBorrowers WHERE intBorrowerID = @BorrowerID;');
+        .query('SELECT BorrowerID FROM dbo.TBorrowers WHERE BorrowerID = @BorrowerID;');
       if(res.recordset?.length){
         return borrowerId;
       }
@@ -620,13 +620,13 @@ async function findBorrowerId(pool, payload){
     const res = await pool.request()
       .input('SchoolID', sql.VarChar(50), schoolId)
       .query(`
-        SELECT TOP (1) intBorrowerID
+        SELECT TOP (1) BorrowerID
         FROM dbo.TBorrowers
-        WHERE strSchoolIDNumber = @SchoolID
-        ORDER BY intBorrowerID DESC;
+        WHERE SchoolIdNumber = @SchoolID
+        ORDER BY BorrowerID DESC;
       `);
     if(res.recordset?.length){
-      return res.recordset[0].intBorrowerID;
+      return res.recordset[0].BorrowerID;
     }
   }
 
@@ -638,13 +638,13 @@ async function findBorrowerId(pool, payload){
         .input('First', sql.VarChar(50), first)
         .input('Last', sql.VarChar(50), last)
         .query(`
-          SELECT TOP (1) intBorrowerID
+          SELECT TOP (1) BorrowerID
           FROM dbo.TBorrowers
-          WHERE strFirstName = @First AND strLastName = @Last
-          ORDER BY intBorrowerID DESC;
+          WHERE FirstName = @First AND LastName = @Last
+          ORDER BY BorrowerID DESC;
         `);
       if(res.recordset?.length){
-        return res.recordset[0].intBorrowerID;
+        return res.recordset[0].BorrowerID;
       }
     }
 
@@ -654,25 +654,25 @@ async function findBorrowerId(pool, payload){
       const aliasExact = await pool.request()
         .input('Alias', sql.NVarChar(120), aliasText)
         .query(`
-          SELECT TOP (1) intBorrowerID
+          SELECT TOP (1) BorrowerID
           FROM dbo.TBorrowerAliases
-          WHERE strAlias = @Alias
-          ORDER BY intBorrowerAliasID DESC;
+          WHERE Alias = @Alias
+          ORDER BY BorrowerAliasID DESC;
         `);
       if(aliasExact.recordset?.length){
-        return aliasExact.recordset[0].intBorrowerID;
+        return aliasExact.recordset[0].BorrowerID;
       }
 
       const aliasLike = await pool.request()
         .input('AliasLike', sql.NVarChar(130), `%${aliasText}%`)
         .query(`
-          SELECT TOP (1) intBorrowerID
+          SELECT TOP (1) BorrowerID
           FROM dbo.TBorrowerAliases
-          WHERE strAlias LIKE @AliasLike
-          ORDER BY intBorrowerAliasID DESC;
+          WHERE Alias LIKE @AliasLike
+          ORDER BY BorrowerAliasID DESC;
         `);
       if(aliasLike.recordset?.length){
-        return aliasLike.recordset[0].intBorrowerID;
+        return aliasLike.recordset[0].BorrowerID;
       }
     }
 
@@ -681,13 +681,13 @@ async function findBorrowerId(pool, payload){
       const res = await pool.request()
         .input('Search', sql.NVarChar(120), fuzzy)
         .query(`
-          SELECT TOP (1) intBorrowerID
+          SELECT TOP (1) BorrowerID
           FROM dbo.TBorrowers
-          WHERE strFirstName LIKE N'%' + @Search + N'%' OR strLastName LIKE N'%' + @Search + N'%' OR ISNULL(strSchoolIDNumber,'') LIKE N'%' + @Search + N'%'
-          ORDER BY intBorrowerID DESC;
+          WHERE FirstName LIKE N'%' + @Search + N'%' OR LastName LIKE N'%' + @Search + N'%' OR ISNULL(SchoolIdNumber,'') LIKE N'%' + @Search + N'%'
+          ORDER BY BorrowerID DESC;
         `);
       if(res.recordset?.length){
-        return res.recordset[0].intBorrowerID;
+        return res.recordset[0].BorrowerID;
       }
     }
   }
@@ -703,34 +703,34 @@ async function findItemId(pool, raw){
   if(Number.isFinite(numeric)){
     const byId = await pool.request()
       .input('ItemID', sql.Int, numeric)
-      .query('SELECT intItemID FROM dbo.TItems WHERE intItemID = @ItemID;');
+      .query('SELECT ItemID FROM dbo.TItems WHERE ItemID = @ItemID;');
     if(byId.recordset?.length){
-      return byId.recordset[0].intItemID;
+      return byId.recordset[0].ItemID;
     }
   }
 
   const exact = await pool.request()
     .input('Match', sql.VarChar(120), value)
     .query(`
-      SELECT TOP (1) intItemID
+      SELECT TOP (1) ItemID
       FROM dbo.TItems
-      WHERE strItemNumber = @Match OR strItemName = @Match
-      ORDER BY CASE WHEN strItemNumber = @Match THEN 0 ELSE 1 END, intItemID DESC;
+      WHERE ItemNumber = @Match OR ItemName = @Match
+      ORDER BY CASE WHEN ItemNumber = @Match THEN 0 ELSE 1 END, ItemID DESC;
     `);
   if(exact.recordset?.length){
-    return exact.recordset[0].intItemID;
+    return exact.recordset[0].ItemID;
   }
 
   const like = await pool.request()
     .input('Search', sql.NVarChar(120), `%${value}%`)
     .query(`
-      SELECT TOP (1) intItemID
+      SELECT TOP (1) ItemID
       FROM dbo.TItems
-      WHERE strItemName LIKE @Search OR ISNULL(strItemNumber,'') LIKE @Search
-      ORDER BY intItemID DESC;
+      WHERE ItemName LIKE @Search OR ISNULL(ItemNumber,'') LIKE @Search
+      ORDER BY ItemID DESC;
     `);
   if(like.recordset?.length){
-    return like.recordset[0].intItemID;
+    return like.recordset[0].ItemID;
   }
 
   return null;
@@ -749,10 +749,10 @@ async function ensureUserTable(pool){
     BEGIN
       CREATE TABLE dbo.TAppUsers
       (
-        strUsername    VARCHAR(120) NOT NULL PRIMARY KEY,
-        strDisplayName VARCHAR(150) NOT NULL,
-        strRole        VARCHAR(50)  NOT NULL,
-        dtmCreated     DATETIME2(0) NOT NULL CONSTRAINT DF_TAppUsers_Created DEFAULT (SYSUTCDATETIME())
+        Username   VARCHAR(120) NOT NULL PRIMARY KEY,
+        DisplayName VARCHAR(150) NOT NULL,
+        Role        VARCHAR(50)  NOT NULL,
+        CreatedAt   DATETIME2(0) NOT NULL CONSTRAINT DF_TAppUsers_Created DEFAULT (SYSUTCDATETIME())
       );
     END;
   `);
@@ -760,12 +760,12 @@ async function ensureUserTable(pool){
 
 async function generatePublicTicketId(pool){
   const result = await pool.request().query(`
-    SELECT TOP (1) strPublicTicketID
+    SELECT TOP (1) PublicTicketID
     FROM dbo.TServiceTickets
-    WHERE strPublicTicketID LIKE 'S-%'
-    ORDER BY TRY_CONVERT(INT, SUBSTRING(strPublicTicketID,3,10)) DESC, intServiceTicketID DESC;
+    WHERE PublicTicketID LIKE 'S-%'
+    ORDER BY TRY_CONVERT(INT, SUBSTRING(PublicTicketID,3,10)) DESC, ServiceTicketID DESC;
   `);
-  const lastId = result.recordset?.[0]?.strPublicTicketID;
+  const lastId = result.recordset?.[0]?.PublicTicketID;
   const lastNumber = lastId ? Number.parseInt(lastId.replace(/[^0-9]/g, ''), 10) : 0;
   const next = Number.isFinite(lastNumber) ? lastNumber + 1 : 1;
   return `S-${next.toString().padStart(4, '0')}`;
@@ -787,64 +787,64 @@ app.get('/api/customers', asyncHandler(async (req, res) => {
     request.input('Search', sql.NVarChar(130), `%${search}%`);
     queryText = `
       SELECT TOP (@Top)
-             b.intBorrowerID,
-             b.strFirstName,
-             b.strLastName,
-             b.strSchoolIDNumber,
-             b.strPhoneNumber,
-             b.strRoomNumber,
-             b.strInstructor,
-             b.dtmCreated,
-             d.strDepartmentName
+             b.BorrowerID,
+             b.FirstName,
+             b.LastName,
+             b.SchoolIdNumber,
+             b.PhoneNumber,
+             b.RoomNumber,
+             b.Instructor,
+             b.CreatedAt,
+             d.DepartmentName
       FROM dbo.TBorrowers AS b
-      LEFT JOIN dbo.TDepartments AS d ON d.intDepartmentID = b.intDepartmentID
-      WHERE b.strFirstName LIKE @Search
-         OR b.strLastName LIKE @Search
-         OR (b.strFirstName + ' ' + b.strLastName) LIKE @Search
-         OR ISNULL(b.strSchoolIDNumber,'') LIKE @Search
-         OR ISNULL(b.strPhoneNumber,'') LIKE @Search
+      LEFT JOIN dbo.TDepartments AS d ON d.DepartmentID = b.DepartmentID
+      WHERE b.FirstName LIKE @Search
+         OR b.LastName LIKE @Search
+         OR (b.FirstName + ' ' + b.LastName) LIKE @Search
+         OR ISNULL(b.SchoolIdNumber,'') LIKE @Search
+         OR ISNULL(b.PhoneNumber,'') LIKE @Search
          OR EXISTS (
              SELECT 1
              FROM dbo.TBorrowerAliases AS a
-             WHERE a.intBorrowerID = b.intBorrowerID
-               AND a.strAlias LIKE @Search
+             WHERE a.BorrowerID = b.BorrowerID
+               AND a.Alias LIKE @Search
          )
-      ORDER BY b.strLastName, b.strFirstName, b.intBorrowerID DESC;
+      ORDER BY b.LastName, b.FirstName, b.BorrowerID DESC;
     `;
   }else{
     queryText = `
       SELECT TOP (@Top)
-             b.intBorrowerID,
-             b.strFirstName,
-             b.strLastName,
-             b.strSchoolIDNumber,
-             b.strPhoneNumber,
-             b.strRoomNumber,
-             b.strInstructor,
-             b.dtmCreated,
-             d.strDepartmentName
+             b.BorrowerID,
+             b.FirstName,
+             b.LastName,
+             b.SchoolIdNumber,
+             b.PhoneNumber,
+             b.RoomNumber,
+             b.Instructor,
+             b.CreatedAt,
+             d.DepartmentName
       FROM dbo.TBorrowers AS b
-      LEFT JOIN dbo.TDepartments AS d ON d.intDepartmentID = b.intDepartmentID
-      ORDER BY b.dtmCreated DESC, b.intBorrowerID DESC;
+      LEFT JOIN dbo.TDepartments AS d ON d.DepartmentID = b.DepartmentID
+      ORDER BY b.CreatedAt DESC, b.BorrowerID DESC;
     `;
   }
 
   const result = await request.query(queryText);
   const rows = result.recordset || [];
-  const aliasMap = await loadAliasesForBorrowers(pool, rows.map(r => r.intBorrowerID));
+  const aliasMap = await loadAliasesForBorrowers(pool, rows.map(r => r.BorrowerID));
 
   const entries = rows.map(row => ({
-    id: row.intBorrowerID ?? null,
-    firstName: row.strFirstName || null,
-    lastName: row.strLastName || null,
-    name: formatName(row.strFirstName, row.strLastName),
-    schoolId: row.strSchoolIDNumber || null,
-    phone: row.strPhoneNumber || null,
-    room: row.strRoomNumber || null,
-    instructor: row.strInstructor || null,
-    department: row.strDepartmentName || null,
-    createdUtc: toIso(row.dtmCreated),
-    aliases: aliasMap.get(row.intBorrowerID) || []
+    id: row.BorrowerID ?? null,
+    firstName: row.FirstName || null,
+    lastName: row.LastName || null,
+    name: formatName(row.FirstName, row.LastName),
+    schoolId: row.SchoolIdNumber || null,
+    phone: row.PhoneNumber || null,
+    room: row.RoomNumber || null,
+    instructor: row.Instructor || null,
+    department: row.DepartmentName || null,
+    createdUtc: toIso(row.CreatedAt),
+    aliases: aliasMap.get(row.BorrowerID) || []
   }));
 
   res.json({ entries });
@@ -862,18 +862,18 @@ app.get('/api/customers/:id', asyncHandler(async (req, res) => {
   const detailResult = await pool.request()
     .input('BorrowerID', sql.Int, borrowerId)
     .query(`
-      SELECT b.intBorrowerID,
-             b.strFirstName,
-             b.strLastName,
-             b.strSchoolIDNumber,
-             b.strPhoneNumber,
-             b.strRoomNumber,
-             b.strInstructor,
-             b.dtmCreated,
-             d.strDepartmentName
+      SELECT b.BorrowerID,
+             b.FirstName,
+             b.LastName,
+             b.SchoolIdNumber,
+             b.PhoneNumber,
+             b.RoomNumber,
+             b.Instructor,
+             b.CreatedAt,
+             d.DepartmentName
       FROM dbo.TBorrowers AS b
-      LEFT JOIN dbo.TDepartments AS d ON d.intDepartmentID = b.intDepartmentID
-      WHERE b.intBorrowerID = @BorrowerID;
+      LEFT JOIN dbo.TDepartments AS d ON d.DepartmentID = b.DepartmentID
+      WHERE b.BorrowerID = @BorrowerID;
     `);
 
   const row = detailResult.recordset?.[0] || null;
@@ -884,25 +884,25 @@ app.get('/api/customers/:id', asyncHandler(async (req, res) => {
   const aliasResult = await pool.request()
     .input('BorrowerID', sql.Int, borrowerId)
     .query(`
-      SELECT intBorrowerAliasID, strAlias, dtmCreated
+      SELECT BorrowerAliasID, Alias, CreatedAt
       FROM dbo.TBorrowerAliases
-      WHERE intBorrowerID = @BorrowerID
-      ORDER BY strAlias;
+      WHERE BorrowerID = @BorrowerID
+      ORDER BY Alias;
     `);
 
   const aliases = aliasResult.recordset?.map(mapAliasRow) || [];
 
   res.json({
-    id: row.intBorrowerID ?? null,
-    firstName: row.strFirstName || null,
-    lastName: row.strLastName || null,
-    name: formatName(row.strFirstName, row.strLastName),
-    schoolId: row.strSchoolIDNumber || null,
-    phone: row.strPhoneNumber || null,
-    room: row.strRoomNumber || null,
-    instructor: row.strInstructor || null,
-    department: row.strDepartmentName || null,
-    createdUtc: toIso(row.dtmCreated),
+    id: row.BorrowerID ?? null,
+    firstName: row.FirstName || null,
+    lastName: row.LastName || null,
+    name: formatName(row.FirstName, row.LastName),
+    schoolId: row.SchoolIdNumber || null,
+    phone: row.PhoneNumber || null,
+    room: row.RoomNumber || null,
+    instructor: row.Instructor || null,
+    department: row.DepartmentName || null,
+    createdUtc: toIso(row.CreatedAt),
     aliases
   });
 }));
@@ -927,9 +927,9 @@ app.post('/api/customers/:id/aliases', asyncHandler(async (req, res) => {
   const borrowerCheck = await pool.request()
     .input('BorrowerID', sql.Int, borrowerId)
     .query(`
-      SELECT intBorrowerID
+      SELECT BorrowerID
       FROM dbo.TBorrowers
-      WHERE intBorrowerID = @BorrowerID;
+      WHERE BorrowerID = @BorrowerID;
     `);
   if(!borrowerCheck.recordset?.length){
     return res.status(404).json({ error: 'Borrower not found.' });
@@ -940,11 +940,11 @@ app.post('/api/customers/:id/aliases', asyncHandler(async (req, res) => {
       .input('BorrowerID', sql.Int, borrowerId)
       .input('Alias', sql.NVarChar(120), aliasInput)
       .query(`
-        INSERT dbo.TBorrowerAliases(intBorrowerID, strAlias)
+        INSERT dbo.TBorrowerAliases(BorrowerID, Alias)
         VALUES (@BorrowerID, @Alias);
-        SELECT intBorrowerAliasID, strAlias, dtmCreated
+        SELECT BorrowerAliasID, Alias, CreatedAt
         FROM dbo.TBorrowerAliases
-        WHERE intBorrowerAliasID = SCOPE_IDENTITY();
+        WHERE BorrowerAliasID = SCOPE_IDENTITY();
       `);
     const aliasRow = insert.recordset?.[0] || null;
     const payload = aliasRow ? mapAliasRow(aliasRow) : { id: null, alias: aliasInput, createdUtc: null };
@@ -972,7 +972,7 @@ app.delete('/api/customers/:id/aliases/:aliasId', asyncHandler(async (req, res) 
     .input('AliasId', sql.Int, aliasId)
     .query(`
       DELETE FROM dbo.TBorrowerAliases
-      WHERE intBorrowerAliasID = @AliasId AND intBorrowerID = @BorrowerID;
+      WHERE BorrowerAliasID = @AliasId AND BorrowerID = @BorrowerID;
       SELECT @@ROWCOUNT AS deleted;
     `);
 
@@ -997,15 +997,15 @@ app.post('/api/customers', asyncHandler(async (req, res) => {
 
   try {
     const request = pool.request();
-    request.input('strFirstName', sql.VarChar(50), firstName);
-    request.input('strLastName', sql.VarChar(50), lastName);
-    request.input('strSchoolIDNumber', sql.VarChar(50), normalizeString(schoolId) || null);
-    request.input('strPhoneNumber', sql.VarChar(25), normalizeString(phone) || null);
-    request.input('strRoomNumber', sql.VarChar(25), normalizeString(room) || null);
-    request.input('strInstructor', sql.VarChar(100), normalizeString(instructor) || null);
-    request.input('intDepartmentID', sql.Int, departmentId ?? null);
-    const result = await request.execute('dbo.usp_CreateBorrower');
-    const borrowerId = result.recordset?.[0]?.intBorrowerID ?? null;
+    request.input('FirstName', sql.NVarChar(50), firstName);
+    request.input('LastName', sql.NVarChar(50), lastName);
+    request.input('SchoolIdNumber', sql.NVarChar(50), normalizeString(schoolId) || null);
+    request.input('PhoneNumber', sql.NVarChar(25), normalizeString(phone) || null);
+    request.input('RoomNumber', sql.NVarChar(25), normalizeString(room) || null);
+    request.input('Instructor', sql.NVarChar(100), normalizeString(instructor) || null);
+    request.input('DepartmentID', sql.Int, departmentId ?? null);
+    const result = await request.execute('dbo.spCreateBorrower');
+    const borrowerId = result.recordset?.[0]?.BorrowerID ?? null;
     res.status(201).json({ id: borrowerId });
   } catch(err){
     if(err && (err.number === 2627 || err.number === 2601)){
@@ -1135,14 +1135,14 @@ app.post('/api/loans/checkout', asyncHandler(async (req, res) => {
   const labTechId = await getDefaultLabTechId(pool);
 
   const request = pool.request();
-  request.input('intItemID', sql.Int, itemId);
-  request.input('intBorrowerID', sql.Int, borrowerId);
-  request.input('intCheckoutLabTechID', sql.Int, labTechId);
-  request.input('dtmDueUTC', sql.DateTime2, dueDate);
-  request.input('strCheckoutNotes', sql.VarChar(400), normalizeString(notes) || null);
+  request.input('ItemID', sql.Int, itemId);
+  request.input('BorrowerID', sql.Int, borrowerId);
+  request.input('CheckoutLabTechID', sql.Int, labTechId);
+  request.input('DueUtc', sql.DateTime2, dueDate);
+  request.input('CheckoutNotes', sql.NVarChar(400), normalizeString(notes) || null);
 
-  const result = await request.execute('dbo.usp_CheckoutItem');
-  const loanId = result.recordset?.[0]?.intItemLoanID ?? null;
+  const result = await request.execute('dbo.spCheckoutItem');
+  const loanId = result.recordset?.[0]?.ItemLoanID ?? null;
   const traceNumber = typeof loanId === 'number' ? loanId.toString().padStart(6, '0') : null;
   res.status(201).json({
     loanId,
@@ -1169,15 +1169,15 @@ app.post('/api/tickets', asyncHandler(async (req, res) => {
   const labTechId = await getDefaultLabTechId(pool);
 
   const request = pool.request();
-  request.input('strPublicTicketID', sql.VarChar(20), publicId);
-  request.input('intBorrowerID', sql.Int, borrowerId ?? null);
-  request.input('intItemID', sql.Int, itemId ?? null);
-  request.input('strItemLabel', sql.VarChar(120), ticketLabel);
-  request.input('strIssue', sql.VarChar(1000), issueText);
-  request.input('intAssignedLabTechID', sql.Int, labTechId);
+  request.input('PublicTicketID', sql.NVarChar(20), publicId);
+  request.input('BorrowerID', sql.Int, borrowerId ?? null);
+  request.input('ItemID', sql.Int, itemId ?? null);
+  request.input('ItemLabel', sql.NVarChar(120), ticketLabel);
+  request.input('Issue', sql.NVarChar(1000), issueText);
+  request.input('AssignedLabTechID', sql.Int, labTechId);
 
-  const result = await request.execute('dbo.usp_ServiceTicketCreate');
-  const ticketId = result.recordset?.[0]?.intServiceTicketID ?? null;
+  const result = await request.execute('dbo.spCreateServiceTicket');
+  const ticketId = result.recordset?.[0]?.ServiceTicketID ?? null;
   res.status(201).json({ ticketId, publicId });
 }));
 
@@ -1249,18 +1249,18 @@ app.post('/api/items', asyncHandler(async (req, res) => {
 
   try {
     const request = pool.request();
-    request.input('strItemName', sql.VarChar(120), itemName);
-    request.input('strItemNumber', sql.VarChar(60), normalizeString(number) || null);
-    request.input('blnIsSchoolOwned', sql.Bit, schoolOwned === false ? 0 : 1);
-    request.input('intDepartmentID', sql.Int, departmentId ?? null);
-    request.input('strDescription', sql.VarChar(400), normalizeString(description) || null);
-    request.input('strDuePolicy', sql.VarChar(30), policy);
-    request.input('intDueDaysOffset', sql.Int, (policy === 'OFFSET' || policy === 'NEXT_DAY_6PM') ? days : null);
-    request.input('intDueHoursOffset', sql.Int, policy === 'OFFSET' ? hours : null);
-    request.input('tDueTime', sql.Time, (policy === 'OFFSET' || policy === 'NEXT_DAY_6PM') ? (timeSql || null) : null);
-    request.input('dtmFixedDueLocal', sql.DateTime2, (policy === 'SEMESTER' || policy === 'FIXED') ? fixedDueDate : null);
-    const result = await request.execute('dbo.usp_CreateItem');
-    const itemId = result.recordset?.[0]?.intItemID ?? null;
+    request.input('ItemName', sql.NVarChar(120), itemName);
+    request.input('ItemNumber', sql.NVarChar(60), normalizeString(number) || null);
+    request.input('IsSchoolOwned', sql.Bit, schoolOwned === false ? 0 : 1);
+    request.input('DepartmentID', sql.Int, departmentId ?? null);
+    request.input('Description', sql.NVarChar(400), normalizeString(description) || null);
+    request.input('DuePolicy', sql.NVarChar(30), policy);
+    request.input('DueDaysOffset', sql.Int, (policy === 'OFFSET' || policy === 'NEXT_DAY_6PM') ? days : null);
+    request.input('DueHoursOffset', sql.Int, policy === 'OFFSET' ? hours : null);
+    request.input('DueTime', sql.Time, (policy === 'OFFSET' || policy === 'NEXT_DAY_6PM') ? (timeSql || null) : null);
+    request.input('FixedDueLocal', sql.DateTime2, (policy === 'SEMESTER' || policy === 'FIXED') ? fixedDueDate : null);
+    const result = await request.execute('dbo.spCreateItem');
+    const itemId = result.recordset?.[0]?.ItemID ?? null;
     res.status(201).json({ itemId });
   } catch(err){
     if(err && (err.number === 2627 || err.number === 2601)){
@@ -1393,7 +1393,7 @@ app.delete('/api/items/:id', asyncHandler(async (req, res) => {
 }));
 
 const LOAN_STATUS_SET = new Set(['On Time', 'Overdue', 'Returned']);
-const TICKET_STATUS_SET = new Set(['Diagnosing', 'Awaiting Parts', 'Ready for Pickup', 'Quarantined', 'Returned']);
+const TICKET_STATUS_SET = new Set(['Diagnosing', 'Awaiting Parts', 'Ready for Pickup', 'Quarantined', 'Returned', 'Cancelled']);
 
 app.post('/api/status', asyncHandler(async (req, res) => {
   const { id, type, status, note } = req.body || {};
@@ -1418,9 +1418,9 @@ app.post('/api/status', asyncHandler(async (req, res) => {
     const loanResult = await pool.request()
       .input('LoanID', sql.Int, loanId)
       .query(`
-        SELECT intItemLoanID, dtmDueUTC, dtmCheckinUTC, strCheckoutNotes
+        SELECT ItemLoanID, DueUtc, CheckinUtc, CheckoutNotes
         FROM dbo.TItemLoans
-        WHERE intItemLoanID = @LoanID;
+        WHERE ItemLoanID = @LoanID;
       `);
     if(!loanResult.recordset?.length){
       return res.status(404).json({ error: 'Loan not found.' });
@@ -1429,13 +1429,13 @@ app.post('/api/status', asyncHandler(async (req, res) => {
 
     if(statusText === 'Returned'){
       const checkinReq = pool.request();
-      checkinReq.input('intItemLoanID', sql.Int, loanId);
-      checkinReq.input('intCheckinLabTechID', sql.Int, labTechId);
-      checkinReq.input('strCheckinNotes', sql.VarChar(400), trimmedNote);
-      await checkinReq.execute('dbo.usp_CheckinItem');
+      checkinReq.input('ItemLoanID', sql.Int, loanId);
+      checkinReq.input('CheckinLabTechID', sql.Int, labTechId);
+      checkinReq.input('CheckinNotes', sql.NVarChar(400), trimmedNote);
+      await checkinReq.execute('dbo.spCheckinItem');
     } else {
       const now = new Date();
-      let dueDate = loan.dtmDueUTC ? new Date(loan.dtmDueUTC) : null;
+      let dueDate = loan.DueUtc ? new Date(loan.DueUtc) : null;
       if(statusText === 'Overdue'){
         if(!dueDate || dueDate > now){
           dueDate = new Date(now.getTime() - 60 * 60 * 1000);
@@ -1447,17 +1447,17 @@ app.post('/api/status', asyncHandler(async (req, res) => {
       }
       if(dueDate){
         const updateReq = pool.request();
-        updateReq.input('intItemLoanID', sql.Int, loanId);
-        updateReq.input('dtmDueUTC', sql.DateTime2, dueDate);
-        updateReq.input('strCheckoutNotes', sql.VarChar(400), loan.strCheckoutNotes || null);
-        await updateReq.execute('dbo.usp_UpdateLoanDue');
+        updateReq.input('ItemLoanID', sql.Int, loanId);
+        updateReq.input('DueUtc', sql.DateTime2, dueDate);
+        updateReq.input('CheckoutNotes', sql.NVarChar(400), loan.CheckoutNotes || null);
+        await updateReq.execute('dbo.spUpdateLoanDue');
       }
       if(trimmedNote){
         const noteReq = pool.request();
-        noteReq.input('intItemLoanID', sql.Int, loanId);
-        noteReq.input('intLabTechID', sql.Int, labTechId);
-        noteReq.input('strNote', sql.VarChar(1000), trimmedNote);
-        await noteReq.execute('dbo.usp_AddLoanNote');
+        noteReq.input('ItemLoanID', sql.Int, loanId);
+        noteReq.input('LabTechID', sql.Int, labTechId);
+        noteReq.input('Note', sql.NVarChar(1000), trimmedNote);
+        await noteReq.execute('dbo.spAddLoanNote');
       }
     }
 
@@ -1474,17 +1474,17 @@ app.post('/api/status', asyncHandler(async (req, res) => {
     }
 
     const statusReq = pool.request();
-    statusReq.input('intServiceTicketID', sql.Int, ticketId);
-    statusReq.input('strStatus', sql.VarChar(30), statusText);
-    statusReq.input('intLabTechID', sql.Int, labTechId);
-    await statusReq.execute('dbo.usp_ServiceTicketSetStatus');
+    statusReq.input('ServiceTicketID', sql.Int, ticketId);
+    statusReq.input('Status', sql.NVarChar(30), statusText);
+    statusReq.input('LabTechID', sql.Int, labTechId);
+    await statusReq.execute('dbo.spSetServiceTicketStatus');
 
     if(trimmedNote){
       const noteReq = pool.request();
-      noteReq.input('intServiceTicketID', sql.Int, ticketId);
-      noteReq.input('intLabTechID', sql.Int, labTechId);
-      noteReq.input('strNote', sql.VarChar(1000), trimmedNote);
-      await noteReq.execute('dbo.usp_AddServiceTicketNote');
+      noteReq.input('ServiceTicketID', sql.Int, ticketId);
+      noteReq.input('LabTechID', sql.Int, labTechId);
+      noteReq.input('Note', sql.NVarChar(1000), trimmedNote);
+      await noteReq.execute('dbo.spAddServiceTicketNote');
     }
 
     return res.json({ success: true });
@@ -1543,7 +1543,7 @@ app.post('/api/users', asyncHandler(async (req, res) => {
       .input('Display', sql.VarChar(150), displayName)
       .input('Role', sql.VarChar(50), roleName)
       .query(`
-        INSERT INTO dbo.TAppUsers(strUsername,strDisplayName,strRole)
+        INSERT INTO dbo.TAppUsers(Username,DisplayName,Role)
         VALUES (@Username,@Display,@Role);
       `);
   } catch(err){
@@ -1603,7 +1603,7 @@ app.delete('/api/users/:username', asyncHandler(async (req, res) => {
   const result = await pool.request()
     .input('Username', sql.VarChar(120), username)
     .query(`
-      DELETE FROM dbo.TAppUsers WHERE strUsername = @Username;
+      DELETE FROM dbo.TAppUsers WHERE Username = @Username;
       SELECT @@ROWCOUNT AS deleted;
     `);
   const deleted = result.recordset?.[0]?.deleted ?? 0;

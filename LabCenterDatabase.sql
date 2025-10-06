@@ -1,24 +1,21 @@
-/* ============================================================================
-   Cincinnati State Lab Center  Inventory & Check-In/Out Database
-   RDBMS: Microsoft SQL Server (T-SQL)
-   Notes:
-     - Tables prefixed with T*
-     - Adds dtmDueUTC to loans, proper service tickets, and note tables.
-     - Provides stored procedures to create borrowers, checkout/checkin,
-       create/update service tickets, and append notes.
-   ============================================================================ */
+/* -----------------------------------------------------------------------------
+   Name: LabCenter Inventory Management Schema
+   Abstract: Creates the Lab Center database schema, supporting procedures, and
+             supporting programmable objects with consistent naming conventions.
+   Notes: Run on a blank SQL Server instance. Script is idempotent for dev use.
+----------------------------------------------------------------------------- */
 
 IF DB_ID('dbLabCenter') IS NULL
 BEGIN
     CREATE DATABASE dbLabCenter;
-END
+END;
 GO
 USE dbLabCenter;
 GO
 
-/* =========================
-   Drop if re-running (dev)
-   ========================= */
+/* -----------------------------------------------------------------------------
+   Section: Drop Existing Objects (development convenience)
+----------------------------------------------------------------------------- */
 IF OBJECT_ID('dbo.TServiceTicketNotes','U') IS NOT NULL DROP TABLE dbo.TServiceTicketNotes;
 IF OBJECT_ID('dbo.TItemLoanNotes','U')     IS NOT NULL DROP TABLE dbo.TItemLoanNotes;
 IF OBJECT_ID('dbo.TServiceTickets','U')    IS NOT NULL DROP TABLE dbo.TServiceTickets;
@@ -31,208 +28,218 @@ IF OBJECT_ID('dbo.TLabTechs','U')          IS NOT NULL DROP TABLE dbo.TLabTechs;
 IF OBJECT_ID('dbo.TDepartments','U')       IS NOT NULL DROP TABLE dbo.TDepartments;
 GO
 
-/* ============================================================================ */
+/* -----------------------------------------------------------------------------
+   Section: Table Definitions
+----------------------------------------------------------------------------- */
 CREATE TABLE dbo.TDepartments
 (
-    intDepartmentID     INT IDENTITY(1,1) PRIMARY KEY,
-    strDepartmentName   VARCHAR(100) NOT NULL UNIQUE
+    DepartmentID      INT IDENTITY(1,1) NOT NULL,
+    DepartmentName    NVARCHAR(100)     NOT NULL,
+    CONSTRAINT PK_TDepartments PRIMARY KEY CLUSTERED (DepartmentID),
+    CONSTRAINT UQ_TDepartments_DepartmentName UNIQUE (DepartmentName)
 );
 
 CREATE TABLE dbo.TLabTechs
 (
-    intLabTechID        INT IDENTITY(1,1) PRIMARY KEY,
-    strFirstName        VARCHAR(50)  NOT NULL,
-    strLastName         VARCHAR(50)  NOT NULL,
-    strEmail            VARCHAR(120) NULL,
-    strPhoneNumber      VARCHAR(25)  NULL,
-    blnIsActive         BIT          NOT NULL CONSTRAINT DF_TLabTechs_IsActive DEFAULT (1),
-    dtmCreated          DATETIME2(0) NOT NULL CONSTRAINT DF_TLabTechs_Created  DEFAULT (SYSUTCDATETIME())
+    LabTechID     INT           IDENTITY(1,1) NOT NULL,
+    FirstName     NVARCHAR(50)  NOT NULL,
+    LastName      NVARCHAR(50)  NOT NULL,
+    Email         NVARCHAR(120) NULL,
+    PhoneNumber   NVARCHAR(25)  NULL,
+    IsActive      BIT           NOT NULL CONSTRAINT DF_TLabTechs_IsActive DEFAULT (1),
+    CreatedAt     DATETIME2(0)  NOT NULL CONSTRAINT DF_TLabTechs_CreatedAt DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT PK_TLabTechs PRIMARY KEY CLUSTERED (LabTechID)
 );
 
 CREATE TABLE dbo.TBorrowers
 (
-    intBorrowerID           INT IDENTITY(1,1) PRIMARY KEY,
-    strFirstName            VARCHAR(50)  NOT NULL,
-    strLastName             VARCHAR(50)  NOT NULL,
-    strSchoolIDNumber       VARCHAR(50)  NULL,
-    strPhoneNumber          VARCHAR(25)  NULL,
-    strRoomNumber           VARCHAR(25)  NULL,
-    strInstructor           VARCHAR(100) NULL,
-    intDepartmentID         INT          NULL  REFERENCES dbo.TDepartments(intDepartmentID),
-    strBorrowerType         VARCHAR(30)  NULL,
-    dtmCreated              DATETIME2(0) NOT NULL CONSTRAINT DF_TBorrowers_Created DEFAULT (SYSUTCDATETIME())
+    BorrowerID       INT           IDENTITY(1,1) NOT NULL,
+    FirstName        NVARCHAR(50)  NOT NULL,
+    LastName         NVARCHAR(50)  NOT NULL,
+    SchoolIdNumber   NVARCHAR(50)  NULL,
+    PhoneNumber      NVARCHAR(25)  NULL,
+    RoomNumber       NVARCHAR(25)  NULL,
+    Instructor       NVARCHAR(100) NULL,
+    DepartmentID     INT           NULL,
+    BorrowerType     NVARCHAR(30)  NULL,
+    CreatedAt        DATETIME2(0)  NOT NULL CONSTRAINT DF_TBorrowers_CreatedAt DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT PK_TBorrowers PRIMARY KEY CLUSTERED (BorrowerID),
+    CONSTRAINT FK_TBorrowers_DepartmentID FOREIGN KEY (DepartmentID) REFERENCES dbo.TDepartments(DepartmentID)
 );
-CREATE INDEX IX_TBorrowers_Name ON dbo.TBorrowers(strLastName, strFirstName);
-CREATE INDEX IX_TBorrowers_SchoolID ON dbo.TBorrowers(strSchoolIDNumber);
-CREATE UNIQUE INDEX UQ_TBorrowers_SchoolID ON dbo.TBorrowers(strSchoolIDNumber) WHERE strSchoolIDNumber IS NOT NULL;
+CREATE INDEX IX_TBorrowers_LastName_FirstName ON dbo.TBorrowers (LastName, FirstName);
+CREATE INDEX IX_TBorrowers_SchoolIdNumber ON dbo.TBorrowers (SchoolIdNumber);
+CREATE UNIQUE INDEX UIX_TBorrowers_SchoolIdNumber ON dbo.TBorrowers (SchoolIdNumber) WHERE SchoolIdNumber IS NOT NULL;
 
 CREATE TABLE dbo.TBorrowerAliases
 (
-    intBorrowerAliasID  INT IDENTITY(1,1) PRIMARY KEY,
-    intBorrowerID       INT NOT NULL REFERENCES dbo.TBorrowers(intBorrowerID) ON DELETE CASCADE,
-    strAlias            NVARCHAR(120) NOT NULL,
-    dtmCreated          DATETIME2(0) NOT NULL CONSTRAINT DF_TBorrowerAliases_Created DEFAULT (SYSUTCDATETIME()),
-    CONSTRAINT UQ_TBorrowerAliases UNIQUE (intBorrowerID, strAlias)
+    BorrowerAliasID INT           IDENTITY(1,1) NOT NULL,
+    BorrowerID      INT           NOT NULL,
+    Alias           NVARCHAR(120) NOT NULL,
+    CreatedAt       DATETIME2(0)  NOT NULL CONSTRAINT DF_TBorrowerAliases_CreatedAt DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT PK_TBorrowerAliases PRIMARY KEY CLUSTERED (BorrowerAliasID),
+    CONSTRAINT FK_TBorrowerAliases_BorrowerID FOREIGN KEY (BorrowerID) REFERENCES dbo.TBorrowers(BorrowerID) ON DELETE CASCADE,
+    CONSTRAINT UQ_TBorrowerAliases UNIQUE (BorrowerID, Alias)
 );
-CREATE INDEX IX_TBorrowerAliases_Alias ON dbo.TBorrowerAliases(strAlias);
+CREATE INDEX IX_TBorrowerAliases_Alias ON dbo.TBorrowerAliases (Alias);
 
 CREATE TABLE dbo.TItems
 (
-    intItemID               INT IDENTITY(1,1) PRIMARY KEY,
-    strItemName             VARCHAR(120) NOT NULL,
-    strItemNumber           VARCHAR(60)  NULL,
-    blnIsSchoolOwned        BIT          NOT NULL,
-    intDepartmentID         INT          NULL REFERENCES dbo.TDepartments(intDepartmentID),
-    strDescription          VARCHAR(400) NULL,
-    strDuePolicy            VARCHAR(30)  NOT NULL CONSTRAINT DF_TItems_DuePolicy DEFAULT ('NEXT_DAY_6PM'),
-    intDueDaysOffset        INT          NULL,
-    intDueHoursOffset       INT          NULL,
-    tDueTime                TIME(0)      NULL,
-    dtmFixedDueLocal        DATETIME2(0) NULL,
-    blnIsActive             BIT          NOT NULL CONSTRAINT DF_TItems_IsActive DEFAULT (1),
-    dtmCreated              DATETIME2(0) NOT NULL CONSTRAINT DF_TItems_Created  DEFAULT (SYSUTCDATETIME()),
-    CONSTRAINT UQ_TItems_ItemNumber UNIQUE (strItemNumber)
+    ItemID            INT           IDENTITY(1,1) NOT NULL,
+    ItemName          NVARCHAR(120) NOT NULL,
+    ItemNumber        NVARCHAR(60)  NULL,
+    IsSchoolOwned     BIT           NOT NULL,
+    DepartmentID      INT           NULL,
+    Description       NVARCHAR(400) NULL,
+    DuePolicy         NVARCHAR(30)  NOT NULL CONSTRAINT DF_TItems_DuePolicy DEFAULT ('NEXT_DAY_6PM'),
+    DueDaysOffset     INT           NULL,
+    DueHoursOffset    INT           NULL,
+    DueTime           TIME(0)       NULL,
+    FixedDueLocal     DATETIME2(0)  NULL,
+    IsActive          BIT           NOT NULL CONSTRAINT DF_TItems_IsActive DEFAULT (1),
+    CreatedAt         DATETIME2(0)  NOT NULL CONSTRAINT DF_TItems_CreatedAt DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT PK_TItems PRIMARY KEY CLUSTERED (ItemID),
+    CONSTRAINT FK_TItems_DepartmentID FOREIGN KEY (DepartmentID) REFERENCES dbo.TDepartments(DepartmentID),
+    CONSTRAINT CK_TItems_DuePolicy CHECK (DuePolicy IN ('NEXT_DAY_6PM','OFFSET','FIXED','SEMESTER')),
+    CONSTRAINT UQ_TItems_ItemNumber UNIQUE (ItemNumber)
 );
-ALTER TABLE dbo.TItems ADD CONSTRAINT CK_TItems_DuePolicy CHECK (strDuePolicy IN ('NEXT_DAY_6PM','OFFSET','FIXED','SEMESTER'));
-CREATE INDEX IX_TItems_Name ON dbo.TItems(strItemName);
+CREATE INDEX IX_TItems_ItemName ON dbo.TItems (ItemName);
 
 CREATE TABLE dbo.TItemLoans
 (
-    intItemLoanID           INT IDENTITY(1,1) PRIMARY KEY,
-
-    intItemID               INT NOT NULL REFERENCES dbo.TItems(intItemID),
-    intBorrowerID           INT NOT NULL REFERENCES dbo.TBorrowers(intBorrowerID),
-    intCheckoutLabTechID    INT NOT NULL REFERENCES dbo.TLabTechs(intLabTechID),
-
-    dtmCheckoutUTC          DATETIME2(0) NOT NULL CONSTRAINT DF_TItemLoans_Checkout DEFAULT (SYSUTCDATETIME()),
-    dtmDueUTC               DATETIME2(0) NULL,  -- NEW: due date/time (UTC)
-    strCheckoutNotes        VARCHAR(400) NULL,
-
-    dtmCheckinUTC           DATETIME2(0) NULL,
-    intCheckinLabTechID     INT          NULL REFERENCES dbo.TLabTechs(intLabTechID),
-    strCheckinNotes         VARCHAR(400) NULL,
-
-    -- Snapshots
-    snapBorrowerFirstName   VARCHAR(50)  NOT NULL,
-    snapBorrowerLastName    VARCHAR(50)  NOT NULL,
-    snapSchoolIDNumber      VARCHAR(50)  NULL,
-    snapPhoneNumber         VARCHAR(25)  NULL,
-    snapRoomNumber          VARCHAR(25)  NULL,
-    snapInstructor          VARCHAR(100) NULL,
-
-    snapItemName            VARCHAR(120) NOT NULL,
-    snapItemNumber          VARCHAR(60)  NULL,
-    snapIsSchoolOwned       BIT          NOT NULL,
-    snapDepartmentName      VARCHAR(100) NULL,
-
-    CONSTRAINT CK_TItemLoans_CheckinAfterCheckout
-        CHECK (dtmCheckinUTC IS NULL OR dtmCheckinUTC >= dtmCheckoutUTC)
+    ItemLoanID                INT           IDENTITY(1,1) NOT NULL,
+    ItemID                    INT           NOT NULL,
+    BorrowerID                INT           NOT NULL,
+    CheckoutLabTechID         INT           NOT NULL,
+    CheckoutUtc               DATETIME2(0)  NOT NULL CONSTRAINT DF_TItemLoans_CheckoutUtc DEFAULT (SYSUTCDATETIME()),
+    DueUtc                    DATETIME2(0)  NULL,
+    CheckoutNotes             NVARCHAR(400) NULL,
+    CheckinUtc                DATETIME2(0)  NULL,
+    CheckinLabTechID          INT           NULL,
+    CheckinNotes              NVARCHAR(400) NULL,
+    SnapshotBorrowerFirstName NVARCHAR(50)  NOT NULL,
+    SnapshotBorrowerLastName  NVARCHAR(50)  NOT NULL,
+    SnapshotSchoolIdNumber    NVARCHAR(50)  NULL,
+    SnapshotPhoneNumber       NVARCHAR(25)  NULL,
+    SnapshotRoomNumber        NVARCHAR(25)  NULL,
+    SnapshotInstructor        NVARCHAR(100) NULL,
+    SnapshotItemName          NVARCHAR(120) NOT NULL,
+    SnapshotItemNumber        NVARCHAR(60)  NULL,
+    SnapshotIsSchoolOwned     BIT           NOT NULL,
+    SnapshotDepartmentName    NVARCHAR(100) NULL,
+    CONSTRAINT PK_TItemLoans PRIMARY KEY CLUSTERED (ItemLoanID),
+    CONSTRAINT FK_TItemLoans_ItemID FOREIGN KEY (ItemID) REFERENCES dbo.TItems(ItemID),
+    CONSTRAINT FK_TItemLoans_BorrowerID FOREIGN KEY (BorrowerID) REFERENCES dbo.TBorrowers(BorrowerID),
+    CONSTRAINT FK_TItemLoans_CheckoutLabTechID FOREIGN KEY (CheckoutLabTechID) REFERENCES dbo.TLabTechs(LabTechID),
+    CONSTRAINT FK_TItemLoans_CheckinLabTechID FOREIGN KEY (CheckinLabTechID) REFERENCES dbo.TLabTechs(LabTechID),
+    CONSTRAINT CK_TItemLoans_CheckinAfterCheckout CHECK (CheckinUtc IS NULL OR CheckinUtc >= CheckoutUtc)
 );
-CREATE INDEX IX_TItemLoans_Item ON dbo.TItemLoans(intItemID, dtmCheckinUTC);
-CREATE INDEX IX_TItemLoans_Borrower ON dbo.TItemLoans(intBorrowerID, dtmCheckinUTC);
-CREATE INDEX IX_TItemLoans_CheckoutTime ON dbo.TItemLoans(dtmCheckoutUTC);
-CREATE INDEX IX_TItemLoans_DueTime ON dbo.TItemLoans(dtmDueUTC);
-CREATE INDEX IX_TItemLoans_Status ON dbo.TItemLoans(dtmCheckinUTC, dtmDueUTC);
+CREATE INDEX IX_TItemLoans_Item ON dbo.TItemLoans (ItemID, CheckinUtc);
+CREATE INDEX IX_TItemLoans_Borrower ON dbo.TItemLoans (BorrowerID, CheckinUtc);
+CREATE INDEX IX_TItemLoans_CheckoutUtc ON dbo.TItemLoans (CheckoutUtc);
+CREATE INDEX IX_TItemLoans_DueUtc ON dbo.TItemLoans (DueUtc);
+CREATE INDEX IX_TItemLoans_Status ON dbo.TItemLoans (CheckinUtc, DueUtc);
 
--- Per-loan notes (for "add note" in detail modal)
 CREATE TABLE dbo.TItemLoanNotes
 (
-    intItemLoanNoteID   INT IDENTITY(1,1) PRIMARY KEY,
-    intItemLoanID       INT NOT NULL REFERENCES dbo.TItemLoans(intItemLoanID),
-    intLabTechID        INT NULL REFERENCES dbo.TLabTechs(intLabTechID),
-    dtmNoteUTC          DATETIME2(0) NOT NULL CONSTRAINT DF_TItemLoanNotes_NoteUTC DEFAULT (SYSUTCDATETIME()),
-    strNote             VARCHAR(1000) NOT NULL
+    ItemLoanNoteID INT           IDENTITY(1,1) NOT NULL,
+    ItemLoanID     INT           NOT NULL,
+    LabTechID      INT           NULL,
+    NoteUtc        DATETIME2(0)  NOT NULL CONSTRAINT DF_TItemLoanNotes_NoteUtc DEFAULT (SYSUTCDATETIME()),
+    Note           NVARCHAR(1000) NOT NULL,
+    CONSTRAINT PK_TItemLoanNotes PRIMARY KEY CLUSTERED (ItemLoanNoteID),
+    CONSTRAINT FK_TItemLoanNotes_ItemLoanID FOREIGN KEY (ItemLoanID) REFERENCES dbo.TItemLoans(ItemLoanID),
+    CONSTRAINT FK_TItemLoanNotes_LabTechID FOREIGN KEY (LabTechID) REFERENCES dbo.TLabTechs(LabTechID)
 );
-CREATE INDEX IX_TItemLoanNotes_Loan ON dbo.TItemLoanNotes(intItemLoanID, dtmNoteUTC DESC);
+CREATE INDEX IX_TItemLoanNotes_ItemLoanID ON dbo.TItemLoanNotes (ItemLoanID, NoteUtc DESC);
 
--- Service tickets (separate from loans)
 CREATE TABLE dbo.TServiceTickets
 (
-    intServiceTicketID  INT IDENTITY(1,1) PRIMARY KEY,
-    strPublicTicketID   VARCHAR(20) NOT NULL UNIQUE,         -- e.g., "S-0192"
-    intItemID           INT NULL REFERENCES dbo.TItems(intItemID),
-    intBorrowerID       INT NULL REFERENCES dbo.TBorrowers(intBorrowerID),
-    strItemLabel        VARCHAR(120) NULL,  -- if item not in inventory
-    strIssue            VARCHAR(1000) NOT NULL,
-
-    dtmLoggedUTC        DATETIME2(0) NOT NULL CONSTRAINT DF_TServiceTickets_Logged DEFAULT (SYSUTCDATETIME()),
-    intAssignedLabTechID INT NULL REFERENCES dbo.TLabTechs(intLabTechID),
-
-    strStatus           VARCHAR(30) NOT NULL CONSTRAINT DF_TServiceTickets_Status DEFAULT ('Diagnosing')
-       CHECK (strStatus IN ('Diagnosing','Awaiting Parts','Ready for Pickup','Quarantined','Completed','Cancelled'))
+    ServiceTicketID    INT           IDENTITY(1,1) NOT NULL,
+    PublicTicketID     NVARCHAR(20)  NOT NULL,
+    ItemID             INT           NULL,
+    BorrowerID         INT           NULL,
+    ItemLabel          NVARCHAR(120) NULL,
+    Issue              NVARCHAR(1000) NOT NULL,
+    LoggedUtc          DATETIME2(0)  NOT NULL CONSTRAINT DF_TServiceTickets_LoggedUtc DEFAULT (SYSUTCDATETIME()),
+    AssignedLabTechID  INT           NULL,
+    Status             NVARCHAR(30)  NOT NULL CONSTRAINT DF_TServiceTickets_Status DEFAULT ('Diagnosing'),
+    CONSTRAINT PK_TServiceTickets PRIMARY KEY CLUSTERED (ServiceTicketID),
+    CONSTRAINT FK_TServiceTickets_ItemID FOREIGN KEY (ItemID) REFERENCES dbo.TItems(ItemID),
+    CONSTRAINT FK_TServiceTickets_BorrowerID FOREIGN KEY (BorrowerID) REFERENCES dbo.TBorrowers(BorrowerID),
+    CONSTRAINT FK_TServiceTickets_AssignedLabTechID FOREIGN KEY (AssignedLabTechID) REFERENCES dbo.TLabTechs(LabTechID),
+    CONSTRAINT CK_TServiceTickets_Status CHECK (Status IN ('Diagnosing','Awaiting Parts','Ready for Pickup','Quarantined','Completed','Cancelled')),
+    CONSTRAINT UQ_TServiceTickets_PublicTicketID UNIQUE (PublicTicketID)
 );
-CREATE INDEX IX_TServiceTickets_Status ON dbo.TServiceTickets(strStatus, dtmLoggedUTC DESC);
-CREATE INDEX IX_TServiceTickets_Assigned ON dbo.TServiceTickets(intAssignedLabTechID, strStatus);
+CREATE INDEX IX_TServiceTickets_Status ON dbo.TServiceTickets (Status, LoggedUtc DESC);
+CREATE INDEX IX_TServiceTickets_Assigned ON dbo.TServiceTickets (AssignedLabTechID, Status);
 
--- Per-ticket notes
 CREATE TABLE dbo.TServiceTicketNotes
 (
-    intServiceTicketNoteID INT IDENTITY(1,1) PRIMARY KEY,
-    intServiceTicketID     INT NOT NULL REFERENCES dbo.TServiceTickets(intServiceTicketID),
-    intLabTechID           INT NULL REFERENCES dbo.TLabTechs(intLabTechID),
-    dtmNoteUTC             DATETIME2(0) NOT NULL CONSTRAINT DF_TServiceTicketNotes_NoteUTC DEFAULT (SYSUTCDATETIME()),
-    strNote                VARCHAR(1000) NOT NULL
+    ServiceTicketNoteID INT           IDENTITY(1,1) NOT NULL,
+    ServiceTicketID     INT           NOT NULL,
+    LabTechID           INT           NULL,
+    NoteUtc             DATETIME2(0)  NOT NULL CONSTRAINT DF_TServiceTicketNotes_NoteUtc DEFAULT (SYSUTCDATETIME()),
+    Note                NVARCHAR(1000) NOT NULL,
+    CONSTRAINT PK_TServiceTicketNotes PRIMARY KEY CLUSTERED (ServiceTicketNoteID),
+    CONSTRAINT FK_TServiceTicketNotes_ServiceTicketID FOREIGN KEY (ServiceTicketID) REFERENCES dbo.TServiceTickets(ServiceTicketID),
+    CONSTRAINT FK_TServiceTicketNotes_LabTechID FOREIGN KEY (LabTechID) REFERENCES dbo.TLabTechs(LabTechID)
 );
-CREATE INDEX IX_TServiceTicketNotes_Ticket ON dbo.TServiceTicketNotes(intServiceTicketID, dtmNoteUTC DESC);
+CREATE INDEX IX_TServiceTicketNotes_ServiceTicketID ON dbo.TServiceTicketNotes (ServiceTicketID, NoteUtc DESC);
 
--- Audit log
 CREATE TABLE dbo.TAuditLog
 (
-    intTraceID              BIGINT IDENTITY(1,1) PRIMARY KEY,
-    dtmEventUTC             DATETIME2(0) NOT NULL CONSTRAINT DF_TAuditLog_EventUTC DEFAULT (SYSUTCDATETIME()),
-    intLabTechID            INT          NULL REFERENCES dbo.TLabTechs(intLabTechID),
-    strAction               VARCHAR(50)  NOT NULL,     -- 'BORROWER_CREATE','ITEM_CREATE','CHECKOUT','CHECKIN','TICKET_CREATE','TICKET_STATUS','NOTE_ADD'
-    strEntity               VARCHAR(50)  NOT NULL,     -- 'TBorrowers','TItems','TItemLoans','TServiceTickets'
-    intEntityPK             BIGINT       NULL,
-    strDetails              VARCHAR(1000) NULL
+    TraceID          BIGINT        IDENTITY(1,1) NOT NULL,
+    EventUtc         DATETIME2(0)  NOT NULL CONSTRAINT DF_TAuditLog_EventUtc DEFAULT (SYSUTCDATETIME()),
+    LabTechID        INT           NULL,
+    Action           NVARCHAR(50)  NOT NULL,
+    Entity           NVARCHAR(50)  NOT NULL,
+    EntityPrimaryKey BIGINT        NULL,
+    Details          NVARCHAR(1000) NULL,
+    CONSTRAINT PK_TAuditLog PRIMARY KEY CLUSTERED (TraceID),
+    CONSTRAINT FK_TAuditLog_LabTechID FOREIGN KEY (LabTechID) REFERENCES dbo.TLabTechs(LabTechID)
 );
-CREATE INDEX IX_TAuditLog_EntityPK ON dbo.TAuditLog(strEntity, intEntityPK);
-CREATE INDEX IX_TAuditLog_EventUTC ON dbo.TAuditLog(dtmEventUTC DESC);
+CREATE INDEX IX_TAuditLog_EntityPrimaryKey ON dbo.TAuditLog (Entity, EntityPrimaryKey);
+CREATE INDEX IX_TAuditLog_EventUtc ON dbo.TAuditLog (EventUtc DESC);
+GO
 
--- Basic seed (optional)
-INSERT dbo.TDepartments(strDepartmentName) VALUES ('Electrical Engineering Tech'),('IT / Software'),('Media');
-INSERT dbo.TLabTechs(strFirstName,strLastName,strEmail) VALUES ('Josie','Wooldridge','j.wooldridge@example.edu'),('Alex','Smith','a.smith@example.edu'),('Kris','Jones','k.jones@example.edu');
-
-
-
-/* =========================
-   Helper VIEW for dashboards
-   ========================= */
+/* -----------------------------------------------------------------------------
+   Section: Views
+----------------------------------------------------------------------------- */
 IF OBJECT_ID('dbo.V_ItemCurrentStatus','V') IS NOT NULL DROP VIEW dbo.V_ItemCurrentStatus;
 GO
 CREATE VIEW dbo.V_ItemCurrentStatus
 AS
 SELECT
-    it.intItemID,
-    it.strItemName,
-    it.strItemNumber,
-    it.blnIsSchoolOwned,
-    d.strDepartmentName,
-    il.intItemLoanID,
-    il.dtmCheckoutUTC,
-    il.dtmDueUTC,
-    il.dtmCheckinUTC,
-    CASE WHEN il.dtmCheckinUTC IS NULL THEN 1 ELSE 0 END AS blnIsCheckedOut,
-    il.snapBorrowerFirstName AS curBorrowerFirstName,
-    il.snapBorrowerLastName  AS curBorrowerLastName
-FROM dbo.TItems it
+    i.ItemID,
+    i.ItemName,
+    i.ItemNumber,
+    i.IsSchoolOwned,
+    d.DepartmentName,
+    l.ItemLoanID,
+    l.CheckoutUtc,
+    l.DueUtc,
+    l.CheckinUtc,
+    CASE WHEN l.CheckinUtc IS NULL THEN 1 ELSE 0 END AS IsCheckedOut,
+    l.SnapshotBorrowerFirstName AS CurrentBorrowerFirstName,
+    l.SnapshotBorrowerLastName  AS CurrentBorrowerLastName
+FROM dbo.TItems AS i
 LEFT JOIN (
-    SELECT il1.*
-    FROM dbo.TItemLoans il1
-    JOIN (
-        SELECT intItemID, MAX(dtmCheckoutUTC) AS MaxOut
+    SELECT l1.*
+    FROM dbo.TItemLoans AS l1
+    INNER JOIN (
+        SELECT ItemID, MAX(CheckoutUtc) AS MaxCheckoutUtc
         FROM dbo.TItemLoans
-        GROUP BY intItemID
-    ) lastOut
-      ON il1.intItemID = lastOut.intItemID AND il1.dtmCheckoutUTC = lastOut.MaxOut
-) il ON il.intItemID = it.intItemID
-LEFT JOIN dbo.TDepartments d ON d.intDepartmentID = it.intDepartmentID;
+        GROUP BY ItemID
+    ) AS lastOut
+        ON l1.ItemID = lastOut.ItemID
+       AND l1.CheckoutUtc = lastOut.MaxCheckoutUtc
+) AS l ON l.ItemID = i.ItemID
+LEFT JOIN dbo.TDepartments AS d ON d.DepartmentID = i.DepartmentID;
 GO
 
-
-/* =========================
-   Triggers: write to audit
-   ========================= */
+/* -----------------------------------------------------------------------------
+   Section: Triggers
+----------------------------------------------------------------------------- */
 IF OBJECT_ID('dbo.trg_TBorrowers_Insert','TR') IS NOT NULL DROP TRIGGER dbo.trg_TBorrowers_Insert;
 GO
 CREATE TRIGGER dbo.trg_TBorrowers_Insert
@@ -240,12 +247,15 @@ ON dbo.TBorrowers
 AFTER INSERT
 AS
 BEGIN
-  SET NOCOUNT ON;
-  INSERT dbo.TAuditLog (intLabTechID, strAction, strEntity, intEntityPK, strDetails)
-  SELECT NULL, 'BORROWER_CREATE', 'TBorrowers', i.intBorrowerID,
-         CONCAT('{"name":"', i.strFirstName, ' ', i.strLastName, '","schoolId":"', ISNULL(i.strSchoolIDNumber,''), '"}')
-  FROM inserted i;
-END
+    SET NOCOUNT ON;
+    INSERT dbo.TAuditLog (LabTechID, Action, Entity, EntityPrimaryKey, Details)
+    SELECT NULL,
+           'BORROWER_CREATE',
+           'TBorrowers',
+           i.BorrowerID,
+           CONCAT('{"name":"', i.FirstName, ' ', i.LastName, '","schoolId":"', ISNULL(i.SchoolIdNumber,''), '"}')
+    FROM inserted AS i;
+END;
 GO
 
 IF OBJECT_ID('dbo.trg_TItems_Insert','TR') IS NOT NULL DROP TRIGGER dbo.trg_TItems_Insert;
@@ -255,12 +265,15 @@ ON dbo.TItems
 AFTER INSERT
 AS
 BEGIN
-  SET NOCOUNT ON;
-  INSERT dbo.TAuditLog (intLabTechID, strAction, strEntity, intEntityPK, strDetails)
-  SELECT NULL, 'ITEM_CREATE', 'TItems', i.intItemID,
-         CONCAT('{"itemName":"', i.strItemName, '","itemNumber":"', ISNULL(i.strItemNumber,''), '","schoolOwned":', IIF(i.blnIsSchoolOwned=1,'true','false'), '}')
-  FROM inserted i;
-END
+    SET NOCOUNT ON;
+    INSERT dbo.TAuditLog (LabTechID, Action, Entity, EntityPrimaryKey, Details)
+    SELECT NULL,
+           'ITEM_CREATE',
+           'TItems',
+           i.ItemID,
+           CONCAT('{"itemName":"', i.ItemName, '","itemNumber":"', ISNULL(i.ItemNumber,''), '","schoolOwned":', IIF(i.IsSchoolOwned = 1,'true','false'), '}')
+    FROM inserted AS i;
+END;
 GO
 
 IF OBJECT_ID('dbo.trg_TItemLoans_Audit','TR') IS NOT NULL DROP TRIGGER dbo.trg_TItemLoans_Audit;
@@ -270,25 +283,28 @@ ON dbo.TItemLoans
 AFTER INSERT, UPDATE
 AS
 BEGIN
-  SET NOCOUNT ON;
-  -- Checkouts
-  INSERT dbo.TAuditLog (intLabTechID, strAction, strEntity, intEntityPK, strDetails)
-  SELECT il.intCheckoutLabTechID, 'CHECKOUT', 'TItemLoans', il.intItemLoanID,
-         CONCAT('{"item":"', il.snapItemName, '","itemNumber":"', ISNULL(il.snapItemNumber,''), '","borrower":"', il.snapBorrowerFirstName, ' ', il.snapBorrowerLastName,
-                '","checkoutUTC":"', CONVERT(varchar(19), il.dtmCheckoutUTC, 126), '","dueUTC":"', ISNULL(CONVERT(varchar(19), il.dtmDueUTC, 126), ''), '"}')
-  FROM inserted il
-  LEFT JOIN deleted d ON d.intItemLoanID = il.intItemLoanID
-  WHERE d.intItemLoanID IS NULL;
+    SET NOCOUNT ON;
 
-  -- Checkins
-  INSERT dbo.TAuditLog (intLabTechID, strAction, strEntity, intEntityPK, strDetails)
-  SELECT il.intCheckinLabTechID, 'CHECKIN', 'TItemLoans', il.intItemLoanID,
-         CONCAT('{"item":"', il.snapItemName, '","itemNumber":"', ISNULL(il.snapItemNumber,''), '","borrower":"', il.snapBorrowerFirstName, ' ', il.snapBorrowerLastName,
-                '","checkinUTC":"', CONVERT(varchar(19), il.dtmCheckinUTC, 126), '"}')
-  FROM inserted il
-  JOIN deleted  d ON d.intItemLoanID = il.intItemLoanID
-  WHERE d.dtmCheckinUTC IS NULL AND il.dtmCheckinUTC IS NOT NULL;
-END
+    INSERT dbo.TAuditLog (LabTechID, Action, Entity, EntityPrimaryKey, Details)
+    SELECT i.CheckoutLabTechID,
+           'CHECKOUT',
+           'TItemLoans',
+           i.ItemLoanID,
+           CONCAT('{"item":"', i.SnapshotItemName, '","itemNumber":"', ISNULL(i.SnapshotItemNumber,''), '","borrower":"', i.SnapshotBorrowerFirstName, ' ', i.SnapshotBorrowerLastName, '","checkoutUTC":"', CONVERT(VARCHAR(19), i.CheckoutUtc, 126), '","dueUTC":"', ISNULL(CONVERT(VARCHAR(19), i.DueUtc, 126), ''), '"}')
+    FROM inserted AS i
+    LEFT JOIN deleted AS d ON d.ItemLoanID = i.ItemLoanID
+    WHERE d.ItemLoanID IS NULL;
+
+    INSERT dbo.TAuditLog (LabTechID, Action, Entity, EntityPrimaryKey, Details)
+    SELECT i.CheckinLabTechID,
+           'CHECKIN',
+           'TItemLoans',
+           i.ItemLoanID,
+           CONCAT('{"item":"', i.SnapshotItemName, '","itemNumber":"', ISNULL(i.SnapshotItemNumber,''), '","borrower":"', i.SnapshotBorrowerFirstName, ' ', i.SnapshotBorrowerLastName, '","checkinUTC":"', CONVERT(VARCHAR(19), i.CheckinUtc, 126), '"}')
+    FROM inserted AS i
+    INNER JOIN deleted AS d ON d.ItemLoanID = i.ItemLoanID
+    WHERE d.CheckinUtc IS NULL AND i.CheckinUtc IS NOT NULL;
+END;
 GO
 
 IF OBJECT_ID('dbo.trg_TServiceTickets_Audit','TR') IS NOT NULL DROP TRIGGER dbo.trg_TServiceTickets_Audit;
@@ -298,801 +314,669 @@ ON dbo.TServiceTickets
 AFTER INSERT, UPDATE
 AS
 BEGIN
-  SET NOCOUNT ON;
-  -- Create
-  INSERT dbo.TAuditLog (intLabTechID, strAction, strEntity, intEntityPK, strDetails)
-  SELECT t.intAssignedLabTechID, 'TICKET_CREATE', 'TServiceTickets', t.intServiceTicketID,
-         CONCAT('{"publicId":"', t.strPublicTicketID, '","status":"', t.strStatus, '"}')
-  FROM inserted t
-  LEFT JOIN deleted d ON d.intServiceTicketID = t.intServiceTicketID
-  WHERE d.intServiceTicketID IS NULL;
+    SET NOCOUNT ON;
 
-  -- Status changes
-  INSERT dbo.TAuditLog (intLabTechID, strAction, strEntity, intEntityPK, strDetails)
-  SELECT t.intAssignedLabTechID, 'TICKET_STATUS', 'TServiceTickets', t.intServiceTicketID,
-         CONCAT('{"publicId":"', t.strPublicTicketID, '","status":"', t.strStatus, '"}')
-  FROM inserted t
-  JOIN deleted  d ON d.intServiceTicketID = t.intServiceTicketID
-  WHERE ISNULL(d.strStatus,'') <> ISNULL(t.strStatus,'');
-END
+    INSERT dbo.TAuditLog (LabTechID, Action, Entity, EntityPrimaryKey, Details)
+    SELECT i.AssignedLabTechID,
+           'TICKET_CREATE',
+           'TServiceTickets',
+           i.ServiceTicketID,
+           CONCAT('{"publicId":"', i.PublicTicketID, '","status":"', i.Status, '"}')
+    FROM inserted AS i
+    LEFT JOIN deleted AS d ON d.ServiceTicketID = i.ServiceTicketID
+    WHERE d.ServiceTicketID IS NULL;
+
+    INSERT dbo.TAuditLog (LabTechID, Action, Entity, EntityPrimaryKey, Details)
+    SELECT i.AssignedLabTechID,
+           'TICKET_STATUS',
+           'TServiceTickets',
+           i.ServiceTicketID,
+           CONCAT('{"publicId":"', i.PublicTicketID, '","status":"', i.Status, '"}')
+    FROM inserted AS i
+    INNER JOIN deleted AS d ON d.ServiceTicketID = i.ServiceTicketID
+    WHERE ISNULL(d.Status, N'') <> ISNULL(i.Status, N'');
+END;
 GO
 
-
-/* =========================
-   Stored Procedures (core)
-   ========================= */
-
--- New borrower (used by "New Customer" modal)
-IF OBJECT_ID('dbo.usp_CreateBorrower','P') IS NOT NULL DROP PROCEDURE dbo.usp_CreateBorrower;
+/* -----------------------------------------------------------------------------
+   Section: Stored Procedures - Core Operations
+----------------------------------------------------------------------------- */
+IF OBJECT_ID('dbo.spCreateBorrower','P') IS NOT NULL DROP PROCEDURE dbo.spCreateBorrower;
 GO
-CREATE PROCEDURE dbo.usp_CreateBorrower
-  @strFirstName VARCHAR(50),
-  @strLastName  VARCHAR(50),
-  @strSchoolIDNumber VARCHAR(50) = NULL,
-  @strPhoneNumber VARCHAR(25) = NULL,
-  @strRoomNumber VARCHAR(25) = NULL,
-  @strInstructor VARCHAR(100) = NULL,
-  @intDepartmentID INT = NULL
+CREATE PROCEDURE dbo.spCreateBorrower
+    @FirstName        NVARCHAR(50),
+    @LastName         NVARCHAR(50),
+    @SchoolIdNumber   NVARCHAR(50) = NULL,
+    @PhoneNumber      NVARCHAR(25) = NULL,
+    @RoomNumber       NVARCHAR(25) = NULL,
+    @Instructor       NVARCHAR(100) = NULL,
+    @DepartmentID     INT = NULL
 AS
 BEGIN
-  SET NOCOUNT ON;
-  INSERT dbo.TBorrowers (strFirstName,strLastName,strSchoolIDNumber,strPhoneNumber,strRoomNumber,strInstructor,intDepartmentID)
-  VALUES (@strFirstName,@strLastName,@strSchoolIDNumber,@strPhoneNumber,@strRoomNumber,@strInstructor,@intDepartmentID);
+    SET NOCOUNT ON;
 
-  SELECT SCOPE_IDENTITY() AS intBorrowerID;
-END
+    INSERT dbo.TBorrowers (FirstName, LastName, SchoolIdNumber, PhoneNumber, RoomNumber, Instructor, DepartmentID)
+    VALUES (@FirstName, @LastName, @SchoolIdNumber, @PhoneNumber, @RoomNumber, @Instructor, @DepartmentID);
+
+    SELECT SCOPE_IDENTITY() AS BorrowerID;
+END;
 GO
 
--- Borrower lookup for live search
-IF OBJECT_ID('dbo.usp_SearchBorrowers','P') IS NOT NULL DROP PROCEDURE dbo.usp_SearchBorrowers;
+IF OBJECT_ID('dbo.spSearchBorrowers','P') IS NOT NULL DROP PROCEDURE dbo.spSearchBorrowers;
 GO
-CREATE PROCEDURE dbo.usp_SearchBorrowers
-  @SearchTerm NVARCHAR(120),
-  @Top INT = 8
+CREATE PROCEDURE dbo.spSearchBorrowers
+    @SearchTerm NVARCHAR(120),
+    @Top        INT = 8
 AS
 BEGIN
-  SET NOCOUNT ON;
+    SET NOCOUNT ON;
 
-  DECLARE @Term NVARCHAR(120) = LTRIM(RTRIM(ISNULL(@SearchTerm, N'')));
-  IF (@Term = N'')
-  BEGIN
-      SELECT TOP (0)
-             b.intBorrowerID,
-             b.strFirstName,
-             b.strLastName,
-             b.strSchoolIDNumber,
-             CAST(NULL AS NVARCHAR(120)) AS MatchedAlias
-      FROM dbo.TBorrowers AS b;
-      RETURN;
-  END;
+    DECLARE @Term NVARCHAR(120) = LTRIM(RTRIM(ISNULL(@SearchTerm, N'')));
+    IF (@Term = N'')
+    BEGIN
+        SELECT TOP (0)
+            b.BorrowerID,
+            b.FirstName,
+            b.LastName,
+            b.SchoolIdNumber,
+            CAST(NULL AS NVARCHAR(120)) AS MatchedAlias
+        FROM dbo.TBorrowers AS b;
+        RETURN;
+    END;
 
-  DECLARE @Like NVARCHAR(130) = N'%' + @Term + N'%';
+    DECLARE @Like NVARCHAR(130) = N'%' + @Term + N'%';
 
-  ;WITH Matches AS
-  (
-      SELECT TOP (@Top)
-             b.intBorrowerID,
-             b.strFirstName,
-             b.strLastName,
-             b.strSchoolIDNumber,
-             CAST(NULL AS NVARCHAR(120)) AS MatchedAlias,
-             0 AS Priority,
-             b.intBorrowerID AS SortId
-      FROM dbo.TBorrowers AS b
-      WHERE b.strFirstName LIKE @Like
-         OR b.strLastName LIKE @Like
-         OR (b.strFirstName + N' ' + b.strLastName) LIKE @Like
-         OR ISNULL(b.strSchoolIDNumber, N'') LIKE @Like
-      ORDER BY b.strLastName, b.strFirstName, b.intBorrowerID DESC
+    ;WITH BorrowerMatches AS
+    (
+        SELECT TOP (@Top)
+            b.BorrowerID,
+            b.FirstName,
+            b.LastName,
+            b.SchoolIdNumber,
+            CAST(NULL AS NVARCHAR(120)) AS MatchedAlias,
+            0 AS Priority,
+            b.BorrowerID AS SortId
+        FROM dbo.TBorrowers AS b
+        WHERE b.FirstName LIKE @Like
+           OR b.LastName LIKE @Like
+           OR (b.FirstName + N' ' + b.LastName) LIKE @Like
+           OR ISNULL(b.SchoolIdNumber, N'') LIKE @Like
+        ORDER BY b.LastName, b.FirstName, b.BorrowerID DESC
 
-      UNION ALL
+        UNION ALL
 
-      SELECT TOP (@Top)
-             b.intBorrowerID,
-             b.strFirstName,
-             b.strLastName,
-             b.strSchoolIDNumber,
-             a.strAlias AS MatchedAlias,
-             1 AS Priority,
-             a.intBorrowerAliasID AS SortId
-      FROM dbo.TBorrowers AS b
-      INNER JOIN dbo.TBorrowerAliases AS a ON a.intBorrowerID = b.intBorrowerID
-      WHERE a.strAlias LIKE @Like
-      ORDER BY a.intBorrowerAliasID DESC
-  )
-  SELECT TOP (@Top)
-         ranked.intBorrowerID,
-         ranked.strFirstName,
-         ranked.strLastName,
-         ranked.strSchoolIDNumber,
-         ranked.MatchedAlias
-  FROM
-  (
-      SELECT *, ROW_NUMBER() OVER (PARTITION BY intBorrowerID ORDER BY Priority, SortId DESC) AS rn
-      FROM Matches
-  ) AS ranked
-  WHERE ranked.rn = 1
-  ORDER BY ranked.Priority, ranked.strLastName, ranked.strFirstName, ranked.intBorrowerID DESC;
-END
+        SELECT TOP (@Top)
+            b.BorrowerID,
+            b.FirstName,
+            b.LastName,
+            b.SchoolIdNumber,
+            a.Alias AS MatchedAlias,
+            1 AS Priority,
+            a.BorrowerAliasID AS SortId
+        FROM dbo.TBorrowers AS b
+        INNER JOIN dbo.TBorrowerAliases AS a ON a.BorrowerID = b.BorrowerID
+        WHERE a.Alias LIKE @Like
+        ORDER BY a.BorrowerAliasID DESC
+    )
+    SELECT TOP (@Top)
+        RankedMatches.BorrowerID,
+        RankedMatches.FirstName,
+        RankedMatches.LastName,
+        RankedMatches.SchoolIdNumber,
+        RankedMatches.MatchedAlias
+    FROM
+    (
+        SELECT m.*, ROW_NUMBER() OVER (PARTITION BY m.BorrowerID ORDER BY m.Priority, m.SortId DESC) AS RowNumber
+        FROM BorrowerMatches AS m
+    ) AS RankedMatches
+    WHERE RankedMatches.RowNumber = 1
+    ORDER BY RankedMatches.Priority, RankedMatches.LastName, RankedMatches.FirstName, RankedMatches.BorrowerID DESC;
+END;
 GO
 
--- Create inventory item with due policy metadata
-IF OBJECT_ID('dbo.usp_CreateItem','P') IS NOT NULL DROP PROCEDURE dbo.usp_CreateItem;
+IF OBJECT_ID('dbo.spCreateItem','P') IS NOT NULL DROP PROCEDURE dbo.spCreateItem;
 GO
-CREATE PROCEDURE dbo.usp_CreateItem
-  @strItemName        VARCHAR(120),
-  @strItemNumber      VARCHAR(60) = NULL,
-  @blnIsSchoolOwned   BIT,
-  @intDepartmentID    INT = NULL,
-  @strDescription     VARCHAR(400) = NULL,
-  @strDuePolicy       VARCHAR(30) = 'NEXT_DAY_6PM',
-  @intDueDaysOffset   INT = NULL,
-  @intDueHoursOffset  INT = NULL,
-  @tDueTime           TIME(0) = NULL,
-  @dtmFixedDueLocal   DATETIME2(0) = NULL
+CREATE PROCEDURE dbo.spCreateItem
+    @ItemName         NVARCHAR(120),
+    @ItemNumber       NVARCHAR(60) = NULL,
+    @IsSchoolOwned    BIT,
+    @DepartmentID     INT = NULL,
+    @Description      NVARCHAR(400) = NULL,
+    @DuePolicy        NVARCHAR(30) = 'NEXT_DAY_6PM',
+    @DueDaysOffset    INT = NULL,
+    @DueHoursOffset   INT = NULL,
+    @DueTime          TIME(0) = NULL,
+    @FixedDueLocal    DATETIME2(0) = NULL
 AS
 BEGIN
-  SET NOCOUNT ON;
+    SET NOCOUNT ON;
 
-  DECLARE @Policy VARCHAR(30) = UPPER(LTRIM(RTRIM(ISNULL(@strDuePolicy, 'NEXT_DAY_6PM'))));
-  IF (@Policy NOT IN ('NEXT_DAY_6PM','OFFSET','FIXED','SEMESTER'))
-      SET @Policy = 'NEXT_DAY_6PM';
+    DECLARE @Policy NVARCHAR(30) = UPPER(LTRIM(RTRIM(ISNULL(@DuePolicy, N'NEXT_DAY_6PM'))));
+    IF (@Policy NOT IN ('NEXT_DAY_6PM','OFFSET','FIXED','SEMESTER'))
+    BEGIN
+        SET @Policy = 'NEXT_DAY_6PM';
+    END;
 
-  IF (@Policy = 'NEXT_DAY_6PM')
-  BEGIN
-      IF (@intDueDaysOffset IS NULL) SET @intDueDaysOffset = 1;
-      IF (@intDueHoursOffset IS NULL) SET @intDueHoursOffset = 0;
-      IF (@tDueTime IS NULL) SET @tDueTime = '18:00';
-  END;
+    IF (@Policy = 'NEXT_DAY_6PM')
+    BEGIN
+        SET @DueDaysOffset = 1;
+        SET @DueHoursOffset = 0;
+        SET @DueTime = '18:00';
+        SET @FixedDueLocal = NULL;
+    END;
+    ELSE IF (@Policy = 'OFFSET')
+    BEGIN
+        IF (@DueDaysOffset IS NULL AND @DueHoursOffset IS NULL)
+            SET @DueDaysOffset = 1;
+        SET @FixedDueLocal = NULL;
+    END;
+    ELSE IF (@Policy = 'FIXED')
+    BEGIN
+        SET @DueDaysOffset = NULL;
+        SET @DueHoursOffset = NULL;
+    END;
+    ELSE IF (@Policy = 'SEMESTER')
+    BEGIN
+        SET @DueDaysOffset = NULL;
+        SET @DueHoursOffset = NULL;
+        SET @DueTime = NULL;
+    END;
 
-  INSERT dbo.TItems
-  (
-    strItemName,
-    strItemNumber,
-    blnIsSchoolOwned,
-    intDepartmentID,
-    strDescription,
-    strDuePolicy,
-    intDueDaysOffset,
-    intDueHoursOffset,
-    tDueTime,
-    dtmFixedDueLocal
-  )
-  VALUES
-  (
-    @strItemName,
-    @strItemNumber,
-    @blnIsSchoolOwned,
-    @intDepartmentID,
-    @strDescription,
-    @Policy,
-    @intDueDaysOffset,
-    @intDueHoursOffset,
-    @tDueTime,
-    @dtmFixedDueLocal
-  );
+    INSERT dbo.TItems
+    (
+        ItemName, ItemNumber, IsSchoolOwned, DepartmentID, Description,
+        DuePolicy, DueDaysOffset, DueHoursOffset, DueTime, FixedDueLocal
+    )
+    VALUES
+    (
+        @ItemName, @ItemNumber, @IsSchoolOwned, @DepartmentID, @Description,
+        @Policy, @DueDaysOffset, @DueHoursOffset, @DueTime, @FixedDueLocal
+    );
 
-  SELECT SCOPE_IDENTITY() AS intItemID;
-END
+    SELECT SCOPE_IDENTITY() AS ItemID;
+END;
 GO
 
--- Update borrower profile
-IF OBJECT_ID('dbo.usp_UpdateBorrower','P') IS NOT NULL DROP PROCEDURE dbo.usp_UpdateBorrower;
+IF OBJECT_ID('dbo.spUpdateBorrower','P') IS NOT NULL DROP PROCEDURE dbo.spUpdateBorrower;
 GO
-CREATE PROCEDURE dbo.usp_UpdateBorrower
-  @intBorrowerID       INT,
-  @strFirstName        VARCHAR(50),
-  @strLastName         VARCHAR(50),
-  @strSchoolIDNumber   VARCHAR(50) = NULL,
-  @strPhoneNumber      VARCHAR(25) = NULL,
-  @strRoomNumber       VARCHAR(25) = NULL,
-  @strInstructor       VARCHAR(100) = NULL,
-  @intDepartmentID     INT = NULL
+CREATE PROCEDURE dbo.spUpdateBorrower
+    @BorrowerID     INT,
+    @FirstName      NVARCHAR(50),
+    @LastName       NVARCHAR(50),
+    @SchoolIdNumber NVARCHAR(50) = NULL,
+    @PhoneNumber    NVARCHAR(25) = NULL,
+    @RoomNumber     NVARCHAR(25) = NULL,
+    @Instructor     NVARCHAR(100) = NULL,
+    @DepartmentID   INT = NULL
 AS
 BEGIN
-  SET NOCOUNT ON;
+    SET NOCOUNT ON;
 
-  UPDATE dbo.TBorrowers
-  SET strFirstName = @strFirstName,
-      strLastName = @strLastName,
-      strSchoolIDNumber = @strSchoolIDNumber,
-      strPhoneNumber = @strPhoneNumber,
-      strRoomNumber = @strRoomNumber,
-      strInstructor = @strInstructor,
-      intDepartmentID = @intDepartmentID
-  WHERE intBorrowerID = @intBorrowerID;
-
-  IF @@ROWCOUNT = 0
-    RAISERROR('Borrower not found.', 16, 1);
-END
-GO
-
--- Checkout
-IF OBJECT_ID('dbo.usp_CheckoutItem','P') IS NOT NULL DROP PROCEDURE dbo.usp_CheckoutItem;
-GO
-CREATE PROCEDURE dbo.usp_CheckoutItem
-  @intItemID             INT,
-  @intBorrowerID         INT,
-  @intCheckoutLabTechID  INT,
-  @dtmDueUTC             DATETIME2(0) = NULL,
-  @strCheckoutNotes      VARCHAR(400) = NULL
-AS
-BEGIN
-  SET NOCOUNT ON;
-
-  DECLARE @snapItemName VARCHAR(120),
-          @snapItemNumber VARCHAR(60),
-          @snapIsSchoolOwned BIT,
-          @snapDepartmentName VARCHAR(100);
-
-  SELECT @snapItemName = strItemName,
-         @snapItemNumber = strItemNumber,
-         @snapIsSchoolOwned = blnIsSchoolOwned,
-         @snapDepartmentName = d.strDepartmentName
-  FROM dbo.TItems i
-  LEFT JOIN dbo.TDepartments d ON d.intDepartmentID = i.intDepartmentID
-  WHERE i.intItemID = @intItemID;
-
-  DECLARE @snapBorrowerFirstName VARCHAR(50),
-          @snapBorrowerLastName  VARCHAR(50),
-          @snapSchoolIDNumber    VARCHAR(50),
-          @snapPhoneNumber       VARCHAR(25),
-          @snapRoomNumber        VARCHAR(25),
-          @snapInstructor        VARCHAR(100);
-
-  SELECT @snapBorrowerFirstName = b.strFirstName,
-         @snapBorrowerLastName  = b.strLastName,
-         @snapSchoolIDNumber    = b.strSchoolIDNumber,
-         @snapPhoneNumber       = b.strPhoneNumber,
-         @snapRoomNumber        = b.strRoomNumber,
-         @snapInstructor        = b.strInstructor
-  FROM dbo.TBorrowers b
-  WHERE b.intBorrowerID = @intBorrowerID;
-
-  IF EXISTS (SELECT 1 FROM dbo.TItemLoans WHERE intItemID=@intItemID AND dtmCheckinUTC IS NULL)
-  BEGIN
-      RAISERROR('Item is already checked out.', 16, 1); RETURN;
-  END
-
-  INSERT dbo.TItemLoans
-  (
-    intItemID,intBorrowerID,intCheckoutLabTechID,dtmDueUTC,strCheckoutNotes,
-    snapBorrowerFirstName,snapBorrowerLastName,snapSchoolIDNumber,snapPhoneNumber,snapRoomNumber,snapInstructor,
-    snapItemName,snapItemNumber,snapIsSchoolOwned,snapDepartmentName
-  )
-  VALUES
-  (
-    @intItemID,@intBorrowerID,@intCheckoutLabTechID,@dtmDueUTC,@strCheckoutNotes,
-    @snapBorrowerFirstName,@snapBorrowerLastName,@snapSchoolIDNumber,@snapPhoneNumber,@snapRoomNumber,@snapInstructor,
-    @snapItemName,@snapItemNumber,@snapIsSchoolOwned,@snapDepartmentName
-  );
-
-  SELECT SCOPE_IDENTITY() AS intItemLoanID;
-END
-GO
-
--- Update due date or checkout metadata
-IF OBJECT_ID('dbo.usp_UpdateLoanDue','P') IS NOT NULL DROP PROCEDURE dbo.usp_UpdateLoanDue;
-GO
-CREATE PROCEDURE dbo.usp_UpdateLoanDue
-  @intItemLoanID INT,
-  @dtmDueUTC     DATETIME2(0) = NULL,
-  @strCheckoutNotes VARCHAR(400) = NULL
-AS
-BEGIN
-  SET NOCOUNT ON;
-
-  UPDATE dbo.TItemLoans
-  SET dtmDueUTC = @dtmDueUTC,
-      strCheckoutNotes = @strCheckoutNotes
-  WHERE intItemLoanID = @intItemLoanID;
-
-  IF @@ROWCOUNT = 0
-    RAISERROR('Loan not found.', 16, 1);
-END
-GO
-
--- Checkin
-IF OBJECT_ID('dbo.usp_CheckinItem','P') IS NOT NULL DROP PROCEDURE dbo.usp_CheckinItem;
-GO
-CREATE PROCEDURE dbo.usp_CheckinItem
-  @intItemLoanID     INT,
-  @intCheckinLabTechID INT,
-  @strCheckinNotes   VARCHAR(400) = NULL
-AS
-BEGIN
-  SET NOCOUNT ON;
-
-  UPDATE dbo.TItemLoans
-  SET dtmCheckinUTC = SYSUTCDATETIME(),
-      intCheckinLabTechID = @intCheckinLabTechID,
-      strCheckinNotes = @strCheckinNotes
-  WHERE intItemLoanID = @intItemLoanID
-    AND dtmCheckinUTC IS NULL;
-
-  IF @@ROWCOUNT = 0
-    RAISERROR('Loan not found or already checked in.', 16, 1);
-END
-GO
-
--- Add / update inventory item
-IF OBJECT_ID('dbo.usp_SaveItem','P') IS NOT NULL DROP PROCEDURE dbo.usp_SaveItem;
-GO
-CREATE PROCEDURE dbo.usp_SaveItem
-  @intItemID       INT = NULL,
-  @strItemName     VARCHAR(120),
-  @strItemNumber   VARCHAR(60) = NULL,
-  @blnIsSchoolOwned BIT,
-  @intDepartmentID INT = NULL,
-  @strDescription  VARCHAR(400) = NULL,
-  @blnIsActive     BIT = 1
-AS
-BEGIN
-  SET NOCOUNT ON;
-
-  IF @intItemID IS NULL
-  BEGIN
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,blnIsActive)
-    VALUES (@strItemName,@strItemNumber,@blnIsSchoolOwned,@intDepartmentID,@strDescription,@blnIsActive);
-
-    SELECT SCOPE_IDENTITY() AS intItemID;
-  END
-  ELSE
-  BEGIN
-    UPDATE dbo.TItems
-    SET strItemName = @strItemName,
-        strItemNumber = @strItemNumber,
-        blnIsSchoolOwned = @blnIsSchoolOwned,
-        intDepartmentID = @intDepartmentID,
-        strDescription = @strDescription,
-        blnIsActive = @blnIsActive
-    WHERE intItemID = @intItemID;
+    UPDATE dbo.TBorrowers
+    SET FirstName = @FirstName,
+        LastName = @LastName,
+        SchoolIdNumber = @SchoolIdNumber,
+        PhoneNumber = @PhoneNumber,
+        RoomNumber = @RoomNumber,
+        Instructor = @Instructor,
+        DepartmentID = @DepartmentID
+    WHERE BorrowerID = @BorrowerID;
 
     IF @@ROWCOUNT = 0
-      RAISERROR('Item not found.', 16, 1);
-  END
-END
+    BEGIN
+        RAISERROR('Borrower not found.', 16, 1);
+    END;
+END;
 GO
 
--- Append note to loan
-IF OBJECT_ID('dbo.usp_AddLoanNote','P') IS NOT NULL DROP PROCEDURE dbo.usp_AddLoanNote;
+IF OBJECT_ID('dbo.spCheckoutItem','P') IS NOT NULL DROP PROCEDURE dbo.spCheckoutItem;
 GO
-CREATE PROCEDURE dbo.usp_AddLoanNote
-  @intItemLoanID INT,
-  @intLabTechID  INT = NULL,
-  @strNote       VARCHAR(1000)
+CREATE PROCEDURE dbo.spCheckoutItem
+    @ItemID             INT,
+    @BorrowerID         INT,
+    @CheckoutLabTechID  INT,
+    @DueUtc             DATETIME2(0) = NULL,
+    @CheckoutNotes      NVARCHAR(400) = NULL
 AS
 BEGIN
-  SET NOCOUNT ON;
-  INSERT dbo.TItemLoanNotes(intItemLoanID,intLabTechID,strNote)
-  VALUES (@intItemLoanID,@intLabTechID,@strNote);
+    SET NOCOUNT ON;
 
-  INSERT dbo.TAuditLog(intLabTechID,strAction,strEntity,intEntityPK,strDetails)
-  VALUES (@intLabTechID,'NOTE_ADD','TItemLoans',@intItemLoanID,@strNote);
-END
-GO
+    DECLARE @SnapshotItemName NVARCHAR(120),
+            @SnapshotItemNumber NVARCHAR(60),
+            @SnapshotIsSchoolOwned BIT,
+            @SnapshotDepartmentName NVARCHAR(100);
 
--- Create service ticket
-IF OBJECT_ID('dbo.usp_ServiceTicketCreate','P') IS NOT NULL DROP PROCEDURE dbo.usp_ServiceTicketCreate;
-GO
-CREATE PROCEDURE dbo.usp_ServiceTicketCreate
-  @strPublicTicketID   VARCHAR(20),
-  @intBorrowerID       INT = NULL,
-  @intItemID           INT = NULL,
-  @strItemLabel        VARCHAR(120) = NULL,
-  @strIssue            VARCHAR(1000),
-  @intAssignedLabTechID INT = NULL
-AS
-BEGIN
-  SET NOCOUNT ON;
-  INSERT dbo.TServiceTickets(strPublicTicketID,intItemID,intBorrowerID,strItemLabel,strIssue,intAssignedLabTechID)
-  VALUES (@strPublicTicketID,@intItemID,@intBorrowerID,@strItemLabel,@strIssue,@intAssignedLabTechID);
+    SELECT @SnapshotItemName = i.ItemName,
+           @SnapshotItemNumber = i.ItemNumber,
+           @SnapshotIsSchoolOwned = i.IsSchoolOwned,
+           @SnapshotDepartmentName = d.DepartmentName
+    FROM dbo.TItems AS i
+    LEFT JOIN dbo.TDepartments AS d ON d.DepartmentID = i.DepartmentID
+    WHERE i.ItemID = @ItemID;
 
-  SELECT SCOPE_IDENTITY() AS intServiceTicketID;
-END
-GO
+    DECLARE @SnapshotBorrowerFirstName NVARCHAR(50),
+            @SnapshotBorrowerLastName  NVARCHAR(50),
+            @SnapshotSchoolIdNumber    NVARCHAR(50),
+            @SnapshotPhoneNumber       NVARCHAR(25),
+            @SnapshotRoomNumber        NVARCHAR(25),
+            @SnapshotInstructor        NVARCHAR(100);
 
--- Reassign or update ticket metadata
-IF OBJECT_ID('dbo.usp_ServiceTicketUpdate','P') IS NOT NULL DROP PROCEDURE dbo.usp_ServiceTicketUpdate;
-GO
-CREATE PROCEDURE dbo.usp_ServiceTicketUpdate
-  @intServiceTicketID INT,
-  @intAssignedLabTechID INT = NULL,
-  @intItemID           INT = NULL,
-  @intBorrowerID       INT = NULL,
-  @strItemLabel        VARCHAR(120) = NULL,
-  @strIssue            VARCHAR(1000) = NULL
-AS
-BEGIN
-  SET NOCOUNT ON;
+    SELECT @SnapshotBorrowerFirstName = b.FirstName,
+           @SnapshotBorrowerLastName  = b.LastName,
+           @SnapshotSchoolIdNumber    = b.SchoolIdNumber,
+           @SnapshotPhoneNumber       = b.PhoneNumber,
+           @SnapshotRoomNumber        = b.RoomNumber,
+           @SnapshotInstructor        = b.Instructor
+    FROM dbo.TBorrowers AS b
+    WHERE b.BorrowerID = @BorrowerID;
 
-  UPDATE dbo.TServiceTickets
-  SET intAssignedLabTechID = @intAssignedLabTechID,
-      intItemID = @intItemID,
-      intBorrowerID = @intBorrowerID,
-      strItemLabel = @strItemLabel,
-      strIssue = ISNULL(@strIssue, strIssue)
-  WHERE intServiceTicketID = @intServiceTicketID;
+    IF EXISTS (SELECT 1 FROM dbo.TItemLoans WHERE ItemID = @ItemID AND CheckinUtc IS NULL)
+    BEGIN
+        RAISERROR('Item is already checked out.', 16, 1);
+        RETURN;
+    END;
 
-  IF @@ROWCOUNT = 0
-    RAISERROR('Service ticket not found.', 16, 1);
-END
-GO
-
--- Update service ticket status
-IF OBJECT_ID('dbo.usp_ServiceTicketSetStatus','P') IS NOT NULL DROP PROCEDURE dbo.usp_ServiceTicketSetStatus;
-GO
-CREATE PROCEDURE dbo.usp_ServiceTicketSetStatus
-  @intServiceTicketID INT,
-  @strStatus          VARCHAR(30),
-  @intLabTechID       INT = NULL
-AS
-BEGIN
-  SET NOCOUNT ON;
-  UPDATE dbo.TServiceTickets
-  SET strStatus = @strStatus
-  WHERE intServiceTicketID = @intServiceTicketID;
-
-  INSERT dbo.TAuditLog(intLabTechID,strAction,strEntity,intEntityPK,strDetails)
-  VALUES (@intLabTechID,'TICKET_STATUS','TServiceTickets',@intServiceTicketID,@strStatus);
-END
-GO
-
--- Append note to service ticket
-IF OBJECT_ID('dbo.usp_AddServiceTicketNote','P') IS NOT NULL DROP PROCEDURE dbo.usp_AddServiceTicketNote;
-GO
-CREATE PROCEDURE dbo.usp_AddServiceTicketNote
-  @intServiceTicketID INT,
-  @intLabTechID       INT = NULL,
-  @strNote            VARCHAR(1000)
-AS
-BEGIN
-  SET NOCOUNT ON;
-  INSERT dbo.TServiceTicketNotes(intServiceTicketID,intLabTechID,strNote)
-  VALUES (@intServiceTicketID,@intLabTechID,@strNote);
-
-  INSERT dbo.TAuditLog(intLabTechID,strAction,strEntity,intEntityPK,strDetails)
-  VALUES (@intLabTechID,'NOTE_ADD','TServiceTickets',@intServiceTicketID,@strNote);
-END
-GO
-
-/* =========================
-   Stored Procedures (reporting/search)
-   ========================= */
-
--- Dashboard counters
-IF OBJECT_ID('dbo.usp_GetDashboardStats','P') IS NOT NULL DROP PROCEDURE dbo.usp_GetDashboardStats;
-GO
-CREATE PROCEDURE dbo.usp_GetDashboardStats
-AS
-BEGIN
-  SET NOCOUNT ON;
-
-  DECLARE @today DATE = CONVERT(date, SYSUTCDATETIME());
-  DECLARE @startOfDay DATETIME2(0) = CAST(@today AS DATETIME2(0));
-  DECLARE @endOfDay DATETIME2(0) = DATEADD(DAY, 1, @startOfDay);
-
-  SELECT
-      outNow   = COALESCE(SUM(CASE WHEN dtmCheckinUTC IS NULL THEN 1 ELSE 0 END),0),
-      dueToday = COALESCE(SUM(CASE WHEN dtmCheckinUTC IS NULL AND dtmDueUTC >= @startOfDay AND dtmDueUTC < @endOfDay THEN 1 ELSE 0 END),0),
-      repairs  = (SELECT COUNT(*) FROM dbo.TServiceTickets WHERE strStatus IN ('Diagnosing','Awaiting Parts','Ready for Pickup','Quarantined')),
-      overdue  = COALESCE(SUM(CASE WHEN dtmCheckinUTC IS NULL AND dtmDueUTC IS NOT NULL AND dtmDueUTC < SYSUTCDATETIME() THEN 1 ELSE 0 END),0)
-  FROM dbo.TItemLoans;
-END
-GO
-
--- Recent loans with optional filters
-IF OBJECT_ID('dbo.usp_GetRecentLoans','P') IS NOT NULL DROP PROCEDURE dbo.usp_GetRecentLoans;
-GO
-CREATE PROCEDURE dbo.usp_GetRecentLoans
-  @Top INT = 50,
-  @StatusFilter VARCHAR(30) = NULL,
-  @Search NVARCHAR(120) = NULL
-AS
-BEGIN
-  SET NOCOUNT ON;
-
-  ;WITH LoanCTE AS (
-    SELECT TOP (@Top)
-        il.intItemLoanID,
-        il.intItemID,
-        il.intBorrowerID,
-        il.dtmCheckoutUTC,
-        il.dtmDueUTC,
-        il.dtmCheckinUTC,
-        il.strCheckoutNotes,
-        il.snapBorrowerFirstName,
-        il.snapBorrowerLastName,
-        il.snapSchoolIDNumber,
-        il.snapRoomNumber,
-        il.snapItemName,
-        il.snapItemNumber,
-        il.snapDepartmentName,
-        CASE
-          WHEN il.dtmCheckinUTC IS NOT NULL THEN 'Returned'
-          WHEN il.dtmDueUTC IS NOT NULL AND il.dtmDueUTC < SYSUTCDATETIME() THEN 'Overdue'
-          ELSE 'On Time'
-        END AS LoanStatus
-    FROM dbo.TItemLoans il
-    ORDER BY il.dtmCheckoutUTC DESC, il.intItemLoanID DESC
-  )
-  SELECT *
-  FROM LoanCTE
-  WHERE (@StatusFilter IS NULL OR LoanStatus = @StatusFilter OR (@StatusFilter = 'All'))
-    AND (
-      @Search IS NULL OR @Search = '' OR
-      LoanCTE.snapBorrowerFirstName LIKE N'%' + @Search + N'%' OR
-      LoanCTE.snapBorrowerLastName LIKE N'%' + @Search + N'%' OR
-      LoanCTE.snapSchoolIDNumber LIKE N'%' + @Search + N'%' OR
-      LoanCTE.snapItemName LIKE N'%' + @Search + N'%' OR
-      LoanCTE.snapItemNumber LIKE N'%' + @Search + N'%'
+    INSERT dbo.TItemLoans
+    (
+        ItemID, BorrowerID, CheckoutLabTechID, DueUtc, CheckoutNotes,
+        SnapshotBorrowerFirstName, SnapshotBorrowerLastName, SnapshotSchoolIdNumber,
+        SnapshotPhoneNumber, SnapshotRoomNumber, SnapshotInstructor,
+        SnapshotItemName, SnapshotItemNumber, SnapshotIsSchoolOwned, SnapshotDepartmentName
     )
-  ORDER BY LoanCTE.dtmCheckoutUTC DESC;
-END
+    VALUES
+    (
+        @ItemID, @BorrowerID, @CheckoutLabTechID, @DueUtc, @CheckoutNotes,
+        @SnapshotBorrowerFirstName, @SnapshotBorrowerLastName, @SnapshotSchoolIdNumber,
+        @SnapshotPhoneNumber, @SnapshotRoomNumber, @SnapshotInstructor,
+        @SnapshotItemName, @SnapshotItemNumber, @SnapshotIsSchoolOwned, @SnapshotDepartmentName
+    );
+
+    SELECT SCOPE_IDENTITY() AS ItemLoanID;
+END;
 GO
 
--- Service ticket listings
-IF OBJECT_ID('dbo.usp_GetServiceTickets','P') IS NOT NULL DROP PROCEDURE dbo.usp_GetServiceTickets;
+IF OBJECT_ID('dbo.spUpdateLoanDue','P') IS NOT NULL DROP PROCEDURE dbo.spUpdateLoanDue;
 GO
-CREATE PROCEDURE dbo.usp_GetServiceTickets
-  @Top INT = 50,
-  @StatusFilter VARCHAR(30) = NULL,
-  @Search NVARCHAR(120) = NULL
+CREATE PROCEDURE dbo.spUpdateLoanDue
+    @ItemLoanID      INT,
+    @DueUtc          DATETIME2(0) = NULL,
+    @CheckoutNotes   NVARCHAR(400) = NULL
 AS
 BEGIN
-  SET NOCOUNT ON;
+    SET NOCOUNT ON;
 
-  ;WITH TicketCTE AS (
-    SELECT TOP (@Top)
-        st.intServiceTicketID,
-        st.strPublicTicketID,
-        st.intItemID,
-        st.intBorrowerID,
-        st.strItemLabel,
-        st.strIssue,
-        st.dtmLoggedUTC,
-        st.intAssignedLabTechID,
-        st.strStatus,
-        bt.strFirstName AS borrowerFirstName,
-        bt.strLastName  AS borrowerLastName,
-        it.strItemName,
-        lt.strFirstName AS assignedFirstName,
-        lt.strLastName  AS assignedLastName
-    FROM dbo.TServiceTickets st
-    LEFT JOIN dbo.TBorrowers bt ON bt.intBorrowerID = st.intBorrowerID
-    LEFT JOIN dbo.TItems it      ON it.intItemID = st.intItemID
-    LEFT JOIN dbo.TLabTechs lt   ON lt.intLabTechID = st.intAssignedLabTechID
-    ORDER BY st.dtmLoggedUTC DESC, st.intServiceTicketID DESC
-  )
-  SELECT *
-  FROM TicketCTE
-  WHERE (@StatusFilter IS NULL OR strStatus = @StatusFilter OR (@StatusFilter = 'all') OR (@StatusFilter = 'All'))
-    AND (
-      @Search IS NULL OR @Search = '' OR
-      strPublicTicketID LIKE N'%' + @Search + N'%' OR
-      COALESCE(strItemName, strItemLabel, N'') LIKE N'%' + @Search + N'%' OR
-      COALESCE(borrowerFirstName,N'') LIKE N'%' + @Search + N'%' OR
-      COALESCE(borrowerLastName,N'') LIKE N'%' + @Search + N'%' OR
-      COALESCE(assignedFirstName,N'') LIKE N'%' + @Search + N'%' OR
-      COALESCE(assignedLastName,N'') LIKE N'%' + @Search + N'%'
+    UPDATE dbo.TItemLoans
+    SET DueUtc = @DueUtc,
+        CheckoutNotes = @CheckoutNotes
+    WHERE ItemLoanID = @ItemLoanID;
+
+    IF @@ROWCOUNT = 0
+    BEGIN
+        RAISERROR('Loan not found.', 16, 1);
+    END;
+END;
+GO
+
+IF OBJECT_ID('dbo.spCheckinItem','P') IS NOT NULL DROP PROCEDURE dbo.spCheckinItem;
+GO
+CREATE PROCEDURE dbo.spCheckinItem
+    @ItemLoanID        INT,
+    @CheckinLabTechID  INT,
+    @CheckinNotes      NVARCHAR(400) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE dbo.TItemLoans
+    SET CheckinUtc = SYSUTCDATETIME(),
+        CheckinLabTechID = @CheckinLabTechID,
+        CheckinNotes = @CheckinNotes
+    WHERE ItemLoanID = @ItemLoanID
+      AND CheckinUtc IS NULL;
+
+    IF @@ROWCOUNT = 0
+    BEGIN
+        RAISERROR('Loan not found or already checked in.', 16, 1);
+    END;
+END;
+GO
+
+IF OBJECT_ID('dbo.spSaveItem','P') IS NOT NULL DROP PROCEDURE dbo.spSaveItem;
+GO
+CREATE PROCEDURE dbo.spSaveItem
+    @ItemID         INT = NULL,
+    @ItemName       NVARCHAR(120),
+    @ItemNumber     NVARCHAR(60) = NULL,
+    @IsSchoolOwned  BIT,
+    @DepartmentID   INT = NULL,
+    @Description    NVARCHAR(400) = NULL,
+    @IsActive       BIT = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @ItemID IS NULL
+    BEGIN
+        INSERT dbo.TItems (ItemName, ItemNumber, IsSchoolOwned, DepartmentID, Description, IsActive)
+        VALUES (@ItemName, @ItemNumber, @IsSchoolOwned, @DepartmentID, @Description, @IsActive);
+
+        SELECT SCOPE_IDENTITY() AS ItemID;
+    END
+    ELSE
+    BEGIN
+        UPDATE dbo.TItems
+        SET ItemName = @ItemName,
+            ItemNumber = @ItemNumber,
+            IsSchoolOwned = @IsSchoolOwned,
+            DepartmentID = @DepartmentID,
+            Description = @Description,
+            IsActive = @IsActive
+        WHERE ItemID = @ItemID;
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            RAISERROR('Item not found.', 16, 1);
+        END;
+    END;
+END;
+GO
+
+IF OBJECT_ID('dbo.spAddLoanNote','P') IS NOT NULL DROP PROCEDURE dbo.spAddLoanNote;
+GO
+CREATE PROCEDURE dbo.spAddLoanNote
+    @ItemLoanID INT,
+    @LabTechID  INT = NULL,
+    @Note       NVARCHAR(1000)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    INSERT dbo.TItemLoanNotes (ItemLoanID, LabTechID, Note)
+    VALUES (@ItemLoanID, @LabTechID, @Note);
+
+    INSERT dbo.TAuditLog (LabTechID, Action, Entity, EntityPrimaryKey, Details)
+    VALUES (@LabTechID, 'NOTE_ADD', 'TItemLoans', @ItemLoanID, @Note);
+END;
+GO
+
+IF OBJECT_ID('dbo.spCreateServiceTicket','P') IS NOT NULL DROP PROCEDURE dbo.spCreateServiceTicket;
+GO
+CREATE PROCEDURE dbo.spCreateServiceTicket
+    @PublicTicketID     NVARCHAR(20),
+    @BorrowerID         INT = NULL,
+    @ItemID             INT = NULL,
+    @ItemLabel          NVARCHAR(120) = NULL,
+    @Issue              NVARCHAR(1000),
+    @AssignedLabTechID  INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    INSERT dbo.TServiceTickets (PublicTicketID, ItemID, BorrowerID, ItemLabel, Issue, AssignedLabTechID)
+    VALUES (@PublicTicketID, @ItemID, @BorrowerID, @ItemLabel, @Issue, @AssignedLabTechID);
+
+    SELECT SCOPE_IDENTITY() AS ServiceTicketID;
+END;
+GO
+
+IF OBJECT_ID('dbo.spUpdateServiceTicket','P') IS NOT NULL DROP PROCEDURE dbo.spUpdateServiceTicket;
+GO
+CREATE PROCEDURE dbo.spUpdateServiceTicket
+    @ServiceTicketID    INT,
+    @AssignedLabTechID  INT = NULL,
+    @ItemID             INT = NULL,
+    @BorrowerID         INT = NULL,
+    @ItemLabel          NVARCHAR(120) = NULL,
+    @Issue              NVARCHAR(1000) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE dbo.TServiceTickets
+    SET AssignedLabTechID = @AssignedLabTechID,
+        ItemID = @ItemID,
+        BorrowerID = @BorrowerID,
+        ItemLabel = @ItemLabel,
+        Issue = ISNULL(@Issue, Issue)
+    WHERE ServiceTicketID = @ServiceTicketID;
+
+    IF @@ROWCOUNT = 0
+    BEGIN
+        RAISERROR('Service ticket not found.', 16, 1);
+    END;
+END;
+GO
+
+IF OBJECT_ID('dbo.spSetServiceTicketStatus','P') IS NOT NULL DROP PROCEDURE dbo.spSetServiceTicketStatus;
+GO
+CREATE PROCEDURE dbo.spSetServiceTicketStatus
+    @ServiceTicketID INT,
+    @Status          NVARCHAR(30),
+    @LabTechID       INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE dbo.TServiceTickets
+    SET Status = @Status
+    WHERE ServiceTicketID = @ServiceTicketID;
+
+    INSERT dbo.TAuditLog (LabTechID, Action, Entity, EntityPrimaryKey, Details)
+    VALUES (@LabTechID, 'TICKET_STATUS', 'TServiceTickets', @ServiceTicketID, @Status);
+END;
+GO
+
+IF OBJECT_ID('dbo.spAddServiceTicketNote','P') IS NOT NULL DROP PROCEDURE dbo.spAddServiceTicketNote;
+GO
+CREATE PROCEDURE dbo.spAddServiceTicketNote
+    @ServiceTicketID INT,
+    @LabTechID       INT = NULL,
+    @Note            NVARCHAR(1000)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    INSERT dbo.TServiceTicketNotes (ServiceTicketID, LabTechID, Note)
+    VALUES (@ServiceTicketID, @LabTechID, @Note);
+
+    INSERT dbo.TAuditLog (LabTechID, Action, Entity, EntityPrimaryKey, Details)
+    VALUES (@LabTechID, 'NOTE_ADD', 'TServiceTickets', @ServiceTicketID, @Note);
+END;
+GO
+
+/* -----------------------------------------------------------------------------
+   Section: Stored Procedures - Reporting & Search
+----------------------------------------------------------------------------- */
+IF OBJECT_ID('dbo.spGetDashboardStats','P') IS NOT NULL DROP PROCEDURE dbo.spGetDashboardStats;
+GO
+CREATE PROCEDURE dbo.spGetDashboardStats
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @Today DATE = CONVERT(DATE, SYSUTCDATETIME());
+    DECLARE @StartOfDay DATETIME2(0) = CAST(@Today AS DATETIME2(0));
+    DECLARE @EndOfDay DATETIME2(0) = DATEADD(DAY, 1, @StartOfDay);
+
+    SELECT
+        outNow = COALESCE(SUM(CASE WHEN CheckinUtc IS NULL THEN 1 ELSE 0 END), 0),
+        dueToday = COALESCE(SUM(CASE WHEN CheckinUtc IS NULL AND DueUtc >= @StartOfDay AND DueUtc < @EndOfDay THEN 1 ELSE 0 END), 0),
+        repairs = (SELECT COUNT(*) FROM dbo.TServiceTickets WHERE Status IN ('Diagnosing','Awaiting Parts','Ready for Pickup','Quarantined')),
+        overdue = COALESCE(SUM(CASE WHEN CheckinUtc IS NULL AND DueUtc IS NOT NULL AND DueUtc < SYSUTCDATETIME() THEN 1 ELSE 0 END), 0)
+    FROM dbo.TItemLoans;
+END;
+GO
+
+IF OBJECT_ID('dbo.spGetRecentLoans','P') IS NOT NULL DROP PROCEDURE dbo.spGetRecentLoans;
+GO
+CREATE PROCEDURE dbo.spGetRecentLoans
+    @Top          INT = 50,
+    @StatusFilter NVARCHAR(30) = NULL,
+    @Search       NVARCHAR(120) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    ;WITH LoanCTE AS
+    (
+        SELECT TOP (@Top)
+            l.ItemLoanID,
+            l.ItemID,
+            l.BorrowerID,
+            l.CheckoutUtc,
+            l.DueUtc,
+            l.CheckinUtc,
+            l.CheckoutNotes,
+            l.SnapshotBorrowerFirstName,
+            l.SnapshotBorrowerLastName,
+            l.SnapshotSchoolIdNumber,
+            l.SnapshotRoomNumber,
+            l.SnapshotItemName,
+            l.SnapshotItemNumber,
+            l.SnapshotDepartmentName,
+            CASE
+                WHEN l.CheckinUtc IS NOT NULL THEN N'Returned'
+                WHEN l.DueUtc IS NOT NULL AND l.DueUtc < SYSUTCDATETIME() THEN N'Overdue'
+                ELSE N'On Time'
+            END AS LoanStatus
+        FROM dbo.TItemLoans AS l
+        ORDER BY l.CheckoutUtc DESC, l.ItemLoanID DESC
     )
-  ORDER BY TicketCTE.dtmLoggedUTC DESC;
-END
+    SELECT *
+    FROM LoanCTE
+    WHERE (@StatusFilter IS NULL OR LoanStatus = @StatusFilter OR (@StatusFilter = N'All'))
+      AND (
+            @Search IS NULL OR @Search = N'' OR
+            LoanCTE.SnapshotBorrowerFirstName LIKE N'%' + @Search + N'%' OR
+            LoanCTE.SnapshotBorrowerLastName LIKE N'%' + @Search + N'%' OR
+            ISNULL(LoanCTE.SnapshotSchoolIdNumber, N'') LIKE N'%' + @Search + N'%' OR
+            ISNULL(LoanCTE.SnapshotItemName, N'') LIKE N'%' + @Search + N'%' OR
+            ISNULL(LoanCTE.SnapshotItemNumber, N'') LIKE N'%' + @Search + N'%'
+          )
+    ORDER BY LoanCTE.CheckoutUtc DESC;
+END;
 GO
 
--- Borrower lookup helper
-IF OBJECT_ID('dbo.usp_FindBorrowers','P') IS NOT NULL DROP PROCEDURE dbo.usp_FindBorrowers;
+IF OBJECT_ID('dbo.spGetServiceTickets','P') IS NOT NULL DROP PROCEDURE dbo.spGetServiceTickets;
 GO
-CREATE PROCEDURE dbo.usp_FindBorrowers
-  @Search NVARCHAR(120),
-  @Top INT = 20
+CREATE PROCEDURE dbo.spGetServiceTickets
+    @Top          INT = 50,
+    @StatusFilter NVARCHAR(30) = NULL,
+    @Search       NVARCHAR(120) = NULL
 AS
 BEGIN
-  SET NOCOUNT ON;
+    SET NOCOUNT ON;
 
-  SELECT TOP (@Top)
-      b.intBorrowerID,
-      b.strFirstName,
-      b.strLastName,
-      b.strSchoolIDNumber,
-      b.strPhoneNumber,
-      b.strRoomNumber,
-      b.strInstructor,
-      d.strDepartmentName
-  FROM dbo.TBorrowers b
-  LEFT JOIN dbo.TDepartments d ON d.intDepartmentID = b.intDepartmentID
-  WHERE b.strFirstName LIKE N'%' + @Search + N'%'
-     OR b.strLastName LIKE N'%' + @Search + N'%'
-     OR ISNULL(b.strSchoolIDNumber,N'') LIKE N'%' + @Search + N'%'
-  ORDER BY b.strLastName, b.strFirstName;
-END
+    ;WITH TicketCTE AS
+    (
+        SELECT TOP (@Top)
+            st.ServiceTicketID,
+            st.PublicTicketID,
+            st.ItemID,
+            st.BorrowerID,
+            st.ItemLabel,
+            st.Issue,
+            st.LoggedUtc,
+            st.AssignedLabTechID,
+            st.Status,
+            b.FirstName AS BorrowerFirstName,
+            b.LastName  AS BorrowerLastName,
+            i.ItemName,
+            lt.FirstName AS AssignedFirstName,
+            lt.LastName  AS AssignedLastName
+        FROM dbo.TServiceTickets AS st
+        LEFT JOIN dbo.TBorrowers AS b ON b.BorrowerID = st.BorrowerID
+        LEFT JOIN dbo.TItems AS i      ON i.ItemID = st.ItemID
+        LEFT JOIN dbo.TLabTechs AS lt  ON lt.LabTechID = st.AssignedLabTechID
+        ORDER BY st.LoggedUtc DESC, st.ServiceTicketID DESC
+    )
+    SELECT *
+    FROM TicketCTE
+    WHERE (@StatusFilter IS NULL OR Status = @StatusFilter OR (@StatusFilter = 'all') OR (@StatusFilter = 'All'))
+      AND (
+            @Search IS NULL OR @Search = N'' OR
+            PublicTicketID LIKE N'%' + @Search + N'%' OR
+            COALESCE(ItemName, ItemLabel, N'') LIKE N'%' + @Search + N'%' OR
+            COALESCE(BorrowerFirstName, N'') LIKE N'%' + @Search + N'%' OR
+            COALESCE(BorrowerLastName, N'') LIKE N'%' + @Search + N'%' OR
+            COALESCE(AssignedFirstName, N'') LIKE N'%' + @Search + N'%' OR
+            COALESCE(AssignedLastName, N'') LIKE N'%' + @Search + N'%'
+          )
+    ORDER BY TicketCTE.LoggedUtc DESC;
+END;
 GO
 
--- Item lookup helper
-IF OBJECT_ID('dbo.usp_FindItems','P') IS NOT NULL DROP PROCEDURE dbo.usp_FindItems;
+IF OBJECT_ID('dbo.spFindBorrowers','P') IS NOT NULL DROP PROCEDURE dbo.spFindBorrowers;
 GO
-CREATE PROCEDURE dbo.usp_FindItems
-  @Search NVARCHAR(120),
-  @Top INT = 20
+CREATE PROCEDURE dbo.spFindBorrowers
+    @Search NVARCHAR(120),
+    @Top    INT = 20
 AS
 BEGIN
-  SET NOCOUNT ON;
+    SET NOCOUNT ON;
 
-  SELECT TOP (@Top)
-      i.intItemID,
-      i.strItemName,
-      i.strItemNumber,
-      i.blnIsSchoolOwned,
-      d.strDepartmentName,
-      i.blnIsActive
-  FROM dbo.TItems i
-  LEFT JOIN dbo.TDepartments d ON d.intDepartmentID = i.intDepartmentID
-  WHERE i.strItemName LIKE N'%' + @Search + N'%'
-     OR ISNULL(i.strItemNumber,N'') LIKE N'%' + @Search + N'%'
-  ORDER BY i.strItemName;
-END
+    SELECT TOP (@Top)
+        b.BorrowerID,
+        b.FirstName,
+        b.LastName,
+        b.SchoolIdNumber,
+        b.PhoneNumber,
+        b.RoomNumber,
+        b.Instructor,
+        d.DepartmentName
+    FROM dbo.TBorrowers AS b
+    LEFT JOIN dbo.TDepartments AS d ON d.DepartmentID = b.DepartmentID
+    WHERE b.FirstName LIKE N'%' + @Search + N'%'
+       OR b.LastName LIKE N'%' + @Search + N'%'
+       OR ISNULL(b.SchoolIdNumber, N'') LIKE N'%' + @Search + N'%'
+    ORDER BY b.LastName, b.FirstName;
+END;
 GO
 
--- Latest audit log entries
-IF OBJECT_ID('dbo.usp_GetAuditLog','P') IS NOT NULL DROP PROCEDURE dbo.usp_GetAuditLog;
+IF OBJECT_ID('dbo.spFindItems','P') IS NOT NULL DROP PROCEDURE dbo.spFindItems;
 GO
-CREATE PROCEDURE dbo.usp_GetAuditLog
-  @Top INT = 100
+CREATE PROCEDURE dbo.spFindItems
+    @Search NVARCHAR(120),
+    @Top    INT = 20
 AS
 BEGIN
-  SET NOCOUNT ON;
+    SET NOCOUNT ON;
 
-  SELECT TOP (@Top)
-      a.intTraceID,
-      a.dtmEventUTC,
-      a.intLabTechID,
-      lt.strFirstName,
-      lt.strLastName,
-      a.strAction,
-      a.strEntity,
-      a.intEntityPK,
-      a.strDetails
-  FROM dbo.TAuditLog a
-  LEFT JOIN dbo.TLabTechs lt ON lt.intLabTechID = a.intLabTechID
-  ORDER BY a.dtmEventUTC DESC;
-END
+    SELECT TOP (@Top)
+        i.ItemID,
+        i.ItemName,
+        i.ItemNumber,
+        i.IsSchoolOwned,
+        d.DepartmentName,
+        i.IsActive
+    FROM dbo.TItems AS i
+    LEFT JOIN dbo.TDepartments AS d ON d.DepartmentID = i.DepartmentID
+    WHERE i.ItemName LIKE N'%' + @Search + N'%'
+       OR ISNULL(i.ItemNumber, N'') LIKE N'%' + @Search + N'%'
+    ORDER BY i.ItemName;
+END;
 GO
 
-/* =========================
-   Example queries
-   =========================
--- Items currently checked out
--- SELECT * FROM dbo.V_ItemCurrentStatus WHERE blnIsCheckedOut = 1;
-
--- Overdue loans (UTC assumption; convert if needed)
--- SELECT * FROM dbo.TItemLoans WHERE dtmCheckinUTC IS NULL AND dtmDueUTC IS NOT NULL AND dtmDueUTC < SYSUTCDATETIME();
-
--- Loan history for an item
--- SELECT * FROM dbo.TItemLoans WHERE intItemID=@ItemID ORDER BY dtmCheckoutUTC DESC;
-
--- Latest activity
--- SELECT TOP 200 * FROM dbo.TAuditLog ORDER BY dtmEventUTC DESC;
-*/
-
+IF OBJECT_ID('dbo.spGetAuditLog','P') IS NOT NULL DROP PROCEDURE dbo.spGetAuditLog;
 GO
-
-/* =========================
-   Demo seed data
-   ========================= */
-IF NOT EXISTS (SELECT 1 FROM dbo.TBorrowers)
+CREATE PROCEDURE dbo.spGetAuditLog
+    @Top INT = 100
+AS
 BEGIN
-    INSERT dbo.TBorrowers(strFirstName,strLastName,strSchoolIDNumber,strPhoneNumber,strRoomNumber,strInstructor,intDepartmentID)
-    SELECT 'Jane','Doe','123456','513-555-1010','ATLC 102','Prof. Carter',d.intDepartmentID
-    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
+    SET NOCOUNT ON;
 
-    INSERT dbo.TBorrowers(strFirstName,strLastName,strSchoolIDNumber,strPhoneNumber,strRoomNumber,strInstructor,intDepartmentID)
-    SELECT 'Alex','Smith','332211','513-555-2020','ATLC 204','Dr. Nguyen',d.intDepartmentID
-    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'IT / Software';
-
-    INSERT dbo.TBorrowers(strFirstName,strLastName,strSchoolIDNumber,strPhoneNumber,strRoomNumber,strInstructor,intDepartmentID)
-    SELECT 'Chris','Patel','778899','513-555-3030','ATLC 120','Prof. Rivera',d.intDepartmentID
-    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
-END
-
-IF NOT EXISTS (SELECT 1 FROM dbo.TItems)
-BEGIN
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,strDuePolicy,intDueDaysOffset,intDueHoursOffset,tDueTime,dtmFixedDueLocal)
-    SELECT 'USB-C Cable (1m)','CAB-UC-001',1,d.intDepartmentID,'Standard USB-C charging/data cable','NEXT_DAY_6PM',1,0,'18:00',NULL
-    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
-
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,strDuePolicy,intDueDaysOffset,intDueHoursOffset,tDueTime,dtmFixedDueLocal)
-    SELECT 'Raspberry Pi 5','DEV-RPI-005',1,d.intDepartmentID,'Single-board computer kit with PSU','OFFSET',3,0,'12:00',NULL
-    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'IT / Software';
-
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,strDuePolicy,intDueDaysOffset,intDueHoursOffset,tDueTime,dtmFixedDueLocal)
-    SELECT 'Scope Probe','OSC-SCP-07',1,d.intDepartmentID,'Oscilloscope probe replacement','OFFSET',7,0,'09:30',NULL
-    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
-
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,strDuePolicy,intDueDaysOffset,intDueHoursOffset,tDueTime,dtmFixedDueLocal)
-    SELECT 'Lab Laptop 15','LAP-015',1,d.intDepartmentID,'15" Windows laptop for student checkout','SEMESTER',NULL,NULL,NULL,'2024-05-10T18:00:00'
-    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Media';
-
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,strDuePolicy,intDueDaysOffset,intDueHoursOffset,tDueTime,dtmFixedDueLocal)
-    SELECT 'Multimeter #A12','MM-A12',1,d.intDepartmentID,'Digital multimeter used in circuits lab','NEXT_DAY_6PM',1,0,'18:00',NULL
-    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
-
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,strDuePolicy,intDueDaysOffset,intDueHoursOffset,tDueTime,dtmFixedDueLocal)
-    SELECT 'Oscilloscope #S7','OSC-S7',1,d.intDepartmentID,'Bench oscilloscope station','SEMESTER',NULL,NULL,NULL,'2024-05-10T18:00:00'
-    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
-END
-
-IF NOT EXISTS (SELECT 1 FROM dbo.TItemLoans)
-BEGIN
-    DECLARE @JaneID INT = (SELECT intBorrowerID FROM dbo.TBorrowers WHERE strFirstName='Jane' AND strLastName='Doe');
-    DECLARE @AlexID INT = (SELECT intBorrowerID FROM dbo.TBorrowers WHERE strFirstName='Alex' AND strLastName='Smith');
-    DECLARE @ChrisID INT = (SELECT intBorrowerID FROM dbo.TBorrowers WHERE strFirstName='Chris' AND strLastName='Patel');
-    DECLARE @JosieID INT = (SELECT intLabTechID FROM dbo.TLabTechs WHERE strFirstName='Josie');
-    DECLARE @AlexTechID INT = (SELECT intLabTechID FROM dbo.TLabTechs WHERE strFirstName='Alex');
-
-    DECLARE @CableID INT = (SELECT intItemID FROM dbo.TItems WHERE strItemName='USB-C Cable (1m)');
-    DECLARE @PiID INT = (SELECT intItemID FROM dbo.TItems WHERE strItemName='Raspberry Pi 5');
-    DECLARE @ProbeID INT = (SELECT intItemID FROM dbo.TItems WHERE strItemName='Scope Probe');
-
-    DECLARE @Loan TABLE(intItemLoanID INT);
-
-    INSERT INTO @Loan
-    EXEC dbo.usp_CheckoutItem
-        @intItemID            = @CableID,
-        @intBorrowerID        = @JaneID,
-        @intCheckoutLabTechID = @JosieID,
-        @dtmDueUTC            = '2024-02-01T18:00:00',
-        @strCheckoutNotes     = 'Checked condition';
-    DECLARE @LoanJane INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
-    UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-6,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanJane;
-
-    DELETE FROM @Loan;
-    INSERT INTO @Loan
-    EXEC dbo.usp_CheckoutItem
-        @intItemID            = @PiID,
-        @intBorrowerID        = @AlexID,
-        @intCheckoutLabTechID = @JosieID,
-        @dtmDueUTC            = '2024-02-03T12:00:00',
-        @strCheckoutNotes     = NULL;
-    DECLARE @LoanAlex INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
-    UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-10,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanAlex;
-
-    DELETE FROM @Loan;
-    INSERT INTO @Loan
-    EXEC dbo.usp_CheckoutItem
-        @intItemID            = @ProbeID,
-        @intBorrowerID        = @ChrisID,
-        @intCheckoutLabTechID = @AlexTechID,
-        @dtmDueUTC            = '2024-01-15T09:30:00',
-        @strCheckoutNotes     = 'Handle with care';
-    DECLARE @LoanChris INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
-    UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-30,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanChris;
-END
-
-IF NOT EXISTS (SELECT 1 FROM dbo.TServiceTickets)
-BEGIN
-    DECLARE @JaneID2 INT = (SELECT intBorrowerID FROM dbo.TBorrowers WHERE strFirstName='Jane' AND strLastName='Doe');
-    DECLARE @AlexID2 INT = (SELECT intBorrowerID FROM dbo.TBorrowers WHERE strFirstName='Alex' AND strLastName='Smith');
-    DECLARE @ChrisID2 INT = (SELECT intBorrowerID FROM dbo.TBorrowers WHERE strFirstName='Chris' AND strLastName='Patel');
-    DECLARE @LaptopID INT = (SELECT intItemID FROM dbo.TItems WHERE strItemName='Lab Laptop 15');
-    DECLARE @MultimeterID INT = (SELECT intItemID FROM dbo.TItems WHERE strItemName='Multimeter #A12');
-    DECLARE @OscID INT = (SELECT intItemID FROM dbo.TItems WHERE strItemName='Oscilloscope #S7');
-    DECLARE @JosieID2 INT = (SELECT intLabTechID FROM dbo.TLabTechs WHERE strFirstName='Josie');
-    DECLARE @AlexTechID2 INT = (SELECT intLabTechID FROM dbo.TLabTechs WHERE strFirstName='Alex');
-    DECLARE @KrisID INT = (SELECT intLabTechID FROM dbo.TLabTechs WHERE strFirstName='Kris');
-
-    DECLARE @Ticket TABLE(intServiceTicketID INT);
-
-    INSERT INTO @Ticket EXEC dbo.usp_ServiceTicketCreate 'S-0192', @JaneID2, @MultimeterID, NULL, 'Reads zero', @JosieID2;
-    DECLARE @TicketMultimeter INT = (SELECT TOP 1 intServiceTicketID FROM @Ticket ORDER BY intServiceTicketID DESC);
-    UPDATE dbo.TServiceTickets SET dtmLoggedUTC = DATEADD(DAY,-2,SYSUTCDATETIME()), strStatus='Diagnosing' WHERE intServiceTicketID = @TicketMultimeter;
-
-    DELETE FROM @Ticket;
-    INSERT INTO @Ticket EXEC dbo.usp_ServiceTicketCreate 'S-0193', @AlexID2, @OscID, NULL, 'Display flicker', @AlexTechID2;
-    DECLARE @TicketOsc INT = (SELECT TOP 1 intServiceTicketID FROM @Ticket ORDER BY intServiceTicketID DESC);
-    UPDATE dbo.TServiceTickets SET dtmLoggedUTC = DATEADD(DAY,-3,SYSUTCDATETIME()), strStatus='Awaiting Parts' WHERE intServiceTicketID = @TicketOsc;
-
-    DELETE FROM @Ticket;
-    INSERT INTO @Ticket EXEC dbo.usp_ServiceTicketCreate 'S-0194', @ChrisID2, @LaptopID, NULL, 'Battery swell', @KrisID;
-    DECLARE @TicketLaptop INT = (SELECT TOP 1 intServiceTicketID FROM @Ticket ORDER BY intServiceTicketID DESC);
-    UPDATE dbo.TServiceTickets SET dtmLoggedUTC = DATEADD(DAY,-4,SYSUTCDATETIME()), strStatus='Ready for Pickup' WHERE intServiceTicketID = @TicketLaptop;
-END
+    SELECT TOP (@Top)
+        a.TraceID,
+        a.EventUtc,
+        a.LabTechID,
+        lt.FirstName,
+        lt.LastName,
+        a.Action,
+        a.Entity,
+        a.EntityPrimaryKey,
+        a.Details
+    FROM dbo.TAuditLog AS a
+    LEFT JOIN dbo.TLabTechs AS lt ON lt.LabTechID = a.LabTechID
+    ORDER BY a.EventUtc DESC;
+END;
+GO
