@@ -25,6 +25,7 @@ IF OBJECT_ID('dbo.TServiceTickets','U')    IS NOT NULL DROP TABLE dbo.TServiceTi
 IF OBJECT_ID('dbo.TAuditLog','U')          IS NOT NULL DROP TABLE dbo.TAuditLog;
 IF OBJECT_ID('dbo.TItemLoans','U')         IS NOT NULL DROP TABLE dbo.TItemLoans;
 IF OBJECT_ID('dbo.TItems','U')             IS NOT NULL DROP TABLE dbo.TItems;
+IF OBJECT_ID('dbo.TBorrowerAliases','U')   IS NOT NULL DROP TABLE dbo.TBorrowerAliases;
 IF OBJECT_ID('dbo.TBorrowers','U')         IS NOT NULL DROP TABLE dbo.TBorrowers;
 IF OBJECT_ID('dbo.TLabTechs','U')          IS NOT NULL DROP TABLE dbo.TLabTechs;
 IF OBJECT_ID('dbo.TDepartments','U')       IS NOT NULL DROP TABLE dbo.TDepartments;
@@ -64,6 +65,16 @@ CREATE TABLE dbo.TBorrowers
 CREATE INDEX IX_TBorrowers_Name ON dbo.TBorrowers(strLastName, strFirstName);
 CREATE INDEX IX_TBorrowers_SchoolID ON dbo.TBorrowers(strSchoolIDNumber);
 CREATE UNIQUE INDEX UQ_TBorrowers_SchoolID ON dbo.TBorrowers(strSchoolIDNumber) WHERE strSchoolIDNumber IS NOT NULL;
+
+CREATE TABLE dbo.TBorrowerAliases
+(
+    intBorrowerAliasID  INT IDENTITY(1,1) PRIMARY KEY,
+    intBorrowerID       INT NOT NULL REFERENCES dbo.TBorrowers(intBorrowerID) ON DELETE CASCADE,
+    strAlias            NVARCHAR(120) NOT NULL,
+    dtmCreated          DATETIME2(0) NOT NULL CONSTRAINT DF_TBorrowerAliases_Created DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT UQ_TBorrowerAliases UNIQUE (intBorrowerID, strAlias)
+);
+CREATE INDEX IX_TBorrowerAliases_Alias ON dbo.TBorrowerAliases(strAlias);
 
 CREATE TABLE dbo.TItems
 (
@@ -349,24 +360,59 @@ BEGIN
              b.intBorrowerID,
              b.strFirstName,
              b.strLastName,
-             b.strSchoolIDNumber
+             b.strSchoolIDNumber,
+             CAST(NULL AS NVARCHAR(120)) AS MatchedAlias
       FROM dbo.TBorrowers AS b;
       RETURN;
   END;
 
   DECLARE @Like NVARCHAR(130) = N'%' + @Term + N'%';
 
+  ;WITH Matches AS
+  (
+      SELECT TOP (@Top)
+             b.intBorrowerID,
+             b.strFirstName,
+             b.strLastName,
+             b.strSchoolIDNumber,
+             CAST(NULL AS NVARCHAR(120)) AS MatchedAlias,
+             0 AS Priority,
+             b.intBorrowerID AS SortId
+      FROM dbo.TBorrowers AS b
+      WHERE b.strFirstName LIKE @Like
+         OR b.strLastName LIKE @Like
+         OR (b.strFirstName + N' ' + b.strLastName) LIKE @Like
+         OR ISNULL(b.strSchoolIDNumber, N'') LIKE @Like
+      ORDER BY b.strLastName, b.strFirstName, b.intBorrowerID DESC
+
+      UNION ALL
+
+      SELECT TOP (@Top)
+             b.intBorrowerID,
+             b.strFirstName,
+             b.strLastName,
+             b.strSchoolIDNumber,
+             a.strAlias AS MatchedAlias,
+             1 AS Priority,
+             a.intBorrowerAliasID AS SortId
+      FROM dbo.TBorrowers AS b
+      INNER JOIN dbo.TBorrowerAliases AS a ON a.intBorrowerID = b.intBorrowerID
+      WHERE a.strAlias LIKE @Like
+      ORDER BY a.intBorrowerAliasID DESC
+  )
   SELECT TOP (@Top)
-         b.intBorrowerID,
-         b.strFirstName,
-         b.strLastName,
-         b.strSchoolIDNumber
-  FROM dbo.TBorrowers AS b
-  WHERE b.strFirstName LIKE @Like
-     OR b.strLastName LIKE @Like
-     OR (b.strFirstName + N' ' + b.strLastName) LIKE @Like
-     OR ISNULL(b.strSchoolIDNumber, N'') LIKE @Like
-  ORDER BY b.strLastName, b.strFirstName, b.intBorrowerID DESC;
+         m.intBorrowerID,
+         m.strFirstName,
+         m.strLastName,
+         m.strSchoolIDNumber,
+         m.MatchedAlias
+  FROM
+  (
+      SELECT *, ROW_NUMBER() OVER (PARTITION BY intBorrowerID ORDER BY Priority, SortId DESC) AS rn
+      FROM Matches
+  ) AS ranked
+  WHERE rn = 1
+  ORDER BY Priority, strLastName, strFirstName, intBorrowerID DESC;
 END
 GO
 
