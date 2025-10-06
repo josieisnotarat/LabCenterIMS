@@ -158,6 +158,21 @@
 
     .filters{display:flex; gap:8px; flex-wrap:wrap}
     .chip{border:1px solid var(--line); padding:6px 10px; border-radius:999px; font-size:12px; background:var(--bg); cursor:pointer; user-select:none}
+    .note-log{
+      border:1px solid var(--line);
+      border-radius:10px;
+      background:var(--surface);
+      padding:10px 12px;
+      max-height:220px;
+      overflow:auto;
+      display:grid;
+      gap:10px;
+      font-size:13px;
+    }
+    .note-entry{display:grid; gap:4px; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px 10px;}
+    .note-meta{display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:12px; color:var(--muted);}
+    .note-text{margin:0; white-space:pre-wrap; word-break:break-word;}
+    .note-empty{margin:0; color:var(--muted); font-style:italic;}
     .chip.active{background:var(--brand-weak); border-color:rgba(68,140,55,.35); font-weight:700}
 
     /* ====== Modals ====== */
@@ -279,7 +294,7 @@
             <div class="body">
               <div class="toolbar">
                 <div style="display:flex; gap:8px; flex-wrap:wrap">
-                  <button class="btn primary" data-open="dlg-new-customer"><span>New Customer</span><span class="spinner" aria-hidden="true"></span></button>
+                  <button class="btn primary" data-open="dlg-new-customer" data-action="borrow"><span>New Customer</span><span class="spinner" aria-hidden="true"></span></button>
                   <button class="btn" data-open="dlg-returning-borrow"><span>Returning Customer</span><span class="spinner" aria-hidden="true"></span></button>
                 </div>
                 <div class="search" role="search">
@@ -324,7 +339,7 @@
             <div class="body">
               <div class="toolbar">
                 <div style="display:flex; gap:8px; flex-wrap:wrap">
-                  <button class="btn primary" data-open="dlg-new-service"><span>New Customer</span><span class="spinner" aria-hidden="true"></span></button>
+                  <button class="btn primary" data-open="dlg-new-customer" data-action="service"><span>New Customer</span><span class="spinner" aria-hidden="true"></span></button>
                   <button class="btn" data-open="dlg-returning-service"><span>Returning Customer</span><span class="spinner" aria-hidden="true"></span></button>
                 </div>
                 <div class="search" role="search"><input id="search-service" type="text" placeholder="Search item, ticket, customer…" aria-label="Search"></div>
@@ -614,6 +629,10 @@
             <label>Add Note</label>
             <textarea id="det-note" placeholder="This appends to the log…"></textarea>
           </div>
+          <div class="full">
+            <label>Note History</label>
+            <div id="det-note-log" class="note-log" role="log" aria-live="polite"></div>
+          </div>
         </div>
       </div>
       <div class="modal-ft">
@@ -807,7 +826,16 @@
       btn.addEventListener("click", ()=>{
         const id = btn.getAttribute("data-open");
         const dlg = document.getElementById(id);
-        if (dlg) dlg.showModal();
+        if(!dlg) return;
+        const action = btn.dataset.action;
+        if(id === "dlg-new-customer" && action){
+          const sel = dlg.querySelector("#nc-action");
+          if(sel){
+            sel.value = action;
+            sel.dispatchEvent(new Event("change"));
+          }
+        }
+        dlg.showModal();
       });
     });
 
@@ -873,6 +901,151 @@
       toggle();
     })();
 
+    // ====== NOTE HISTORY SUPPORT ======
+    const detailNoteCache = new Map();
+    let activeDetailNoteKey = null;
+
+    function normalizeNoteId(kind, id){
+      if(kind === "loan"){
+        const num = Number.parseInt(id, 10);
+        return Number.isFinite(num) ? String(num) : null;
+      }
+      if(kind === "ticket"){
+        const str = `${id}`.trim();
+        return str ? str : null;
+      }
+      return null;
+    }
+
+    function noteCacheKey(kind, id){
+      const normalized = normalizeNoteId(kind, id);
+      if(!normalized) return null;
+      return `${kind}:${normalized}`;
+    }
+
+    function renderNoteHistory(entries, state="ready"){
+      const log = $("#det-note-log");
+      if(!log) return;
+      log.textContent = "";
+
+      if(state === "loading"){
+        const p = document.createElement("p");
+        p.className = "note-empty";
+        p.textContent = "Loading notes…";
+        log.appendChild(p);
+        return;
+      }
+
+      if(state === "error"){
+        const p = document.createElement("p");
+        p.className = "note-empty";
+        p.textContent = "Unable to load notes.";
+        log.appendChild(p);
+        return;
+      }
+
+      const list = Array.isArray(entries) ? entries : [];
+      if(list.length === 0){
+        const p = document.createElement("p");
+        p.className = "note-empty";
+        p.textContent = "No notes yet.";
+        log.appendChild(p);
+        return;
+      }
+
+      list.forEach(entry=>{
+        const wrapper = document.createElement("div");
+        wrapper.className = "note-entry";
+
+        const meta = document.createElement("div");
+        meta.className = "note-meta";
+
+        const author = document.createElement("span");
+        author.textContent = entry.author || "Lab Tech";
+
+        const time = document.createElement("time");
+        if(entry.timestamp){
+          time.dateTime = entry.timestamp;
+          time.textContent = formatLocalDateTime(entry.timestamp);
+        }else{
+          time.textContent = "—";
+        }
+
+        meta.appendChild(author);
+        meta.appendChild(time);
+
+        const text = document.createElement("p");
+        text.className = "note-text";
+        text.textContent = entry.note || "";
+
+        wrapper.appendChild(meta);
+        wrapper.appendChild(text);
+        log.appendChild(wrapper);
+      });
+    }
+
+    async function fetchDetailNotes(kind, id, { force=false }={}){
+      const key = noteCacheKey(kind, id);
+      if(!key) throw new Error("Invalid record id for notes.");
+      if(!force && detailNoteCache.has(key)){
+        return detailNoteCache.get(key);
+      }
+
+      let path;
+      if(kind === "loan"){
+        const normalized = normalizeNoteId(kind, id);
+        if(!normalized) throw new Error("Invalid loan id.");
+        path = `/loans/${encodeURIComponent(normalized)}/notes`;
+      }else if(kind === "ticket"){
+        const normalized = normalizeNoteId(kind, id);
+        if(!normalized) throw new Error("Invalid ticket id.");
+        path = `/service-tickets/${encodeURIComponent(normalized)}/notes`;
+      }else{
+        return [];
+      }
+
+      const res = await api(path, { method:"GET" });
+      const payload = await res.json();
+      const entries = Array.isArray(payload?.entries) ? payload.entries : Array.isArray(payload) ? payload : [];
+      detailNoteCache.set(key, entries);
+      return entries;
+    }
+
+    async function loadDetailNotes(kind, id){
+      const key = noteCacheKey(kind, id);
+      if(!key){
+        activeDetailNoteKey = null;
+        renderNoteHistory([], "error");
+        return;
+      }
+
+      activeDetailNoteKey = key;
+      const cached = detailNoteCache.get(key);
+      if(cached){
+        renderNoteHistory(cached);
+      }else{
+        renderNoteHistory(null, "loading");
+      }
+
+      try{
+        const entries = await fetchDetailNotes(kind, id, { force: true });
+        if(activeDetailNoteKey === key){
+          renderNoteHistory(entries);
+        }
+      }catch(err){
+        console.error("Failed to load notes", err);
+        if(activeDetailNoteKey === key){
+          renderNoteHistory(null, "error");
+        }
+      }
+    }
+
+    function typeToKind(type){
+      if(type === "Loan") return "loan";
+      if(type === "Service Ticket") return "ticket";
+      return null;
+    }
+
     // ====== TABLE ROW → DETAILS ======
     const openDetail = (kind, id, primary, status) => {
       const dlg = document.getElementById("dlg-detail");
@@ -883,6 +1056,7 @@
       const sel = $("#det-status");
       Array.from(sel.options).forEach(o => { if (o.text === status) sel.value = o.text; });
       $("#det-note").value = "";
+      loadDetailNotes(kind, id);
       dlg.showModal();
     };
 
@@ -1403,6 +1577,12 @@
       const row = document.querySelector(`[data-id="${CSS.escape(id)}"]`);
       if(row){
         updateRowVisualState(row, status);
+      }
+
+      const kind = typeToKind(type);
+      const cacheKey = noteCacheKey(kind, id);
+      if(cacheKey){
+        detailNoteCache.delete(cacheKey);
       }
 
       closeDialogById("dlg-detail");
