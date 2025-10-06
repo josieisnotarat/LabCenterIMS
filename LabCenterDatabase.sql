@@ -401,18 +401,18 @@ BEGIN
       ORDER BY a.intBorrowerAliasID DESC
   )
   SELECT TOP (@Top)
-         m.intBorrowerID,
-         m.strFirstName,
-         m.strLastName,
-         m.strSchoolIDNumber,
-         m.MatchedAlias
+         ranked.intBorrowerID,
+         ranked.strFirstName,
+         ranked.strLastName,
+         ranked.strSchoolIDNumber,
+         ranked.MatchedAlias
   FROM
   (
       SELECT *, ROW_NUMBER() OVER (PARTITION BY intBorrowerID ORDER BY Priority, SortId DESC) AS rn
       FROM Matches
   ) AS ranked
-  WHERE rn = 1
-  ORDER BY Priority, strLastName, strFirstName, intBorrowerID DESC;
+  WHERE ranked.rn = 1
+  ORDER BY ranked.Priority, ranked.strLastName, ranked.strFirstName, ranked.intBorrowerID DESC;
 END
 GO
 
