@@ -493,70 +493,6 @@
         border-color: rgba(68, 140, 55, 0.35);
         font-weight: 700;
       }
-      .profile-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 12px;
-        margin-bottom: 16px;
-      }
-      .profile-label {
-        font-size: 12px;
-        color: var(--muted);
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        margin-bottom: 4px;
-      }
-      .profile-value {
-        font-weight: 600;
-        min-height: 1.4em;
-      }
-      .alias-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin: 6px 0 14px;
-      }
-      .alias-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 10px;
-        border-radius: 999px;
-        background: var(--surface);
-        border: 1px solid var(--line);
-        font-size: 13px;
-      }
-      .alias-chip button {
-        border: 0;
-        background: transparent;
-        color: var(--muted);
-        cursor: pointer;
-        font-size: 16px;
-        line-height: 1;
-        padding: 0;
-      }
-      .alias-chip button:hover {
-        color: var(--overdue-fg);
-      }
-      .alias-chip button:focus-visible {
-        outline: 2px solid var(--focus);
-        outline-offset: 2px;
-        border-radius: 4px;
-      }
-      .alias-empty {
-        margin: 0;
-        color: var(--muted);
-        font-style: italic;
-      }
-      .alias-add-row {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-      }
-      .alias-add-row input {
-        flex: 1;
-      }
-
       /* ====== Modals ====== */
       dialog {
         width: 720px;
@@ -1216,19 +1152,18 @@
               <label>School/Faculty ID (optional)</label>
               <input
                 id="nc-schoolid"
-                pattern="\\d{5,10}"
-                placeholder="e.g., 1234567"
+                pattern="\\d{5,8}"
+                placeholder="e.g., 0234567"
               />
-              <div class="hint">5–10 digits</div>
+              <div class="hint">5–7 digits, 0 as first digit.</div>
             </div>
             <div>
               <label>Phone</label>
               <input
                 id="nc-phone"
-                placeholder="(555) 555-5555"
-                pattern="^\\(\\d{3}\\) \\d{3}-\\d{4}$"
+                placeholder="5555555555"
+                length=10
               />
-              <div class="hint">Format: (###) ###-####</div>
             </div>
             <div>
               <label>Room</label>
@@ -2104,9 +2039,6 @@
         // ====== NOTE HISTORY SUPPORT ======
         const m_mapDetailNoteCache = new Map();
         let m_strActiveDetailNoteKey = null;
-        let m_objActiveCustomerProfile = null;
-        let m_intProfileSearchToken = 0;
-        let m_strLastProfileSearchTerm = "";
 
         function fnNormalizeNoteId(kind, id) {
           if (kind === "loan") {
