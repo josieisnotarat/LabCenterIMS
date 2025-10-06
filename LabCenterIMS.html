@@ -172,6 +172,17 @@
     .note-text{margin:0; white-space:pre-wrap; word-break:break-word;}
     .note-empty{margin:0; color:var(--muted); font-style:italic;}
     .chip.active{background:var(--brand-weak); border-color:rgba(68,140,55,.35); font-weight:700}
+    .profile-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:16px}
+    .profile-label{font-size:12px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase; margin-bottom:4px}
+    .profile-value{font-weight:600; min-height:1.4em}
+    .alias-list{display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 14px}
+    .alias-chip{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:var(--surface); border:1px solid var(--line); font-size:13px}
+    .alias-chip button{border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:16px; line-height:1; padding:0}
+    .alias-chip button:hover{color:var(--overdue-fg)}
+    .alias-chip button:focus-visible{outline:2px solid var(--focus); outline-offset:2px; border-radius:4px}
+    .alias-empty{margin:0; color:var(--muted); font-style:italic}
+    .alias-add-row{display:flex; gap:8px; align-items:center}
+    .alias-add-row input{flex:1}
 
     /* ====== Modals ====== */
     dialog{
@@ -410,6 +421,33 @@
                 </div>
                 <div class="search" role="search"><input id="search-admin" type="text" placeholder="Search user or action…" aria-label="Search"></div>
               </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:14px">
+            <h2 style="border-bottom:1px solid var(--line); padding:12px 14px; margin:0">Customer Profiles</h2>
+            <div class="body">
+              <div class="toolbar" style="justify-content:space-between; align-items:center">
+                <p class="hint" style="margin:0; max-width:420px">Search for an existing customer to review their details and manage profile aliases.</p>
+                <div class="search" role="search"><input id="search-profiles" type="text" placeholder="Search name, alias, or ID…" aria-label="Search customer profiles"></div>
+              </div>
+            </div>
+            <div class="body table">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">School ID</th>
+                    <th scope="col">Aliases</th>
+                    <th scope="col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="tbl-customer-profiles">
+                  <tr>
+                    <td colspan="4" style="text-align:center; color:var(--muted); padding:18px 12px">Search to view customer profiles.</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -785,6 +823,68 @@
     </form>
   </dialog>
 
+  <!-- Admin: Manage Customer Profile -->
+  <dialog id="dlg-manage-customer">
+    <form method="dialog" id="form-manage-customer" novalidate>
+      <div class="modal-hd">
+        <strong>Manage Customer Profile</strong>
+        <button class="btn" value="close">Close</button>
+      </div>
+      <div class="modal-bd">
+        <input type="hidden" id="cust-profile-id">
+        <div class="profile-grid">
+          <div>
+            <div class="profile-label">Name</div>
+            <div class="profile-value" id="cust-name">—</div>
+          </div>
+          <div>
+            <div class="profile-label">School/Faculty ID</div>
+            <div class="profile-value" id="cust-school">—</div>
+          </div>
+          <div>
+            <div class="profile-label">Phone</div>
+            <div class="profile-value" id="cust-phone">—</div>
+          </div>
+          <div>
+            <div class="profile-label">Room</div>
+            <div class="profile-value" id="cust-room">—</div>
+          </div>
+          <div>
+            <div class="profile-label">Instructor</div>
+            <div class="profile-value" id="cust-instructor">—</div>
+          </div>
+          <div>
+            <div class="profile-label">Department</div>
+            <div class="profile-value" id="cust-department">—</div>
+          </div>
+          <div>
+            <div class="profile-label">Created</div>
+            <div class="profile-value" id="cust-created">—</div>
+          </div>
+        </div>
+        <div>
+          <label>Aliases</label>
+          <div id="cust-alias-list" class="alias-list" role="list">
+            <p class="alias-empty">No aliases yet.</p>
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="full">
+            <label for="cust-alias-input">Add Alias</label>
+            <div class="alias-add-row">
+              <input id="cust-alias-input" placeholder="e.g., Josie">
+              <button id="cust-alias-add" type="button" class="btn primary"><span>Add Alias</span><span class="spinner" aria-hidden="true"></span></button>
+            </div>
+            <p class="hint">Aliases help staff find the right customer when someone goes by multiple names.</p>
+          </div>
+        </div>
+      </div>
+      <div class="modal-ft">
+        <button class="btn" value="close">Done</button>
+      </div>
+    </form>
+  </dialog>
+
   <script>
     // ====== CONFIG ======
     const USE_BACKEND = true; // flip to true when your API is running
@@ -1035,6 +1135,9 @@
     // ====== NOTE HISTORY SUPPORT ======
     const detailNoteCache = new Map();
     let activeDetailNoteKey = null;
+    let activeCustomerProfile = null;
+    let profileSearchToken = 0;
+    let lastProfileSearchTerm = "";
 
     function normalizeNoteId(kind, id){
       if(kind === "loan"){
@@ -1370,6 +1473,36 @@
         tbody.appendChild(tr);
       });
       applyRowStatusStyles();
+    }
+
+    function renderCustomerProfiles(entries){
+      const tbodyId = "tbl-customer-profiles";
+      const tbody = document.getElementById(tbodyId);
+      if(!tbody) return;
+      tbody.textContent = "";
+      if(!Array.isArray(entries) || entries.length === 0){
+        showTableMessage(tbodyId, "No profiles found.");
+        return;
+      }
+      entries.forEach(profile => {
+        const tr = document.createElement("tr");
+        appendCell(tr, profile.name || "—");
+        appendCell(tr, profile.schoolId || "—");
+        const aliases = Array.isArray(profile.aliases) && profile.aliases.length
+          ? profile.aliases.map(a => a.alias).join(", ")
+          : "—";
+        appendCell(tr, aliases);
+        const actionCell = document.createElement("td");
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn";
+        btn.dataset.manageProfile = profile.id ?? "";
+        btn.innerHTML = "<span>Manage</span>";
+        btn.setAttribute("aria-label", `Manage profile for ${profile.name || 'customer'}`);
+        actionCell.appendChild(btn);
+        tr.appendChild(actionCell);
+        tbody.appendChild(tr);
+      });
     }
 
     async function loadHomeData(){
@@ -1721,6 +1854,36 @@
       return [];
     }
 
+    async function fetchCustomerProfiles(params={}){
+      const searchParams = new URLSearchParams();
+      if(params.top != null) searchParams.set("top", params.top);
+      if(params.search) searchParams.set("search", params.search);
+      const qs = searchParams.toString();
+      const res = await api(`/customers${qs ? `?${qs}` : ""}`, { method:"GET" });
+      const payload = await res.json();
+      if(Array.isArray(payload)) return payload;
+      if(Array.isArray(payload?.entries)) return payload.entries;
+      if(Array.isArray(payload?.data)) return payload.data;
+      return [];
+    }
+
+    async function fetchCustomerProfileDetail(id){
+      const res = await api(`/customers/${encodeURIComponent(id)}`, { method:"GET" });
+      return res.json();
+    }
+
+    async function createCustomerAlias(id, alias){
+      const res = await api(`/customers/${encodeURIComponent(id)}/aliases`, {
+        method:"POST",
+        body: JSON.stringify({ alias })
+      });
+      return res.json();
+    }
+
+    async function deleteCustomerAlias(id, aliasId){
+      await api(`/customers/${encodeURIComponent(id)}/aliases/${encodeURIComponent(aliasId)}`, { method:"DELETE" });
+    }
+
     function formatAuditUser(entry){
       const user = entry.username || entry.user || entry.userName || entry.strUsername;
       if(user) return user;
@@ -1883,6 +2046,151 @@
         td.textContent = "Unable to load audit log.";
         tr.appendChild(td);
         tbody.appendChild(tr);
+      }
+    }
+
+    function resetCustomerProfileModal(){
+      activeCustomerProfile = null;
+      const ids = [
+        "cust-name",
+        "cust-school",
+        "cust-phone",
+        "cust-room",
+        "cust-instructor",
+        "cust-department",
+        "cust-created"
+      ];
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.textContent = "—";
+      });
+      const hidden = document.getElementById('cust-profile-id');
+      if(hidden) hidden.value = '';
+      const aliasList = document.getElementById('cust-alias-list');
+      if(aliasList){
+        aliasList.textContent = '';
+        const p = document.createElement('p');
+        p.className = 'alias-empty';
+        p.textContent = 'No aliases yet.';
+        aliasList.appendChild(p);
+      }
+      const aliasInput = document.getElementById('cust-alias-input');
+      if(aliasInput) aliasInput.value = '';
+    }
+
+    function renderCustomerAliasList(list){
+      const aliasList = document.getElementById('cust-alias-list');
+      if(!aliasList) return;
+      aliasList.textContent = '';
+      if(!Array.isArray(list) || !list.length){
+        const empty = document.createElement('p');
+        empty.className = 'alias-empty';
+        empty.textContent = 'No aliases yet.';
+        aliasList.appendChild(empty);
+        return;
+      }
+      list.forEach(alias => {
+        const chip = document.createElement('span');
+        chip.className = 'alias-chip';
+        chip.setAttribute('role', 'listitem');
+        const label = document.createElement('span');
+        label.textContent = alias.alias;
+        chip.appendChild(label);
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.dataset.aliasId = alias.id ?? '';
+        remove.dataset.aliasName = alias.alias || '';
+        remove.setAttribute('aria-label', `Remove alias ${alias.alias}`);
+        remove.innerHTML = '&times;';
+        chip.appendChild(remove);
+        aliasList.appendChild(chip);
+      });
+    }
+
+    function renderCustomerProfileDetail(profile){
+      if(!profile) return;
+      const hidden = document.getElementById('cust-profile-id');
+      if(hidden) hidden.value = profile.id ?? '';
+      const name = document.getElementById('cust-name');
+      if(name) name.textContent = profile.name || '—';
+      const school = document.getElementById('cust-school');
+      if(school) school.textContent = profile.schoolId || '—';
+      const phone = document.getElementById('cust-phone');
+      if(phone) phone.textContent = profile.phone || '—';
+      const room = document.getElementById('cust-room');
+      if(room) room.textContent = profile.room || '—';
+      const instructor = document.getElementById('cust-instructor');
+      if(instructor) instructor.textContent = profile.instructor || '—';
+      const department = document.getElementById('cust-department');
+      if(department) department.textContent = profile.department || '—';
+      const created = document.getElementById('cust-created');
+      if(created) created.textContent = profile.createdUtc ? formatLocalDateTime(profile.createdUtc) : '—';
+      renderCustomerAliasList(profile.aliases || []);
+    }
+
+    async function openCustomerProfileModal(borrowerId){
+      if(!USE_BACKEND){
+        alert('Enable backend to manage customer profiles.');
+        return;
+      }
+      const dlg = document.getElementById('dlg-manage-customer');
+      if(!dlg) return;
+      resetCustomerProfileModal();
+      const aliasList = document.getElementById('cust-alias-list');
+      if(aliasList){
+        aliasList.textContent = '';
+        const loading = document.createElement('p');
+        loading.className = 'alias-empty';
+        loading.textContent = 'Loading profile…';
+        aliasList.appendChild(loading);
+      }
+      dlg.showModal();
+      try{
+        const detail = await fetchCustomerProfileDetail(borrowerId);
+        activeCustomerProfile = {
+          ...detail,
+          aliases: Array.isArray(detail?.aliases) ? detail.aliases.slice() : []
+        };
+        renderCustomerProfileDetail(activeCustomerProfile);
+      }catch(err){
+        console.error('Failed to load customer profile', err);
+        if(aliasList){
+          aliasList.textContent = '';
+          const error = document.createElement('p');
+          error.className = 'alias-empty';
+          error.style.color = 'var(--overdue-fg)';
+          error.textContent = 'Unable to load aliases.';
+          aliasList.appendChild(error);
+        }
+        alert(err?.message || 'Unable to load profile.');
+      }
+    }
+
+    async function runCustomerProfileSearch(term, { showStatus = true } = {}){
+      const tbodyId = 'tbl-customer-profiles';
+      const tbody = document.getElementById(tbodyId);
+      if(!tbody) return;
+      lastProfileSearchTerm = (term || '').trim();
+      if(!USE_BACKEND){
+        showTableMessage(tbodyId, 'Enable backend to manage customer profiles.');
+        return;
+      }
+      if(lastProfileSearchTerm.length < 2){
+        showTableMessage(tbodyId, 'Type at least 2 characters to search profiles.');
+        return;
+      }
+      const token = ++profileSearchToken;
+      if(showStatus){
+        showTableMessage(tbodyId, 'Searching profiles…');
+      }
+      try{
+        const entries = await fetchCustomerProfiles({ search: lastProfileSearchTerm, top: 25 });
+        if(token !== profileSearchToken) return;
+        renderCustomerProfiles(entries);
+      }catch(err){
+        if(token !== profileSearchToken) return;
+        console.error('Failed to load customer profiles', err);
+        showTableMessage(tbodyId, 'Unable to load customer profiles.', 'error');
       }
     }
 
@@ -2066,6 +2374,81 @@
       alert("User deleted.");
     }));
 
+    // Admin: Customer Profiles
+    const profileSearchInput = document.getElementById('search-profiles');
+    if(profileSearchInput){
+      const debouncedProfileSearch = debounce(()=> runCustomerProfileSearch(profileSearchInput.value, { showStatus: true }), 250);
+      profileSearchInput.addEventListener('input', ()=>{
+        debouncedProfileSearch();
+      });
+    }
+
+    const profileTable = document.getElementById('tbl-customer-profiles');
+    if(profileTable){
+      profileTable.addEventListener('click', (event)=>{
+        const btn = event.target.closest('[data-manage-profile]');
+        if(!btn) return;
+        const id = btn.dataset.manageProfile;
+        if(id){
+          openCustomerProfileModal(id);
+        }
+      });
+    }
+
+    const aliasAddButton = document.getElementById('cust-alias-add');
+    if(aliasAddButton){
+      aliasAddButton.addEventListener('click', withAsyncBusy(aliasAddButton, async ()=>{
+        const hidden = document.getElementById('cust-profile-id');
+        const parsedId = activeCustomerProfile?.id ?? Number.parseInt(hidden?.value || '', 10);
+        must(Number.isFinite(parsedId), 'Open a profile before adding aliases.');
+        const input = document.getElementById('cust-alias-input');
+        const value = input?.value.trim() || '';
+        must(value, 'Alias is required.');
+        const alias = await createCustomerAlias(parsedId, value);
+        if(input) input.value = '';
+        if(!activeCustomerProfile || activeCustomerProfile.id !== parsedId){
+          activeCustomerProfile = activeCustomerProfile || { id: parsedId, aliases: [] };
+        }
+        const aliases = Array.isArray(activeCustomerProfile.aliases) ? activeCustomerProfile.aliases.slice() : [];
+        aliases.push(alias);
+        aliases.sort((a,b)=> (a.alias || '').localeCompare(b.alias || '', undefined, { sensitivity:'base' }));
+        activeCustomerProfile.aliases = aliases;
+        renderCustomerProfileDetail(activeCustomerProfile);
+        runCustomerProfileSearch(lastProfileSearchTerm, { showStatus: false });
+      }));
+    }
+
+    const aliasList = document.getElementById('cust-alias-list');
+    if(aliasList){
+      aliasList.addEventListener('click', async event => {
+        const btn = event.target.closest('button[data-alias-id]');
+        if(!btn) return;
+        event.preventDefault();
+        const hidden = document.getElementById('cust-profile-id');
+        const currentId = activeCustomerProfile?.id ?? Number.parseInt(hidden?.value || '', 10);
+        if(!Number.isFinite(currentId)){
+          alert('Open a profile before removing aliases.');
+          return;
+        }
+        const aliasId = btn.dataset.aliasId;
+        if(!aliasId) return;
+        try{
+          setBusy(btn, true);
+          await deleteCustomerAlias(currentId, aliasId);
+          if(activeCustomerProfile && activeCustomerProfile.id === currentId){
+            activeCustomerProfile.aliases = (activeCustomerProfile.aliases || []).filter(a => String(a.id) !== String(aliasId));
+          }
+          renderCustomerProfileDetail(activeCustomerProfile || { id: currentId, aliases: [] });
+          runCustomerProfileSearch(lastProfileSearchTerm, { showStatus: false });
+        }catch(err){
+          console.error('Failed to delete alias', err);
+          alert(err?.message || 'Unable to remove alias.');
+        }finally{
+          setBusy(btn, false);
+        }
+      });
+    }
+
     setupDuePreview('nc-item','nc-due-preview');
     setupDuePreview('rb-item','rb-due-preview');
     setupBorrowerLookup({ inputId:'rb-name', menuId:'rb-name-menu', hiddenId:'rb-borrower-id', idFieldId:'rb-id' });
@@ -2083,6 +2466,11 @@
     showTableMessage("tbl-borrow", "Loading recent loans…");
     showTableMessage("tbl-service", "Loading service tickets…");
     showTableMessage("tbl-admin-log", "Loading activity…");
+    if(USE_BACKEND){
+      showTableMessage("tbl-customer-profiles", "Search to view customer profiles.");
+    }else{
+      showTableMessage("tbl-customer-profiles", "Enable backend to manage customer profiles.");
+    }
 
     loadHomeData();
     loadBorrowingData();

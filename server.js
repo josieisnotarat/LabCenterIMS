@@ -54,6 +54,14 @@ function formatName(first, last){
   return [first, last].filter(Boolean).join(' ').trim() || null;
 }
 
+function mapAliasRow(row){
+  return {
+    id: row.intBorrowerAliasID ?? null,
+    alias: row.strAlias || '',
+    createdUtc: toIso(row.dtmCreated)
+  };
+}
+
 function mapLoanRow(row){
   const traceNumber = row.intItemLoanID != null
     ? row.intItemLoanID.toString().padStart(6, '0')
@@ -133,18 +141,61 @@ app.get('/api/borrowers/search', asyncHandler(async (req, res) => {
   if(!query || query.length < 2){
     return res.json({ entries: [] });
   }
+
   const top = Number.parseInt(req.query.top || '8', 10);
+  const limit = Number.isFinite(top) && top > 0 ? Math.min(top, 50) : 8;
   const pool = await getPool();
-  const request = pool.request();
-  request.input('SearchTerm', sql.NVarChar(120), query);
-  request.input('Top', sql.Int, Number.isFinite(top) ? top : 8);
-  const result = await request.execute('dbo.usp_SearchBorrowers');
-  const entries = result.recordset?.map(row => ({
-    id: row.intBorrowerID ?? null,
-    name: formatName(row.strFirstName, row.strLastName),
-    schoolId: row.strSchoolIDNumber || null
-  })) || [];
-  res.json({ entries });
+  await ensureBorrowerAliasTable(pool);
+
+  const primaryRequest = pool.request();
+  primaryRequest.input('SearchTerm', sql.NVarChar(120), query);
+  primaryRequest.input('Top', sql.Int, limit);
+  const result = await primaryRequest.execute('dbo.usp_SearchBorrowers');
+  const rows = result.recordset || [];
+
+  const entries = [];
+  const seen = new Set();
+
+  const appendRow = (row, aliasMatch = null) => {
+    const rawId = row.intBorrowerID ?? row.id ?? row.intBorrowerId ?? row.borrowerId;
+    const parsedId = Number.parseInt(rawId, 10);
+    if(!Number.isFinite(parsedId) || seen.has(parsedId)){
+      return;
+    }
+    seen.add(parsedId);
+    const first = row.strFirstName || row.firstName;
+    const last = row.strLastName || row.lastName;
+    const alias = aliasMatch || row.MatchedAlias || row.matchedAlias || row.strAlias || row.alias || null;
+    const displayName = formatName(first, last) || alias || `Customer #${parsedId}`;
+    entries.push({
+      id: parsedId,
+      name: displayName,
+      schoolId: row.strSchoolIDNumber || row.schoolId || null,
+      alias: alias || null
+    });
+  };
+
+  rows.forEach(row => appendRow(row));
+
+  const aliasRequest = pool.request();
+  aliasRequest.input('Top', sql.Int, limit);
+  aliasRequest.input('Search', sql.NVarChar(130), `%${query}%`);
+  const aliasResult = await aliasRequest.query(`
+    SELECT TOP (@Top)
+           b.intBorrowerID,
+           b.strFirstName,
+           b.strLastName,
+           b.strSchoolIDNumber,
+           a.strAlias,
+           a.intBorrowerAliasID
+    FROM dbo.TBorrowers AS b
+    INNER JOIN dbo.TBorrowerAliases AS a ON a.intBorrowerID = b.intBorrowerID
+    WHERE a.strAlias LIKE @Search
+    ORDER BY a.intBorrowerAliasID DESC;
+  `);
+  aliasResult.recordset?.forEach(row => appendRow(row, row.strAlias));
+
+  res.json({ entries: entries.slice(0, limit) });
 }));
 
 app.get('/api/loans/:id/notes', asyncHandler(async (req, res) => {
@@ -398,6 +449,62 @@ async function ensureDepartment(pool, name){
   }
 }
 
+async function ensureBorrowerAliasTable(pool){
+  await pool.request().query(`
+    IF OBJECT_ID('dbo.TBorrowerAliases','U') IS NULL
+    BEGIN
+      CREATE TABLE dbo.TBorrowerAliases
+      (
+        intBorrowerAliasID INT IDENTITY(1,1) PRIMARY KEY,
+        intBorrowerID      INT NOT NULL REFERENCES dbo.TBorrowers(intBorrowerID) ON DELETE CASCADE,
+        strAlias           NVARCHAR(120) NOT NULL,
+        dtmCreated         DATETIME2(0) NOT NULL CONSTRAINT DF_TBorrowerAliases_Created DEFAULT (SYSUTCDATETIME()),
+        CONSTRAINT UQ_TBorrowerAliases UNIQUE (intBorrowerID, strAlias)
+      );
+      CREATE INDEX IX_TBorrowerAliases_Alias ON dbo.TBorrowerAliases(strAlias);
+    END;
+  `);
+}
+
+async function loadAliasesForBorrowers(pool, borrowerIds){
+  if(!Array.isArray(borrowerIds) || !borrowerIds.length){
+    return new Map();
+  }
+
+  const uniqueIds = Array.from(new Set(
+    borrowerIds
+      .map(id => Number.parseInt(id, 10))
+      .filter(id => Number.isInteger(id))
+  ));
+  if(!uniqueIds.length){
+    return new Map();
+  }
+
+  const request = pool.request();
+  const params = uniqueIds.map((id, idx) => {
+    const paramName = `Borrower${idx}`;
+    request.input(paramName, sql.Int, id);
+    return `@${paramName}`;
+  });
+
+  const result = await request.query(`
+    SELECT intBorrowerAliasID, intBorrowerID, strAlias, dtmCreated
+    FROM dbo.TBorrowerAliases
+    WHERE intBorrowerID IN (${params.join(',')})
+    ORDER BY strAlias;
+  `);
+
+  const map = new Map();
+  const rows = result.recordset || [];
+  rows.forEach(row => {
+    const list = map.get(row.intBorrowerID) || [];
+    list.push(mapAliasRow(row));
+    map.set(row.intBorrowerID, list);
+  });
+
+  return map;
+}
+
 async function getDefaultLabTechId(pool){
   if(cachedLabTechId != null){
     return cachedLabTechId;
@@ -474,6 +581,34 @@ async function findBorrowerId(pool, payload){
         `);
       if(res.recordset?.length){
         return res.recordset[0].intBorrowerID;
+      }
+    }
+
+    const aliasText = normalizeString(nameSource);
+    if(aliasText){
+      await ensureBorrowerAliasTable(pool);
+      const aliasExact = await pool.request()
+        .input('Alias', sql.NVarChar(120), aliasText)
+        .query(`
+          SELECT TOP (1) intBorrowerID
+          FROM dbo.TBorrowerAliases
+          WHERE strAlias = @Alias
+          ORDER BY intBorrowerAliasID DESC;
+        `);
+      if(aliasExact.recordset?.length){
+        return aliasExact.recordset[0].intBorrowerID;
+      }
+
+      const aliasLike = await pool.request()
+        .input('AliasLike', sql.NVarChar(130), `%${aliasText}%`)
+        .query(`
+          SELECT TOP (1) intBorrowerID
+          FROM dbo.TBorrowerAliases
+          WHERE strAlias LIKE @AliasLike
+          ORDER BY intBorrowerAliasID DESC;
+        `);
+      if(aliasLike.recordset?.length){
+        return aliasLike.recordset[0].intBorrowerID;
       }
     }
 
@@ -571,6 +706,219 @@ async function generatePublicTicketId(pool){
   const next = Number.isFinite(lastNumber) ? lastNumber + 1 : 1;
   return `S-${next.toString().padStart(4, '0')}`;
 }
+
+app.get('/api/customers', asyncHandler(async (req, res) => {
+  const pool = await getPool();
+  await ensureBorrowerAliasTable(pool);
+
+  const top = Number.parseInt(req.query.top || '25', 10);
+  const limit = Number.isFinite(top) && top > 0 ? Math.min(top, 200) : 25;
+  const search = normalizeString(req.query.search || req.query.q || req.query.query);
+
+  const request = pool.request();
+  request.input('Top', sql.Int, limit);
+
+  let queryText;
+  if(search){
+    request.input('Search', sql.NVarChar(130), `%${search}%`);
+    queryText = `
+      SELECT TOP (@Top)
+             b.intBorrowerID,
+             b.strFirstName,
+             b.strLastName,
+             b.strSchoolIDNumber,
+             b.strPhoneNumber,
+             b.strRoomNumber,
+             b.strInstructor,
+             b.dtmCreated,
+             d.strDepartmentName
+      FROM dbo.TBorrowers AS b
+      LEFT JOIN dbo.TDepartments AS d ON d.intDepartmentID = b.intDepartmentID
+      WHERE b.strFirstName LIKE @Search
+         OR b.strLastName LIKE @Search
+         OR (b.strFirstName + ' ' + b.strLastName) LIKE @Search
+         OR ISNULL(b.strSchoolIDNumber,'') LIKE @Search
+         OR ISNULL(b.strPhoneNumber,'') LIKE @Search
+         OR EXISTS (
+             SELECT 1
+             FROM dbo.TBorrowerAliases AS a
+             WHERE a.intBorrowerID = b.intBorrowerID
+               AND a.strAlias LIKE @Search
+         )
+      ORDER BY b.strLastName, b.strFirstName, b.intBorrowerID DESC;
+    `;
+  }else{
+    queryText = `
+      SELECT TOP (@Top)
+             b.intBorrowerID,
+             b.strFirstName,
+             b.strLastName,
+             b.strSchoolIDNumber,
+             b.strPhoneNumber,
+             b.strRoomNumber,
+             b.strInstructor,
+             b.dtmCreated,
+             d.strDepartmentName
+      FROM dbo.TBorrowers AS b
+      LEFT JOIN dbo.TDepartments AS d ON d.intDepartmentID = b.intDepartmentID
+      ORDER BY b.dtmCreated DESC, b.intBorrowerID DESC;
+    `;
+  }
+
+  const result = await request.query(queryText);
+  const rows = result.recordset || [];
+  const aliasMap = await loadAliasesForBorrowers(pool, rows.map(r => r.intBorrowerID));
+
+  const entries = rows.map(row => ({
+    id: row.intBorrowerID ?? null,
+    firstName: row.strFirstName || null,
+    lastName: row.strLastName || null,
+    name: formatName(row.strFirstName, row.strLastName),
+    schoolId: row.strSchoolIDNumber || null,
+    phone: row.strPhoneNumber || null,
+    room: row.strRoomNumber || null,
+    instructor: row.strInstructor || null,
+    department: row.strDepartmentName || null,
+    createdUtc: toIso(row.dtmCreated),
+    aliases: aliasMap.get(row.intBorrowerID) || []
+  }));
+
+  res.json({ entries });
+}));
+
+app.get('/api/customers/:id', asyncHandler(async (req, res) => {
+  const borrowerId = Number.parseInt(req.params.id, 10);
+  if(!Number.isFinite(borrowerId)){
+    return res.status(400).json({ error: 'Invalid borrower id.' });
+  }
+
+  const pool = await getPool();
+  await ensureBorrowerAliasTable(pool);
+
+  const detailResult = await pool.request()
+    .input('BorrowerID', sql.Int, borrowerId)
+    .query(`
+      SELECT b.intBorrowerID,
+             b.strFirstName,
+             b.strLastName,
+             b.strSchoolIDNumber,
+             b.strPhoneNumber,
+             b.strRoomNumber,
+             b.strInstructor,
+             b.dtmCreated,
+             d.strDepartmentName
+      FROM dbo.TBorrowers AS b
+      LEFT JOIN dbo.TDepartments AS d ON d.intDepartmentID = b.intDepartmentID
+      WHERE b.intBorrowerID = @BorrowerID;
+    `);
+
+  const row = detailResult.recordset?.[0] || null;
+  if(!row){
+    return res.status(404).json({ error: 'Borrower not found.' });
+  }
+
+  const aliasResult = await pool.request()
+    .input('BorrowerID', sql.Int, borrowerId)
+    .query(`
+      SELECT intBorrowerAliasID, strAlias, dtmCreated
+      FROM dbo.TBorrowerAliases
+      WHERE intBorrowerID = @BorrowerID
+      ORDER BY strAlias;
+    `);
+
+  const aliases = aliasResult.recordset?.map(mapAliasRow) || [];
+
+  res.json({
+    id: row.intBorrowerID ?? null,
+    firstName: row.strFirstName || null,
+    lastName: row.strLastName || null,
+    name: formatName(row.strFirstName, row.strLastName),
+    schoolId: row.strSchoolIDNumber || null,
+    phone: row.strPhoneNumber || null,
+    room: row.strRoomNumber || null,
+    instructor: row.strInstructor || null,
+    department: row.strDepartmentName || null,
+    createdUtc: toIso(row.dtmCreated),
+    aliases
+  });
+}));
+
+app.post('/api/customers/:id/aliases', asyncHandler(async (req, res) => {
+  const borrowerId = Number.parseInt(req.params.id, 10);
+  if(!Number.isFinite(borrowerId)){
+    return res.status(400).json({ error: 'Invalid borrower id.' });
+  }
+
+  const aliasInput = normalizeString(req.body?.alias || req.body?.name);
+  if(!aliasInput){
+    return res.status(400).json({ error: 'Alias is required.' });
+  }
+  if(aliasInput.length > 120){
+    return res.status(400).json({ error: 'Alias must be 120 characters or fewer.' });
+  }
+
+  const pool = await getPool();
+  await ensureBorrowerAliasTable(pool);
+
+  const borrowerCheck = await pool.request()
+    .input('BorrowerID', sql.Int, borrowerId)
+    .query(`
+      SELECT intBorrowerID
+      FROM dbo.TBorrowers
+      WHERE intBorrowerID = @BorrowerID;
+    `);
+  if(!borrowerCheck.recordset?.length){
+    return res.status(404).json({ error: 'Borrower not found.' });
+  }
+
+  try {
+    const insert = await pool.request()
+      .input('BorrowerID', sql.Int, borrowerId)
+      .input('Alias', sql.NVarChar(120), aliasInput)
+      .query(`
+        INSERT dbo.TBorrowerAliases(intBorrowerID, strAlias)
+        VALUES (@BorrowerID, @Alias);
+        SELECT intBorrowerAliasID, strAlias, dtmCreated
+        FROM dbo.TBorrowerAliases
+        WHERE intBorrowerAliasID = SCOPE_IDENTITY();
+      `);
+    const aliasRow = insert.recordset?.[0] || null;
+    const payload = aliasRow ? mapAliasRow(aliasRow) : { id: null, alias: aliasInput, createdUtc: null };
+    res.status(201).json(payload);
+  } catch(err){
+    if(err && (err.number === 2627 || err.number === 2601)){
+      return res.status(409).json({ error: 'Alias already exists for this customer.' });
+    }
+    throw err;
+  }
+}));
+
+app.delete('/api/customers/:id/aliases/:aliasId', asyncHandler(async (req, res) => {
+  const borrowerId = Number.parseInt(req.params.id, 10);
+  const aliasId = Number.parseInt(req.params.aliasId, 10);
+  if(!Number.isFinite(borrowerId) || !Number.isFinite(aliasId)){
+    return res.status(400).json({ error: 'Invalid identifier.' });
+  }
+
+  const pool = await getPool();
+  await ensureBorrowerAliasTable(pool);
+
+  const result = await pool.request()
+    .input('BorrowerID', sql.Int, borrowerId)
+    .input('AliasId', sql.Int, aliasId)
+    .query(`
+      DELETE FROM dbo.TBorrowerAliases
+      WHERE intBorrowerAliasID = @AliasId AND intBorrowerID = @BorrowerID;
+      SELECT @@ROWCOUNT AS deleted;
+    `);
+
+  const deleted = result.recordset?.[0]?.deleted ?? 0;
+  if(!deleted){
+    return res.status(404).json({ error: 'Alias not found.' });
+  }
+
+  res.json({ success: true });
+}));
 
 app.post('/api/customers', asyncHandler(async (req, res) => {
   const { first, last, schoolId, phone, room, instructor, dept } = req.body || {};
