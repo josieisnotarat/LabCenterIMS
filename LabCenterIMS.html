@@ -1152,17 +1152,17 @@
               <label>School/Faculty ID (optional)</label>
               <input
                 id="nc-schoolid"
-                pattern="0\d{4,7}"
-                placeholder="e.g., 01234567"
+                pattern="\\d{5,8}"
+                placeholder="e.g., 0234567"
               />
-              <div class="hint">5–8 digits, starting with 0.</div>
+              <div class="hint">5–7 digits, 0 as first digit.</div>
             </div>
             <div>
               <label>Phone</label>
               <input
                 id="nc-phone"
-                placeholder="5551234567"
-                pattern="\d{10}"
+                placeholder="5555555555"
+                length=10
               />
             </div>
             <div>
@@ -1372,19 +1372,19 @@
               <label for="cp-school">School/Faculty ID (optional)</label>
               <input
                 id="cp-school"
-                pattern="0\d{4,7}"
-                placeholder="e.g., 01234567"
+                pattern="\d{5,10}"
+                placeholder="e.g., 1234567"
               />
-              <div class="hint">5–8 digits, starting with 0.</div>
+              <div class="hint">5–10 digits</div>
             </div>
             <div>
               <label for="cp-phone">Phone</label>
               <input
                 id="cp-phone"
-                placeholder="5551234567"
-                pattern="\d{10}"
+                placeholder="(555) 555-5555"
+                pattern="^\(\d{3}\) \d{3}-\d{4}$"
               />
-              <div class="hint">Format: 10 digits</div>
+              <div class="hint">Format: (###) ###-####</div>
             </div>
             <div>
               <label for="cp-room">Room</label>
@@ -1649,18 +1649,14 @@
             </div>
             <div>
               <label for="cust-school">School/Faculty ID</label>
-              <input
-                id="cust-school"
-                pattern="0\d{4,7}"
-                placeholder="optional"
-              />
+              <input id="cust-school" pattern="\d{5,10}" placeholder="optional" />
             </div>
             <div>
               <label for="cust-phone">Phone</label>
               <input
                 id="cust-phone"
-                placeholder="5551234567"
-                pattern="\d{10}"
+                placeholder="(555) 555-5555"
+                pattern="^\(\d{3}\) \d{3}-\d{4}$"
               />
             </div>
             <div>
@@ -4767,11 +4763,11 @@
             }
             // optional patterns
             const id = fnSelectElement("#nc-schoolid").value;
-            if (id && !/^0\d{4,7}$/.test(id))
-              throw new Error("ID must be 5–8 digits starting with 0.");
+            if (id && !/^\d{5,10}$/.test(id))
+              throw new Error("ID must be 5–10 digits.");
             const phone = fnSelectElement("#nc-phone").value;
-            if (phone && !/^\d{10}$/.test(phone))
-              throw new Error("Phone number must be 10 digits.");
+            if (phone && !/^\(\d{3}\) \d{3}-\d{4}$/.test(phone))
+              throw new Error("Phone format: (###) ###-####");
 
             await fnApi("/customers", {
               method: "POST",
@@ -5146,12 +5142,12 @@
               const last = fnSelectElement("#cust-last").value.trim();
               fnMust(first && last, "First/Last required.");
               const school = fnSelectElement("#cust-school").value.trim();
-              if (school && !/^0\d{4,7}$/.test(school)) {
-                throw new Error("ID must be 5–8 digits starting with 0.");
+              if (school && !/^\d{5,10}$/.test(school)) {
+                throw new Error("ID must be 5–10 digits.");
               }
               const phone = fnSelectElement("#cust-phone").value.trim();
-              if (phone && !/^\d{10}$/.test(phone)) {
-                throw new Error("Phone number must be 10 digits.");
+              if (phone && !/^\(\d{3}\) \d{3}-\d{4}$/.test(phone)) {
+                throw new Error("Phone format: (###) ###-####");
               }
               const payload = {
                 first,
@@ -5222,12 +5218,12 @@
               const last = fnSelectElement("#cp-last").value.trim();
               fnMust(first && last, "First/Last required.");
               const school = fnSelectElement("#cp-school").value.trim();
-              if (school && !/^0\d{4,7}$/.test(school)) {
-                throw new Error("ID must be 5–8 digits starting with 0.");
+              if (school && !/^\d{5,10}$/.test(school)) {
+                throw new Error("ID must be 5–10 digits.");
               }
               const phone = fnSelectElement("#cp-phone").value.trim();
-              if (phone && !/^\d{10}$/.test(phone)) {
-                throw new Error("Phone number must be 10 digits.");
+              if (phone && !/^\(\d{3}\) \d{3}-\d{4}$/.test(phone)) {
+                throw new Error("Phone format: (###) ###-####");
               }
               await fnApi("/customers", {
                 method: "POST",
