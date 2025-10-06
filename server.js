@@ -5,20 +5,46 @@ const sql = require('mssql');
 const app = express();
 app.use(express.json());
 
+function envOrDefault(keys, fallback){
+  for(const key of keys){
+    const value = process.env[key];
+    if(value != null && value !== ''){
+      return value;
+    }
+  }
+  return fallback;
+}
+
+function envBool(keys, fallback){
+  const raw = envOrDefault(keys, null);
+  if(raw == null) return fallback;
+  const normalized = String(raw).trim().toLowerCase();
+  if(['1','true','yes','y','on'].includes(normalized)) return true;
+  if(['0','false','no','n','off'].includes(normalized)) return false;
+  return fallback;
+}
+
+function envInt(keys, fallback){
+  const raw = envOrDefault(keys, null);
+  if(raw == null) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 const dbConfig = {
-  user: 'sa1',
-  password: '',
-  server: 'localhost',
-  database: 'dbLabCenter',
-  port: 1433,
+  user: envOrDefault(['DB_USER', 'SQL_USER', 'MSSQL_USER'], 'sa'),
+  password: envOrDefault(['DB_PASSWORD', 'SQL_PASSWORD', 'MSSQL_PASSWORD'], 'yourStrong(!)Password'),
+  server: envOrDefault(['DB_SERVER', 'SQL_SERVER', 'MSSQL_SERVER'], 'localhost'),
+  database: envOrDefault(['DB_NAME', 'SQL_DATABASE', 'MSSQL_DATABASE'], 'dbLabCenter'),
+  port: envInt(['DB_PORT', 'SQL_PORT', 'MSSQL_PORT'], 1433),
   options: {
-    encrypt: false,
-    trustServerCertificate: true
+    encrypt: envBool(['DB_ENCRYPT', 'SQL_ENCRYPT', 'MSSQL_ENCRYPT'], false),
+    trustServerCertificate: envBool(['DB_TRUST_SERVER_CERTIFICATE', 'SQL_TRUST_SERVER_CERTIFICATE', 'MSSQL_TRUST_SERVER_CERTIFICATE'], true)
   },
   pool: {
-    max: 10,
-    min: 0,
-    idleTimeoutMillis: 30000
+    max: envInt(['DB_POOL_MAX', 'SQL_POOL_MAX'], 10),
+    min: envInt(['DB_POOL_MIN', 'SQL_POOL_MIN'], 0),
+    idleTimeoutMillis: envInt(['DB_POOL_IDLE_TIMEOUT', 'SQL_POOL_IDLE_TIMEOUT'], 30000)
   }
 };
 

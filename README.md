@@ -21,12 +21,23 @@ The front-end now expects to communicate with a lightweight Node/Express API tha
    npm install
    ```
 
-2. Start the API server:
+2. (Optional) Override the default SQL Server connection values by setting environment variables before starting the server. The API reads the following keys (with the defaults shown in parentheses):
+
+   * `DB_SERVER` / `SQL_SERVER` (`localhost`)
+   * `DB_PORT` / `SQL_PORT` (`1433`)
+   * `DB_NAME` / `SQL_DATABASE` (`dbLabCenter`)
+   * `DB_USER` / `SQL_USER` (`sa`)
+   * `DB_PASSWORD` / `SQL_PASSWORD` (`yourStrong(!)Password`)
+   * `DB_ENCRYPT` (`false`), `DB_TRUST_SERVER_CERTIFICATE` (`true`)
+
+   These aliases make it easy to match local setups, Docker connection strings, or Azure SQL environments without editing source files.
+
+3. Start the API server:
 
    ```bash
    npm start
    ```
 
-The Node server already contains the default SQL Server credentials (`sa` / `yourStrong(!)Password`) and points to `localhost:1433` with the `dbLabCenter` database. Update `server.js` directly if you need different connection details.
+The Node server ships with sensible defaults (`localhost:1433`, `dbLabCenter`, `sa` / `yourStrong(!)Password`). Provide environment variables if your SQL Server instance uses different connection details.
 
 The app serves both the API under `/api/*` and the static UI. Visit `http://localhost:3000/` after the server is running to see the dashboard populated with live data from SQL Server.
