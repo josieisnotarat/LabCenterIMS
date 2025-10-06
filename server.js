@@ -100,6 +100,33 @@ function mapTicketRow(row){
   };
 }
 
+function mapItemRow(row){
+  return {
+    id: row.intItemID ?? null,
+    name: row.strItemName || null,
+    itemNumber: row.strItemNumber || null,
+    schoolOwned: row.blnIsSchoolOwned === false ? false : true,
+    description: row.strDescription || null,
+    duePolicy: (row.strDuePolicy || '').toUpperCase(),
+    offsetDays: row.intDueDaysOffset ?? null,
+    offsetHours: row.intDueHoursOffset ?? null,
+    dueTime: formatSqlTime(row.tDueTime),
+    fixedDue: toIso(row.dtmFixedDueLocal),
+    isActive: row.blnIsActive === false ? false : true,
+    department: row.strDepartmentName || null,
+    createdUtc: toIso(row.dtmCreated)
+  };
+}
+
+function mapUserRow(row){
+  return {
+    username: row.strUsername || row.username || null,
+    display: row.strDisplayName || row.display || null,
+    role: row.strRole || row.role || null,
+    createdUtc: toIso(row.dtmCreated)
+  };
+}
+
 app.get('/api/dashboard-stats', asyncHandler(async (req, res) => {
   const pool = await getPool();
   const result = await pool.request().execute('dbo.usp_GetDashboardStats');
@@ -285,6 +312,33 @@ function toIntOrNull(value){
   return Number.isFinite(n) ? n : null;
 }
 
+function parseQueryBoolean(value){
+  if(value == null) return null;
+  if(typeof value === 'boolean') return value;
+  if(typeof value === 'number'){
+    return value !== 0;
+  }
+  if(typeof value === 'string'){
+    const normalized = value.trim().toLowerCase();
+    if(!normalized) return null;
+    if(['1','true','yes','y'].includes(normalized)) return true;
+    if(['0','false','no','n'].includes(normalized)) return false;
+  }
+  return null;
+}
+
+function toNullableBit(value){
+  if(value == null) return null;
+  if(typeof value === 'boolean') return value ? 1 : 0;
+  if(typeof value === 'number') return value !== 0 ? 1 : 0;
+  if(typeof value === 'string'){
+    const normalized = value.trim().toLowerCase();
+    if(['1','true','yes','y'].includes(normalized)) return 1;
+    if(['0','false','no','n'].includes(normalized)) return 0;
+  }
+  return null;
+}
+
 function toTimeParts(value){
   if(!value) return null;
   if(typeof value === 'string'){
@@ -314,6 +368,16 @@ function normalizeTimeForSql(value){
   const parts = toTimeParts(value);
   if(!parts) return null;
   return `${parts.hour.toString().padStart(2, '0')}:${parts.minute.toString().padStart(2, '0')}:${parts.second.toString().padStart(2, '0')}`;
+}
+
+function formatSqlTime(value){
+  if(!value) return null;
+  if(typeof value === 'string'){
+    return value.length >= 5 ? value.slice(0,5) : value;
+  }
+  const parts = toTimeParts(value);
+  if(!parts) return null;
+  return `${parts.hour.toString().padStart(2,'0')}:${parts.minute.toString().padStart(2,'0')}`;
 }
 
 async function getItemDueSettings(pool, itemId){
@@ -951,6 +1015,75 @@ app.post('/api/customers', asyncHandler(async (req, res) => {
   }
 }));
 
+app.put('/api/customers/:id', asyncHandler(async (req, res) => {
+  const borrowerId = Number.parseInt(req.params.id, 10);
+  if(!Number.isFinite(borrowerId)){
+    return res.status(400).json({ error: 'Invalid borrower id.' });
+  }
+
+  const { first, last, schoolId, phone, room, instructor } = req.body || {};
+  const firstName = normalizeString(first);
+  const lastName = normalizeString(last);
+  if(!firstName || !lastName){
+    return res.status(400).json({ error: 'First and last name are required.' });
+  }
+
+  const pool = await getPool();
+
+  const request = pool.request();
+  request.input('intBorrowerID', sql.Int, borrowerId);
+  request.input('strFirstName', sql.VarChar(50), firstName);
+  request.input('strLastName', sql.VarChar(50), lastName);
+  request.input('strSchoolIDNumber', sql.VarChar(50), normalizeString(schoolId) || null);
+  request.input('strPhoneNumber', sql.VarChar(25), normalizeString(phone) || null);
+  request.input('strRoomNumber', sql.VarChar(25), normalizeString(room) || null);
+  request.input('strInstructor', sql.VarChar(100), normalizeString(instructor) || null);
+  request.input('intDepartmentID', sql.Int, null);
+
+  try {
+    const result = await request.execute('dbo.usp_UpdateBorrower');
+    const updated = result?.rowsAffected?.[0] ?? 1;
+    if(!updated){
+      return res.status(404).json({ error: 'Borrower not found.' });
+    }
+  } catch(err){
+    if(err && (err.number === 2627 || err.number === 2601)){
+      return res.status(409).json({ error: 'A borrower with that school ID already exists.' });
+    }
+    throw err;
+  }
+
+  res.json({ success: true });
+}));
+
+app.delete('/api/customers/:id', asyncHandler(async (req, res) => {
+  const borrowerId = Number.parseInt(req.params.id, 10);
+  if(!Number.isFinite(borrowerId)){
+    return res.status(400).json({ error: 'Invalid borrower id.' });
+  }
+
+  const pool = await getPool();
+  try {
+    const result = await pool.request()
+      .input('BorrowerID', sql.Int, borrowerId)
+      .query(`
+        DELETE FROM dbo.TBorrowers WHERE intBorrowerID = @BorrowerID;
+        SELECT @@ROWCOUNT AS deleted;
+      `);
+    const deleted = result.recordset?.[0]?.deleted ?? 0;
+    if(!deleted){
+      return res.status(404).json({ error: 'Borrower not found.' });
+    }
+  } catch(err){
+    if(err && err.number === 547){
+      return res.status(409).json({ error: 'Cannot delete borrower with linked records.' });
+    }
+    throw err;
+  }
+
+  res.json({ success: true });
+}));
+
 app.get('/api/items/due-preview', asyncHandler(async (req, res) => {
   const raw = req.query.item || req.query.q || '';
   const itemQuery = normalizeString(raw);
@@ -1048,6 +1181,56 @@ app.post('/api/tickets', asyncHandler(async (req, res) => {
   res.status(201).json({ ticketId, publicId });
 }));
 
+app.get('/api/items', asyncHandler(async (req, res) => {
+  const pool = await getPool();
+  const top = Number.parseInt(req.query.top || '50', 10);
+  const limit = Number.isFinite(top) && top > 0 ? Math.min(top, 500) : 50;
+  const search = normalizeString(req.query.search || req.query.q || req.query.term);
+  const activeFilter = parseQueryBoolean(req.query.active);
+
+  const request = pool.request();
+  request.input('Top', sql.Int, limit);
+
+  const conditions = [];
+  if(search){
+    request.input('Search', sql.NVarChar(140), `%${search}%`);
+    conditions.push(`(i.strItemName LIKE @Search OR ISNULL(i.strItemNumber,'') LIKE @Search OR ISNULL(i.strDescription,'') LIKE @Search OR ISNULL(d.strDepartmentName,'') LIKE @Search)`);
+  }
+  if(activeFilter !== null){
+    request.input('IsActive', sql.Bit, activeFilter ? 1 : 0);
+    conditions.push('i.blnIsActive = @IsActive');
+  }
+
+  let queryText = `
+    SELECT TOP (@Top)
+           i.intItemID,
+           i.strItemName,
+           i.strItemNumber,
+           i.blnIsSchoolOwned,
+           i.strDescription,
+           i.strDuePolicy,
+           i.intDueDaysOffset,
+           i.intDueHoursOffset,
+           i.tDueTime,
+           i.dtmFixedDueLocal,
+           i.blnIsActive,
+           i.dtmCreated,
+           d.strDepartmentName
+    FROM dbo.TItems AS i
+    LEFT JOIN dbo.TDepartments AS d ON d.intDepartmentID = i.intDepartmentID
+  `;
+
+  if(conditions.length){
+    queryText += ` WHERE ${conditions.join(' AND ')}`;
+  }
+
+  queryText += ' ORDER BY i.strItemName, i.intItemID DESC;';
+
+  const result = await request.query(queryText);
+  const entries = result.recordset?.map(mapItemRow) || [];
+  res.json({ entries });
+}));
+
 app.post('/api/items', asyncHandler(async (req, res) => {
   const { name, number, department, schoolOwned, description, duePolicy, offsetDays, offsetHours, dueTime, fixedDue } = req.body || {};
   const itemName = normalizeString(name);
@@ -1081,10 +1264,132 @@ app.post('/api/items', asyncHandler(async (req, res) => {
     res.status(201).json({ itemId });
   } catch(err){
     if(err && (err.number === 2627 || err.number === 2601)){
-      return res.status(409).json({ error: 'An item with that number already exists.' });
+      return res.status(409).json({ error: 'An item with that identifier already exists.' });
     }
     throw err;
   }
+}));
+
+app.put('/api/items/:id', asyncHandler(async (req, res) => {
+  const itemId = Number.parseInt(req.params.id, 10);
+  if(!Number.isFinite(itemId)){
+    return res.status(400).json({ error: 'Invalid item id.' });
+  }
+
+  const { name, department, schoolOwned, description, duePolicy, offsetDays, offsetHours, dueTime, fixedDue, isActive } = req.body || {};
+  const itemName = normalizeString(name);
+  if(!itemName){
+    return res.status(400).json({ error: 'Item name is required.' });
+  }
+
+  let policy = (normalizeString(duePolicy) || 'NEXT_DAY_6PM').toUpperCase();
+  if(!['NEXT_DAY_6PM','OFFSET','FIXED','SEMESTER'].includes(policy)){
+    policy = 'NEXT_DAY_6PM';
+  }
+
+  const pool = await getPool();
+  const departmentId = await ensureDepartment(pool, department);
+
+  let days = null;
+  let hours = null;
+  let timeSql = null;
+  let fixedDueDate = null;
+
+  if(policy === 'OFFSET'){
+    const dayVal = toIntOrNull(offsetDays);
+    const rawHour = (offsetHours === '' || offsetHours == null)
+      ? 0
+      : toIntOrNull(offsetHours);
+    const timeVal = normalizeTimeForSql(dueTime);
+    if(!Number.isInteger(dayVal) || dayVal < 0){
+      return res.status(400).json({ error: 'Offset days must be zero or greater.' });
+    }
+    if(!Number.isInteger(rawHour) || rawHour < 0){
+      return res.status(400).json({ error: 'Offset hours must be zero or greater.' });
+    }
+    if(!timeVal){
+      return res.status(400).json({ error: 'Due time is required for offset policy.' });
+    }
+    days = dayVal;
+    hours = rawHour;
+    timeSql = timeVal;
+  } else if(policy === 'NEXT_DAY_6PM'){
+    days = 1;
+    hours = 0;
+    timeSql = '18:00:00';
+  } else if(policy === 'SEMESTER' || policy === 'FIXED'){
+    const fixedDate = parseLocalDateTime(fixedDue);
+    if(!fixedDate){
+      return res.status(400).json({ error: 'Fixed due date is required for this policy.' });
+    }
+    fixedDueDate = fixedDate;
+  }
+
+  const isActiveBit = toNullableBit(isActive);
+
+  const request = pool.request();
+  request.input('ItemID', sql.Int, itemId);
+  request.input('Name', sql.VarChar(120), itemName);
+  request.input('IsSchoolOwned', sql.Bit, schoolOwned === false ? 0 : 1);
+  request.input('DepartmentID', sql.Int, departmentId ?? null);
+  request.input('Description', sql.VarChar(400), normalizeString(description) || null);
+  request.input('DuePolicy', sql.VarChar(30), policy);
+  request.input('DueDays', sql.Int, days);
+  request.input('DueHours', sql.Int, hours);
+  request.input('DueTime', sql.Time, timeSql);
+  request.input('FixedDue', sql.DateTime2, fixedDueDate);
+  request.input('IsActive', sql.Bit, isActiveBit);
+
+  const result = await request.query(`
+    UPDATE dbo.TItems
+    SET strItemName = @Name,
+        blnIsSchoolOwned = @IsSchoolOwned,
+        intDepartmentID = @DepartmentID,
+        strDescription = @Description,
+        strDuePolicy = @DuePolicy,
+        intDueDaysOffset = @DueDays,
+        intDueHoursOffset = @DueHours,
+        tDueTime = @DueTime,
+        dtmFixedDueLocal = @FixedDue,
+        blnIsActive = CASE WHEN @IsActive IS NULL THEN blnIsActive ELSE @IsActive END
+    WHERE intItemID = @ItemID;
+    SELECT @@ROWCOUNT AS updated;
+  `);
+
+  const updated = result.recordset?.[0]?.updated ?? 0;
+  if(!updated){
+    return res.status(404).json({ error: 'Item not found.' });
+  }
+
+  res.json({ success: true });
+}));
+
+app.delete('/api/items/:id', asyncHandler(async (req, res) => {
+  const itemId = Number.parseInt(req.params.id, 10);
+  if(!Number.isFinite(itemId)){
+    return res.status(400).json({ error: 'Invalid item id.' });
+  }
+
+  const pool = await getPool();
+  try {
+    const result = await pool.request()
+      .input('ItemID', sql.Int, itemId)
+      .query(`
+        DELETE FROM dbo.TItems WHERE intItemID = @ItemID;
+        SELECT @@ROWCOUNT AS deleted;
+      `);
+    const deleted = result.recordset?.[0]?.deleted ?? 0;
+    if(!deleted){
+      return res.status(404).json({ error: 'Item not found.' });
+    }
+  } catch(err){
+    if(err && err.number === 547){
+      return res.status(409).json({ error: 'Cannot delete item with linked records.' });
+    }
+    throw err;
+  }
+
+  res.json({ success: true });
 }));
 
 const LOAN_STATUS_SET = new Set(['On Time', 'Overdue', 'Returned']);
@@ -1188,6 +1493,38 @@ app.post('/api/status', asyncHandler(async (req, res) => {
   return res.status(400).json({ error: `Unknown status type: ${type}` });
 }));
 
+app.get('/api/users', asyncHandler(async (req, res) => {
+  const pool = await getPool();
+  await ensureUserTable(pool);
+
+  const top = Number.parseInt(req.query.top || '200', 10);
+  const limit = Number.isFinite(top) && top > 0 ? Math.min(top, 500) : 200;
+  const search = normalizeString(req.query.search || req.query.q || req.query.term);
+
+  const request = pool.request();
+  request.input('Top', sql.Int, limit);
+
+  let queryText = `
+    SELECT TOP (@Top)
+           strUsername,
+           strDisplayName,
+           strRole,
+           dtmCreated
+    FROM dbo.TAppUsers
+  `;
+
+  if(search){
+    request.input('Search', sql.VarChar(160), `%${search}%`);
+    queryText += ` WHERE strUsername LIKE @Search OR strDisplayName LIKE @Search OR strRole LIKE @Search`;
+  }
+
+  queryText += ' ORDER BY strUsername;';
+
+  const result = await request.query(queryText);
+  const entries = result.recordset?.map(mapUserRow) || [];
+  res.json({ entries });
+}));
+
 app.post('/api/users', asyncHandler(async (req, res) => {
   const { username, display, role } = req.body || {};
   const user = normalizeString(username).toLowerCase();
@@ -1197,8 +1534,8 @@ app.post('/api/users', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Username, display, and role are required.' });
   }
 
-  await ensureUserTable(await getPool());
   const pool = await getPool();
+  await ensureUserTable(pool);
 
   try {
     await pool.request()
@@ -1217,6 +1554,41 @@ app.post('/api/users', asyncHandler(async (req, res) => {
   }
 
   res.status(201).json({ username: user });
+}));
+
+app.put('/api/users/:username', asyncHandler(async (req, res) => {
+  const username = normalizeString(req.params.username).toLowerCase();
+  if(!username){
+    return res.status(400).json({ error: 'Username required.' });
+  }
+
+  const displayName = normalizeString(req.body?.display);
+  const roleName = normalizeString(req.body?.role);
+  if(!displayName || !roleName){
+    return res.status(400).json({ error: 'Display name and role are required.' });
+  }
+
+  const pool = await getPool();
+  await ensureUserTable(pool);
+
+  const result = await pool.request()
+    .input('Username', sql.VarChar(120), username)
+    .input('Display', sql.VarChar(150), displayName)
+    .input('Role', sql.VarChar(50), roleName.toLowerCase())
+    .query(`
+      UPDATE dbo.TAppUsers
+      SET strDisplayName = @Display,
+          strRole = @Role
+      WHERE strUsername = @Username;
+      SELECT @@ROWCOUNT AS updated;
+    `);
+
+  const updated = result.recordset?.[0]?.updated ?? 0;
+  if(!updated){
+    return res.status(404).json({ error: 'User not found.' });
+  }
+
+  res.json({ success: true });
 }));
 
 app.delete('/api/users/:username', asyncHandler(async (req, res) => {
