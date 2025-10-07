@@ -7,7 +7,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=1280, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Lab Center IMS — Desktop UI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -1121,7 +1121,7 @@
                   <tbody id="tbl-admin-users">
                     <tr>
                       <td
-                        colspan="4"
+                        colspan="5"
                         style="
                           text-align: center;
                           color: var(--muted);
@@ -3929,6 +3929,8 @@
           if (!Array.isArray(entries)) return [];
           const normalized = term.trim().toLowerCase();
           if (!normalized) return entries.slice();
+          const tokens = normalized.split(/\s+/).filter(Boolean);
+          if (!tokens.length) return entries.slice();
           return entries.filter((entry) => {
             const parts = [
               fnFormatAuditUser(entry),
@@ -3939,7 +3941,7 @@
             ]
               .map((val) => (val || "").toString().toLowerCase())
               .join(" ");
-            return parts.includes(normalized);
+            return tokens.every((token) => parts.includes(token));
           });
         }
 
@@ -4695,16 +4697,6 @@
             await fnLoadAdminUsers({ showStatus: false });
           }),
         );
-
-        const auditSearchInput = document.getElementById("search-action-log");
-        if (auditSearchInput) {
-          const debouncedAuditSearch = fnDebounce(() => {
-            fnUpdateAuditLogSearch(auditSearchInput.value || "");
-          }, 200);
-          auditSearchInput.addEventListener("input", () => {
-            debouncedAuditSearch();
-          });
-        }
 
         const auditSearchInput = document.getElementById("search-action-log");
         if (auditSearchInput) {

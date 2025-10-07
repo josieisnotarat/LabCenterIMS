@@ -337,7 +337,7 @@ function toTimeParts(value){
   if(!value) return null;
   if(typeof value === 'string'){
     const trimmed = value.trim();
-    const match = trimmed.match(/^(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?$/);
+    const match = trimmed.match(/^(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2})(?:\.\d{1,7})?)?$/);
     if(!match) return null;
     const [, h, m = '0', s = '0'] = match;
     const hour = Math.min(23, Math.max(0, Number.parseInt(h, 10) || 0));
@@ -366,20 +366,23 @@ function normalizeTimeForSql(value){
 
 function formatSqlTime(value){
   if(!value) return null;
-  if(typeof value === 'string'){
-    const trimmed = value.trim();
-    return trimmed ? trimmed.substring(0, 8) : null;
-  }
-  if(value instanceof Date){
-    return value.toISOString().substring(11, 19);
-  }
-  if(typeof value === 'object' && value !== null){
-    const hour = toIntOrNull(value.hour) ?? 0;
-    const minute = toIntOrNull(value.minute) ?? 0;
-    const second = toIntOrNull(value.second) ?? 0;
+  const parts = toTimeParts(value);
+  if(parts){
+    const { hour, minute, second } = parts;
     return `${hour.toString().padStart(2, '0')}:${minute
       .toString()
       .padStart(2, '0')}:${second.toString().padStart(2, '0')}`;
+  }
+  if(typeof value === 'string'){
+    const trimmed = value.trim();
+    if(!trimmed) return null;
+    const parsed = new Date(`1970-01-01T${trimmed}`);
+    if(!Number.isNaN(parsed.getTime())){
+      return parsed.toISOString().substring(11, 19);
+    }
+  }
+  if(value instanceof Date){
+    return value.toISOString().substring(11, 19);
   }
   return null;
 }
@@ -430,10 +433,13 @@ function computeDueFromPolicy(row){
     const days = Number.isInteger(row.intDueDaysOffset) ? row.intDueDaysOffset : (policy === 'NEXT_DAY_6PM' ? 1 : 0);
     const hours = Number.isInteger(row.intDueHoursOffset) ? row.intDueHoursOffset : 0;
     const timeParts = toTimeParts(row.tDueTime);
+    const effectiveTime = timeParts || (policy === 'NEXT_DAY_6PM'
+      ? { hour: 18, minute: 0, second: 0 }
+      : null);
     due = new Date(now.getTime());
     if(days) due.setDate(due.getDate() + days);
-    if(timeParts){
-      due.setHours(timeParts.hour, timeParts.minute, timeParts.second, 0);
+    if(effectiveTime){
+      due.setHours(effectiveTime.hour, effectiveTime.minute, effectiveTime.second, 0);
     }else if(hours){
       due.setHours(due.getHours() + hours);
     }
