@@ -951,36 +951,13 @@
             <div class="card">
               <h2 id="admin-action-title">Action Log</h2>
               <div class="body">
-                <div
-                  class="toolbar"
-                  style="
-                    display: flex;
-                    justify-content: space-between;
-                    gap: 12px;
-                    flex-wrap: wrap;
-                    align-items: center;
-                  "
-                >
-                  <div style="display: flex; gap: 8px; flex-wrap: wrap">
-                    <button class="btn" type="button" id="btn-clear-log">
-                      <span>Clear Log</span>
-                    </button>
-                    <button
-                      class="btn danger"
-                      type="button"
-                      id="btn-clear-database"
-                    >
-                      <span>Clear Database</span>
-                    </button>
-                  </div>
-                  <div class="search" role="search" style="max-width: 320px">
-                    <input
-                      id="search-action-log"
-                      type="text"
-                      placeholder="Search by user, action, or detail…"
-                      aria-label="Search action log"
-                    />
-                  </div>
+                <div class="search" role="search" style="max-width: 320px">
+                  <input
+                    id="search-action-log"
+                    type="text"
+                    placeholder="Search by user, action, or detail…"
+                    aria-label="Search action log"
+                  />
                 </div>
               </div>
               <div class="body table">
@@ -1096,6 +1073,9 @@
                     <button class="btn" data-open="dlg-create-user">
                       <span>Create User</span>
                     </button>
+                    <button class="btn" data-open="dlg-delete-user">
+                      <span>Delete User</span>
+                    </button>
                   </div>
                   <div class="search" role="search" style="flex: 1 1 240px">
                     <input
@@ -1115,13 +1095,12 @@
                       <th scope="col">Display Name</th>
                       <th scope="col">Role</th>
                       <th scope="col">Created</th>
-                      <th scope="col">Actions</th>
                     </tr>
                   </thead>
                   <tbody id="tbl-admin-users">
                     <tr>
                       <td
-                        colspan="5"
+                        colspan="4"
                         style="
                           text-align: center;
                           color: var(--muted);
@@ -1178,13 +1157,12 @@
                       <th scope="col">Item Number</th>
                       <th scope="col">Department</th>
                       <th scope="col">Due Policy</th>
-                      <th scope="col">Actions</th>
                     </tr>
                   </thead>
                   <tbody id="tbl-admin-inventory">
                     <tr>
                       <td
-                        colspan="5"
+                        colspan="4"
                         style="
                           text-align: center;
                           color: var(--muted);
@@ -1677,13 +1655,13 @@
               <label>Role</label>
               <select id="cu-role" required>
                 <option value="">Select…</option>
-                <option value="admin">Admin</option>
+                <option value="labtech">Lab Tech</option>
                 <option value="co-op">Co-Op</option>
               </select>
             </div>
           </div>
           <div class="hint">
-            Roles are limited to Admin and Co-Op to match staffing duties.
+            Roles are limited to Lab Tech and Co-Op to match staffing duties.
           </div>
         </div>
         <div class="modal-ft">
@@ -1718,6 +1696,44 @@
               <select id="eu-role" required>
                 <option value="admin">Admin</option>
                 <option value="co-op">Co-Op</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-ft">
+          <button class="btn" value="close">Cancel</button>
+          <button class="btn primary" id="eu-save">
+            <span>Save Changes</span><span class="spinner" aria-hidden="true"></span>
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Admin: Edit User -->
+    <dialog id="dlg-edit-user">
+      <form method="dialog" id="form-edit-user" novalidate>
+        <div class="modal-hd">
+          <strong>Edit User</strong>
+          <button class="btn" value="close">Close</button>
+        </div>
+        <div class="modal-bd">
+          <input type="hidden" id="eu-username-hidden" />
+          <div class="form-grid">
+            <div>
+              <label>Username</label>
+              <input id="eu-username" readonly />
+            </div>
+            <div>
+              <label>Display Name</label>
+              <input id="eu-display" required />
+            </div>
+            <div class="full">
+              <label>Role</label>
+              <select id="eu-role" required>
+                <option value="inventory">Inventory</option>
+                <option value="order">Order Management</option>
+                <option value="runner">Runner</option>
+                <option value="admin">Admin</option>
               </select>
             </div>
           </div>
@@ -1871,18 +1887,16 @@
         });
 
         const USER_ROLE_LABELS = new Map([
-          ["admin", "Admin"],
+          ["labtech", "Lab Tech"],
           ["co-op", "Co-Op"],
         ]);
         const USER_ROLE_ALIASES = new Map([
-          ["admin", "admin"],
-          ["administrator", "admin"],
-          ["labtech", "admin"],
-          ["lab tech", "admin"],
-          ["lab_tech", "admin"],
-          ["lab-tech", "admin"],
-          ["labtechnician", "admin"],
-          ["lab technician", "admin"],
+          ["labtech", "labtech"],
+          ["lab tech", "labtech"],
+          ["lab_tech", "labtech"],
+          ["lab-tech", "labtech"],
+          ["labtechnician", "labtech"],
+          ["lab technician", "labtech"],
           ["co-op", "co-op"],
           ["coop", "co-op"],
           ["co op", "co-op"],
@@ -2624,28 +2638,12 @@
           }
           entries.forEach((item) => {
             const tr = document.createElement("tr");
+            tr.classList.add("clickable");
+            tr.dataset.itemId = item.id != null ? item.id : "";
             fnAppendTableCell(tr, item.name || "—");
             fnAppendTableCell(tr, item.number || "—");
             fnAppendTableCell(tr, item.department || "—");
             fnAppendTableCell(tr, fnFormatItemDuePolicy(item));
-            const actionCell = document.createElement("td");
-            const wrap = document.createElement("div");
-            wrap.style.display = "flex";
-            wrap.style.gap = "6px";
-            wrap.style.flexWrap = "wrap";
-            const editBtn = document.createElement("button");
-            editBtn.type = "button";
-            editBtn.className = "btn";
-            editBtn.dataset.editItem = item.id != null ? item.id : "";
-            editBtn.textContent = "Edit";
-            const deleteBtn = document.createElement("button");
-            deleteBtn.type = "button";
-            deleteBtn.className = "btn danger";
-            deleteBtn.dataset.deleteItem = item.id != null ? item.id : "";
-            deleteBtn.textContent = "Delete";
-            wrap.append(editBtn, deleteBtn);
-            actionCell.appendChild(wrap);
-            tr.appendChild(actionCell);
             tbody.appendChild(tr);
           });
         }
@@ -2724,41 +2722,6 @@
           }
         }
 
-        async function fnDeleteInventoryItem(button, id) {
-          if (!USE_BACKEND) {
-            alert("Enable backend to manage inventory items.");
-            return;
-          }
-          if (!id) return;
-          if (
-            !window.confirm(
-              "Delete this item? This action cannot be undone.",
-            )
-          ) {
-            return;
-          }
-          try {
-            if (button) fnSetBusyState(button, true);
-            await fnApi(`/items/${encodeURIComponent(id)}`, {
-              method: "DELETE",
-            });
-            if (
-              m_objActiveInventoryItem &&
-              String(m_objActiveInventoryItem.id || "") === String(id)
-            ) {
-              m_objActiveInventoryItem = null;
-              fnCloseDialogById("dlg-manage-item");
-            }
-            alert("Item deleted.");
-            await fnLoadInventoryData({ showStatus: false });
-          } catch (err) {
-            console.error("Failed to delete item", err);
-            alert(err?.message || "Unable to delete item.");
-          } finally {
-            if (button) fnSetBusyState(button, false);
-          }
-        }
-
         function fnRenderAdminUsersTable(entries) {
           const tbodyId = "tbl-admin-users";
           const tbody = document.getElementById(tbodyId);
@@ -2780,34 +2743,15 @@
           }
           entries.forEach((user) => {
             const tr = document.createElement("tr");
+            tr.classList.add("clickable");
+            tr.dataset.username = user.username || "";
             fnAppendTableCell(tr, user.username || "—");
             fnAppendTableCell(tr, user.displayName || "—");
-            fnAppendTableCell(
-              tr,
-              fnFormatUserRole(user.roleLabel || user.role),
-            );
+            fnAppendTableCell(tr, fnFormatUserRole(user.role));
             fnAppendTableCell(
               tr,
               user.createdUtc ? fnFormatLocalDateTime(user.createdUtc) : "—",
             );
-            const actionCell = document.createElement("td");
-            const wrap = document.createElement("div");
-            wrap.style.display = "flex";
-            wrap.style.gap = "6px";
-            wrap.style.flexWrap = "wrap";
-            const editBtn = document.createElement("button");
-            editBtn.type = "button";
-            editBtn.className = "btn";
-            editBtn.dataset.editUser = user.username || "";
-            editBtn.textContent = "Edit";
-            const deleteBtn = document.createElement("button");
-            deleteBtn.type = "button";
-            deleteBtn.className = "btn danger";
-            deleteBtn.dataset.deleteUser = user.username || "";
-            deleteBtn.textContent = "Delete";
-            wrap.append(editBtn, deleteBtn);
-            actionCell.appendChild(wrap);
-            tr.appendChild(actionCell);
             tbody.appendChild(tr);
           });
         }
@@ -2872,41 +2816,6 @@
           }
         }
 
-        async function fnDeleteUser(button, username) {
-          if (!USE_BACKEND) {
-            alert("Enable backend to manage user profiles.");
-            return;
-          }
-          if (!username) return;
-          if (
-            !window.confirm(
-              "Delete this user account? Only allowed when no historical activity exists.",
-            )
-          )
-            return;
-          try {
-            if (button) fnSetBusyState(button, true);
-            await fnApi(`/users/${encodeURIComponent(username)}`, {
-              method: "DELETE",
-            });
-            if (
-              m_objActiveUser &&
-              (m_objActiveUser.username || "").toLowerCase() ===
-                username.toLowerCase()
-            ) {
-              m_objActiveUser = null;
-              fnCloseDialogById("dlg-edit-user");
-            }
-            alert("User deleted.");
-            await fnLoadAdminUsers({ showStatus: false });
-          } catch (err) {
-            console.error("Failed to delete user", err);
-            alert(err?.message || "Unable to delete user.");
-          } finally {
-            if (button) fnSetBusyState(button, false);
-          }
-        }
-
         // ====== VALIDATION HELPERS ======
         // Tiny validation helpers shared by multiple forms.
         function fnMust(cond, msg) {
@@ -2955,25 +2864,7 @@
           return `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
         }
 
-        function fnNormalizeUserRole(value) {
-          if (value == null) return null;
-          const text = value.toString().trim().toLowerCase();
-          if (!text) return null;
-          if (USER_ROLE_ALIASES.has(text)) return USER_ROLE_ALIASES.get(text);
-          const collapsedSpaces = text.replace(/[\s_]+/g, " ");
-          if (USER_ROLE_ALIASES.has(collapsedSpaces))
-            return USER_ROLE_ALIASES.get(collapsedSpaces);
-          const collapsed = text.replace(/[\s_-]+/g, "");
-          if (USER_ROLE_ALIASES.has(collapsed))
-            return USER_ROLE_ALIASES.get(collapsed);
-          return null;
-        }
-
         function fnFormatUserRole(role) {
-          const canonical = fnNormalizeUserRole(role);
-          if (canonical && USER_ROLE_LABELS.has(canonical)) {
-            return USER_ROLE_LABELS.get(canonical);
-          }
           if (!role) return "—";
           return role
             .toString()
@@ -3866,12 +3757,8 @@
           const displayInput = document.getElementById("eu-display");
           if (displayInput) displayInput.value = user.displayName || "";
           const roleSelect = document.getElementById("eu-role");
-          if (roleSelect) {
-            const canonicalRole = fnNormalizeUserRole(
-              user.role || user.roleLabel || "",
-            );
-            roleSelect.value = canonicalRole || "";
-          }
+          if (roleSelect)
+            roleSelect.value = (user.role || "inventory").toLowerCase();
           dlg.showModal();
         }
 
@@ -3961,7 +3848,7 @@
           if (!id) return;
           if (
             !window.confirm(
-              "Delete this customer profile? This is only allowed when no loans or tickets exist.",
+              "Delete this customer profile? This removes all associated records.",
             )
           ) {
             return;
@@ -4302,6 +4189,21 @@
           }),
         );
 
+        // Admin: Delete User
+        fnSelectElement("#du-delete").addEventListener(
+          "click",
+          fnWithAsyncBusy(fnSelectElement("#du-delete"), async () => {
+            const u = fnSelectElement("#du-username").value.trim();
+            fnMust(u, "Username required.");
+            await fnApi(`/users/${encodeURIComponent(u)}`, {
+              method: "DELETE",
+            });
+            fnCloseDialogById("dlg-delete-user");
+            alert("User deleted.");
+            await fnLoadAdminUsers({ showStatus: false });
+          }),
+        );
+
         const auditSearchInput = document.getElementById("search-action-log");
         if (auditSearchInput) {
           const debouncedAuditSearch = fnDebounce(() => {
@@ -4373,20 +4275,11 @@
         const userTable = document.getElementById("tbl-admin-users");
         if (userTable) {
           userTable.addEventListener("click", (event) => {
-            const editBtn = event.target.closest("[data-edit-user]");
-            if (editBtn) {
-              const username = editBtn.dataset.editUser;
-              if (username) {
-                fnOpenUserEditDialog(username);
-              }
-              return;
-            }
-            const deleteBtn = event.target.closest("[data-delete-user]");
-            if (deleteBtn) {
-              const username = deleteBtn.dataset.deleteUser;
-              if (username) {
-                fnDeleteUser(deleteBtn, username);
-              }
+            const row = event.target.closest("tr[data-username]");
+            if (!row) return;
+            const username = row.dataset.username;
+            if (username) {
+              fnOpenUserEditDialog(username);
             }
           });
         }
@@ -4394,13 +4287,11 @@
         const inventoryTable = document.getElementById("tbl-admin-inventory");
         if (inventoryTable) {
           inventoryTable.addEventListener("click", (event) => {
-            const editBtn = event.target.closest("[data-edit-item]");
-            if (editBtn) {
-              const id = editBtn.dataset.editItem;
-              if (id) {
-                fnOpenInventoryItemDialog(id);
-              }
-              return;
+            const row = event.target.closest("tr[data-item-id]");
+            if (!row) return;
+            const id = row.dataset.itemId;
+            if (id) {
+              fnOpenInventoryItemDialog(id);
             }
             const deleteBtn = event.target.closest("[data-delete-item]");
             if (deleteBtn) {
@@ -4686,9 +4577,6 @@
         fnLoadAuditLog();
         fnLoadInventoryData();
         fnLoadAdminUsers();
-        if (USE_BACKEND) {
-          fnRunCustomerProfileSearch("", { showStatus: true });
-        }
 
         // keep row colors consistent if DOM changes later
         // Watch for table updates (e.g., new rows inserted) so the status tinting

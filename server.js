@@ -45,6 +45,24 @@ const USER_ROLE_ALIASES = new Map([
   ['co_op', 'co-op']
 ]);
 
+const USER_ROLE_LABELS = {
+  labtech: 'Lab Tech',
+  'co-op': 'Co-Op'
+};
+
+const USER_ROLE_ALIASES = new Map([
+  ['labtech', 'labtech'],
+  ['lab tech', 'labtech'],
+  ['lab_tech', 'labtech'],
+  ['lab-tech', 'labtech'],
+  ['labtechnician', 'labtech'],
+  ['lab technician', 'labtech'],
+  ['co-op', 'co-op'],
+  ['coop', 'co-op'],
+  ['co op', 'co-op'],
+  ['co_op', 'co-op']
+]);
+
 async function getPool(){
   if(pool && pool.connected){
     return pool;
@@ -481,7 +499,7 @@ function mapItemRow(row){
       : null,
     dueTime: formatSqlTime(row.tDueTime),
     fixedDueLocal: toIso(row.dtmFixedDueLocal),
-    lastUpdatedUtc: toIso(row.dtmLastUpdated || row.dtmUpdated || row.dtmCreated || null)
+    lastUpdatedUtc: toIso(row.dtmLastUpdated || row.dtmUpdated || null)
   };
 }
 
@@ -500,7 +518,7 @@ async function loadItemRow(pool, itemId){
              i.intDueHoursOffset,
              i.tDueTime,
              i.dtmFixedDueLocal,
-             i.dtmCreated,
+             i.dtmUpdated,
              d.strDepartmentName
       FROM dbo.TItems AS i
       LEFT JOIN dbo.TDepartments AS d ON d.intDepartmentID = i.intDepartmentID
@@ -819,13 +837,10 @@ async function ensureUserTable(pool){
 
 function mapUserRow(row){
   if(!row) return null;
-  const canonicalRole = normalizeUserRole(row.strRole);
   return {
-    id: row.intLabTechID ?? null,
     username: row.strUsername || null,
     displayName: row.strDisplayName || null,
-    role: canonicalRole || (row.strRole || null),
-    roleLabel: getUserRoleLabel(row.strRole),
+    role: row.strRole || null,
     createdUtc: toIso(row.dtmCreated)
   };
 }
@@ -1065,33 +1080,6 @@ app.delete('/api/customers/:id', asyncHandler(async (req, res) => {
   const pool = await getPool();
   await ensureBorrowerAliasTable(pool);
 
-  const exists = await pool.request()
-    .input('BorrowerId', sql.Int, borrowerId)
-    .query(`
-      SELECT intBorrowerID
-      FROM dbo.TBorrowers
-      WHERE intBorrowerID = @BorrowerId;
-    `);
-
-  if(!exists.recordset?.length){
-    return res.status(404).json({ error: 'Customer not found.' });
-  }
-
-  const dependency = await pool.request()
-    .input('BorrowerId', sql.Int, borrowerId)
-    .query(`
-      SELECT
-        (SELECT COUNT(*) FROM dbo.TItemLoans WHERE intBorrowerID = @BorrowerId) AS LoanCount,
-        (SELECT COUNT(*) FROM dbo.TServiceTickets WHERE intBorrowerID = @BorrowerId) AS TicketCount;
-    `);
-
-  const depRow = dependency.recordset?.[0] || {};
-  const hasLoans = (depRow.LoanCount ?? 0) > 0;
-  const hasTickets = (depRow.TicketCount ?? 0) > 0;
-  if(hasLoans || hasTickets){
-    return res.status(409).json({ error: 'Cannot delete customer with existing loan or service history.' });
-  }
-
   const result = await pool.request()
     .input('BorrowerId', sql.Int, borrowerId)
     .query(`
@@ -1155,7 +1143,7 @@ app.get('/api/items', asyncHandler(async (req, res) => {
            i.intDueHoursOffset,
            i.tDueTime,
            i.dtmFixedDueLocal,
-           i.dtmCreated,
+           i.dtmUpdated,
            d.strDepartmentName
     FROM dbo.TItems AS i
     LEFT JOIN dbo.TDepartments AS d ON d.intDepartmentID = i.intDepartmentID
@@ -1380,7 +1368,8 @@ app.put('/api/items/:id', asyncHandler(async (req, res) => {
           intDueDaysOffset = @intDueDaysOffset,
           intDueHoursOffset = @intDueHoursOffset,
           tDueTime = @tDueTime,
-          dtmFixedDueLocal = @dtmFixedDueLocal
+          dtmFixedDueLocal = @dtmFixedDueLocal,
+          dtmUpdated = SYSUTCDATETIME()
       WHERE intItemID = @ItemID;
     `);
   } catch(err){
@@ -1535,9 +1524,9 @@ app.get('/api/users', asyncHandler(async (req, res) => {
   }
 
   const result = await request.query(`
-    SELECT intLabTechID, strUsername, strDisplayName, strRole, dtmCreated
-    FROM dbo.TLabTechs
-    ${search ? `WHERE LOWER(strUsername) LIKE @Search OR LOWER(strDisplayName) LIKE @Search OR LOWER(strRole) LIKE @Search OR LOWER(strFirstName) LIKE @Search OR LOWER(strLastName) LIKE @Search` : ''}
+    SELECT strUsername, strDisplayName, strRole, dtmCreated
+    FROM dbo.TAppUsers
+    ${search ? `WHERE LOWER(strUsername) LIKE @Search OR LOWER(strDisplayName) LIKE @Search OR LOWER(strRole) LIKE @Search` : ''}
     ORDER BY strUsername ASC;
   `);
 
@@ -1553,13 +1542,6 @@ app.post('/api/users', asyncHandler(async (req, res) => {
   if(!user || !displayName || !roleName){
     return res.status(400).json({ error: 'Username, display, and a valid role are required.' });
   }
-
-  const cappedDisplayName = displayName.substring(0, 150);
-  const parsedName = splitName(cappedDisplayName);
-  const firstName = normalizeString(parsedName.first) || cappedDisplayName;
-  const lastName = normalizeString(parsedName.last) || cappedDisplayName;
-  const firstLimited = firstName.substring(0, 50);
-  const lastLimited = lastName.substring(0, 50);
 
   const pool = await getPool();
   await ensureUserTable(pool);
@@ -1593,17 +1575,47 @@ app.put('/api/users/:username', asyncHandler(async (req, res) => {
 
   const { display, role } = req.body || {};
   const displayName = normalizeString(display);
-  const roleName = normalizeUserRole(role);
+  const roleName = normalizeString(role)?.toLowerCase();
   if(!displayName || !roleName){
-    return res.status(400).json({ error: 'Display and a valid role are required.' });
+    return res.status(400).json({ error: 'Display and role are required.' });
   }
 
-  const cappedDisplayName = displayName.substring(0, 150);
-  const parsedName = splitName(cappedDisplayName);
-  const firstName = normalizeString(parsedName.first) || cappedDisplayName;
-  const lastName = normalizeString(parsedName.last) || cappedDisplayName;
-  const firstLimited = firstName.substring(0, 50);
-  const lastLimited = lastName.substring(0, 50);
+  const pool = await getPool();
+  await ensureUserTable(pool);
+
+  const result = await pool.request()
+    .input('Username', sql.VarChar(120), username)
+    .input('Display', sql.VarChar(150), displayName)
+    .input('Role', sql.VarChar(50), roleName)
+    .query(`
+      UPDATE dbo.TAppUsers
+      SET strDisplayName = @Display,
+          strRole = @Role
+      WHERE strUsername = @Username;
+      SELECT @@ROWCOUNT AS updated;
+    `);
+
+  const updated = result.recordset?.[0]?.updated ?? 0;
+  if(!updated){
+    return res.status(404).json({ error: 'User not found.' });
+  }
+
+  const detail = await pool.request()
+    .input('Username', sql.VarChar(120), username)
+    .query(`
+      SELECT strUsername, strDisplayName, strRole, dtmCreated
+      FROM dbo.TAppUsers
+      WHERE strUsername = @Username;
+    `);
+
+  res.json(mapUserRow(detail.recordset?.[0] || null));
+}));
+
+app.delete('/api/users/:username', asyncHandler(async (req, res) => {
+  const username = normalizeString(req.params.username).toLowerCase();
+  if(!username){
+    return res.status(400).json({ error: 'Username required.' });
+  }
 
   const pool = await getPool();
   await ensureUserTable(pool);
@@ -1723,7 +1735,7 @@ app.post('/api/admin/clear-database', asyncHandler(async (req, res) => {
       IF OBJECT_ID('dbo.TBorrowerAliases','U') IS NOT NULL DELETE FROM dbo.TBorrowerAliases;
       IF OBJECT_ID('dbo.TBorrowers','U') IS NOT NULL DELETE FROM dbo.TBorrowers;
       IF OBJECT_ID('dbo.TItems','U') IS NOT NULL DELETE FROM dbo.TItems;
-      IF OBJECT_ID('dbo.TLabTechs','U') IS NOT NULL DELETE FROM dbo.TLabTechs;
+      IF OBJECT_ID('dbo.TAppUsers','U') IS NOT NULL DELETE FROM dbo.TAppUsers;
       IF OBJECT_ID('dbo.TAuditLog','U') IS NOT NULL DELETE FROM dbo.TAuditLog;
     `);
     await transaction.commit();
@@ -1732,7 +1744,7 @@ app.post('/api/admin/clear-database', asyncHandler(async (req, res) => {
     throw err;
   }
 
-  cachedDefaultUserId = null;
+  cachedLabTechId = null;
   res.json({ success: true });
 }));
 
