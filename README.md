@@ -55,4 +55,4 @@ The app serves both the API under `/api/*` and the static UI. Visit `http://loca
 
 ## Authentication
 
-The UI now requires users to sign in before accessing any API endpoints. Use an existing lab tech username from the database with the default password `password123`. You can change credentials directly in SQL Server by updating the `dbo.TLabTechCredentials` table or by creating new users through the API and then updating their hashes manually.
+The UI now requires users to sign in before accessing any API endpoints. Use an existing lab tech username from the database with the default password `password123`. The API validates logins directly against the `dbo.TLabTechs.strPassword` column, and new users created through the API start with the same default password so they can sign in immediately. Update passwords straight in SQL Server if you need different credentials.
