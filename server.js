@@ -981,6 +981,34 @@ async function ensureUserTable(pool){
   `);
 }
 
+async function ensureUserCredentialTable(pool){
+  await pool.request().query(`
+    IF OBJECT_ID('dbo.TLabTechCredentials','U') IS NULL
+    BEGIN
+      CREATE TABLE dbo.TLabTechCredentials
+      (
+        intLabTechID   INT NOT NULL PRIMARY KEY REFERENCES dbo.TLabTechs(intLabTechID) ON DELETE CASCADE,
+        strPasswordHash VARBINARY(32) NOT NULL,
+        dtmUpdated     DATETIME2(0) NOT NULL CONSTRAINT DF_TLabTechCredentials_Updated DEFAULT (SYSUTCDATETIME())
+      );
+    END;
+  `);
+}
+
+async function ensureUserCredentials(pool){
+  await ensureUserTable(pool);
+  await ensureUserCredentialTable(pool);
+  await pool.request()
+    .input('DefaultPassword', sql.VarChar(255), DEFAULT_USER_PASSWORD)
+    .query(`
+      INSERT INTO dbo.TLabTechCredentials(intLabTechID, strPasswordHash)
+      SELECT lt.intLabTechID, HASHBYTES('SHA2_256', @DefaultPassword)
+      FROM dbo.TLabTechs AS lt
+      LEFT JOIN dbo.TLabTechCredentials AS cred ON cred.intLabTechID = lt.intLabTechID
+      WHERE cred.intLabTechID IS NULL;
+    `);
+}
+
 function mapUserRow(row){
   if(!row) return null;
   const canonicalRole = normalizeUserRole(row.strRole);
@@ -1886,6 +1914,8 @@ app.post('/api/users', asyncHandler(async (req, res) => {
     }
     throw err;
   }
+
+  await ensureUserCredentials(pool);
 
   res.status(201).json({ username: user });
 }));
