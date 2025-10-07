@@ -193,7 +193,13 @@
         background: var(--surface);
         border-color: var(--line);
       }
-      body:has(#admin.screen:target) .nav-link[href="#admin"] {
+      body:has(#admin-action-log.screen:target)
+        .nav-link[href="#admin-action-log"],
+      body:has(#admin-customers.screen:target)
+        .nav-link[href="#admin-customers"],
+      body:has(#admin-users.screen:target) .nav-link[href="#admin-users"],
+      body:has(#admin-inventory.screen:target)
+        .nav-link[href="#admin-inventory"] {
         background: var(--surface);
         border-color: var(--line);
       }
@@ -695,7 +701,10 @@
         <div class="push-bottom">
           <div class="nav-title">Admin</div>
           <nav>
-            <a class="nav-link" href="#admin">Admin Options</a>
+            <a class="nav-link" href="#admin-action-log">Action Log</a>
+            <a class="nav-link" href="#admin-customers">Customer Management</a>
+            <a class="nav-link" href="#admin-users">User Management</a>
+            <a class="nav-link" href="#admin-inventory">Inventory Management</a>
           </nav>
         </div>
       </aside>
@@ -922,55 +931,73 @@
             </div>
           </section>
 
-          <!-- ADMIN -->
-          <section id="admin" class="screen" aria-labelledby="admin-title">
-            <div class="card" style="margin-bottom: 14px">
-              <h2 id="admin-title">Admin Options</h2>
+          <!-- ADMIN: ACTION LOG -->
+          <section
+            id="admin-action-log"
+            class="screen"
+            aria-labelledby="admin-action-title"
+          >
+            <div class="card">
+              <h2 id="admin-action-title">Action Log</h2>
               <div class="body">
-                <div class="toolbar" style="justify-content: space-between">
-                  <div style="display: flex; gap: 8px; flex-wrap: wrap">
-                    <button class="btn" data-open="dlg-create-item">
-                      <span>Add Inventory Item</span>
-                    </button>
-                    <button class="btn" data-open="dlg-create-user">
-                      <span>Create User</span>
-                    </button>
-                    <button class="btn" data-open="dlg-delete-user">
-                      <span>Delete User</span>
-                    </button>
-                  </div>
-                  <div class="search" role="search">
-                    <input
-                      id="search-admin"
-                      type="text"
-                      placeholder="Search user or action…"
-                      aria-label="Search"
-                    />
-                  </div>
+                <div class="search" role="search" style="max-width: 320px">
+                  <input
+                    id="search-action-log"
+                    type="text"
+                    placeholder="Search by user, action, or detail…"
+                    aria-label="Search action log"
+                  />
                 </div>
               </div>
+              <div class="body table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">User</th>
+                      <th scope="col">Trace #</th>
+                      <th scope="col">Action</th>
+                      <th scope="col">Date/Time</th>
+                      <th scope="col">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbl-admin-log">
+                    <tr>
+                      <td
+                        colspan="5"
+                        style="
+                          text-align: center;
+                          color: var(--muted);
+                          padding: 18px 12px;
+                        "
+                      >
+                        Loading recent activity…
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
+          </section>
 
-            <div class="card" style="margin-bottom: 14px">
-              <h2
-                style="
-                  border-bottom: 1px solid var(--line);
-                  padding: 12px 14px;
-                  margin: 0;
-                "
-              >
-                Customer Profiles
-              </h2>
+          <!-- ADMIN: CUSTOMER MANAGEMENT -->
+          <section
+            id="admin-customers"
+            class="screen"
+            aria-labelledby="admin-customers-title"
+          >
+            <div class="card">
+              <h2 id="admin-customers-title">Customer Management</h2>
               <div class="body">
                 <div
                   class="toolbar"
-                  style="justify-content: space-between; align-items: center"
+                  style="
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 12px;
+                    flex-wrap: wrap;
+                  "
                 >
-                  <p class="hint" style="margin: 0; max-width: 420px">
-                    Search for an existing customer to review their details and
-                    manage profile aliases.
-                  </p>
-                  <div class="search" role="search">
+                  <div class="search" role="search" style="flex: 1 1 260px">
                     <input
                       id="search-profiles"
                       type="text"
@@ -978,6 +1005,10 @@
                       aria-label="Search customer profiles"
                     />
                   </div>
+                  <p class="hint" style="margin: 0; max-width: 420px">
+                    Select a profile to review details, manage aliases, or
+                    perform maintenance tasks.
+                  </p>
                 </div>
               </div>
               <div class="body table">
@@ -1007,39 +1038,127 @@
                 </table>
               </div>
             </div>
+          </section>
 
+          <!-- ADMIN: USER MANAGEMENT -->
+          <section
+            id="admin-users"
+            class="screen"
+            aria-labelledby="admin-users-title"
+          >
             <div class="card">
-              <h2
-                style="
-                  border-bottom: 1px solid var(--line);
-                  padding: 12px 14px;
-                  margin: 0;
-                "
-              >
-                User Action Log
-              </h2>
+              <h2 id="admin-users-title">User Management</h2>
+              <div class="body">
+                <div
+                  class="toolbar"
+                  style="
+                    justify-content: space-between;
+                    gap: 12px;
+                    flex-wrap: wrap;
+                    align-items: center;
+                  "
+                >
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                    <button class="btn" data-open="dlg-create-user">
+                      <span>Create User</span>
+                    </button>
+                    <button class="btn" data-open="dlg-delete-user">
+                      <span>Delete User</span>
+                    </button>
+                  </div>
+                  <div class="search" role="search" style="flex: 1 1 240px">
+                    <input
+                      id="search-admin-users"
+                      type="text"
+                      placeholder="Search users…"
+                      aria-label="Search user profiles"
+                    />
+                  </div>
+                </div>
+              </div>
               <div class="body table">
                 <table>
                   <thead>
                     <tr>
-                      <th scope="col">User</th>
-                      <th scope="col">Trace #</th>
-                      <th scope="col">Action</th>
-                      <th scope="col">Date/Time</th>
-                      <th scope="col">Details</th>
+                      <th scope="col">Username</th>
+                      <th scope="col">Display Name</th>
+                      <th scope="col">Role</th>
+                      <th scope="col">Created</th>
                     </tr>
                   </thead>
-                  <tbody id="tbl-admin-log">
+                  <tbody id="tbl-admin-users">
                     <tr>
                       <td
-                        colspan="5"
+                        colspan="4"
                         style="
                           text-align: center;
                           color: var(--muted);
                           padding: 18px 12px;
                         "
                       >
-                        Loading recent activity…
+                        Enable backend to load user profiles.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- ADMIN: INVENTORY MANAGEMENT -->
+          <section
+            id="admin-inventory"
+            class="screen"
+            aria-labelledby="admin-inventory-title"
+          >
+            <div class="card">
+              <h2 id="admin-inventory-title">Inventory Management</h2>
+              <div class="body">
+                <div
+                  class="toolbar"
+                  style="
+                    justify-content: space-between;
+                    gap: 12px;
+                    flex-wrap: wrap;
+                    align-items: center;
+                  "
+                >
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                    <button class="btn" data-open="dlg-create-item">
+                      <span>Add Inventory Item</span>
+                    </button>
+                  </div>
+                  <div class="search" role="search" style="flex: 1 1 240px">
+                    <input
+                      id="search-admin-inventory"
+                      type="text"
+                      placeholder="Search inventory…"
+                      aria-label="Search inventory items"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div class="body table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Item Name</th>
+                      <th scope="col">Item Number</th>
+                      <th scope="col">Department</th>
+                      <th scope="col">Due Policy</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbl-admin-inventory">
+                    <tr>
+                      <td
+                        colspan="4"
+                        style="
+                          text-align: center;
+                          color: var(--muted);
+                          padding: 18px 12px;
+                        "
+                      >
+                        Enable backend to load inventory items.
                       </td>
                     </tr>
                   </tbody>
@@ -1104,17 +1223,20 @@
               <input
                 id="nc-schoolid"
                 pattern="\\d{5,8}"
-                placeholder="e.g., 0234567"
+                placeholder="e.g., 12345"
+                inputmode="numeric"
               />
-              <div class="hint">5–7 digits, 0 as first digit.</div>
+              <div class="hint">5–8 digits, numbers only.</div>
             </div>
             <div>
               <label>Phone</label>
               <input
                 id="nc-phone"
                 placeholder="5555555555"
-                length=10
+                pattern="\\d{10}"
+                inputmode="numeric"
               />
+              <div class="hint">10 digits, no formatting.</div>
             </div>
             <div>
               <label>Room</label>
@@ -1128,12 +1250,10 @@
 
             <!-- Borrow specifics -->
             <div class="full" data-bind="borrow">
-              <label>Item (name or number)</label>
-              <input
-                id="nc-item"
-                placeholder="e.g., Oscilloscope #S7"
-                autocomplete="off"
-              />
+              <label>Item</label>
+              <select id="nc-item">
+                <option value="">Select an item…</option>
+              </select>
             </div>
             <div
               class="full due-preview"
@@ -1154,7 +1274,9 @@
             <!-- Service specifics -->
             <div class="full" data-bind="service" style="display: none">
               <label>Item Being Serviced</label>
-              <input id="ns-item" placeholder="e.g., Lab Laptop 15" />
+              <select id="ns-item">
+                <option value="">Select an item…</option>
+              </select>
             </div>
             <div class="full" data-bind="service" style="display: none">
               <label>Issue Description</label>
@@ -1190,7 +1312,8 @@
               <input
                 id="rb-id"
                 placeholder="or leave blank & use name lookup"
-                pattern="\\d{5,10}"
+                pattern="\\d{5,8}"
+                inputmode="numeric"
               />
             </div>
             <div>
@@ -1212,12 +1335,10 @@
               </div>
             </div>
             <div class="full">
-              <label>Item (name or number)</label>
-              <input
-                id="rb-item"
-                required
-                placeholder="e.g., Raspberry Pi 5 or #S7"
-              />
+              <label>Item</label>
+              <select id="rb-item" required>
+                <option value="">Select an item…</option>
+              </select>
             </div>
             <div
               class="full due-preview"
@@ -1258,7 +1379,8 @@
               <input
                 id="rs-id"
                 placeholder="or name lookup"
-                pattern="\\d{5,10}"
+                pattern="\\d{5,8}"
+                inputmode="numeric"
               />
             </div>
             <div>
@@ -1281,11 +1403,9 @@
             </div>
             <div class="full">
               <label>Item Being Serviced</label>
-              <input
-                id="rs-item"
-                required
-                placeholder="e.g., Multimeter #A12"
-              />
+              <select id="rs-item" required>
+                <option value="">Select an item…</option>
+              </select>
             </div>
             <div class="full">
               <label>Issue</label>
@@ -1374,10 +1494,6 @@
             <div class="full">
               <label>Item Name</label>
               <input id="ci-name" required placeholder="e.g., Trainer #34" />
-            </div>
-            <div>
-              <label>Item Number</label>
-              <input id="ci-number" placeholder="optional" />
             </div>
             <div>
               <label>Department</label>
@@ -1730,12 +1846,21 @@
             const elDialog = document.getElementById(strDialogId);
             if (!elDialog) return;
             const strAction = elTrigger.dataset.action;
-            if (strDialogId === "dlg-new-customer" && strAction) {
-              const elActionSelect = elDialog.querySelector("#nc-action");
-              if (elActionSelect) {
-                elActionSelect.value = strAction;
-                elActionSelect.dispatchEvent(new Event("change"));
+            if (strDialogId === "dlg-new-customer") {
+              const elForm = elDialog.querySelector("form");
+              elForm?.reset();
+              fnSetNewCustomerDialogMode(elDialog, strAction);
+              const preview = elDialog.querySelector("#nc-due-preview");
+              if (preview) {
+                const message =
+                  preview.dataset.defaultMessage ||
+                  "Due date will be assigned automatically from the item's policy.";
+                preview.textContent = message;
               }
+              requestAnimationFrame(() => {
+                const focusTarget = elDialog.querySelector("#nc-first");
+                focusTarget?.focus();
+              });
             }
             if (strDialogId === "dlg-returning-borrow") {
               const elForm = document.getElementById("form-returning-borrow");
@@ -1831,24 +1956,13 @@
         fnApplyRowStatusStyles();
 
         // ====== NEW CUSTOMER action-type toggle ======
-        (function () {
-          const dlg = document.getElementById("dlg-new-customer");
-          const sel = dlg.querySelector("#nc-action");
-          const toggle = () => {
-            const isBorrow = sel.value === "borrow";
-            dlg
-              .querySelectorAll('[data-bind="borrow"]')
-              .forEach((el) => (el.style.display = isBorrow ? "" : "none"));
-            dlg
-              .querySelectorAll('[data-bind="service"]')
-              .forEach((el) => (el.style.display = isBorrow ? "none" : ""));
-          };
-          sel.addEventListener("change", toggle);
-          toggle();
-        })();
+        fnSetNewCustomerDialogMode(null, "borrow");
 
         // ====== NOTE HISTORY SUPPORT ======
         const m_mapDetailNoteCache = new Map();
+        let m_arrItemOptions = [];
+        let m_arrAuditLogEntries = [];
+        let m_strAuditLogSearchTerm = "";
         let m_strActiveDetailNoteKey = null;
         let m_objActiveCustomerProfile = null;
         let m_intProfileSearchToken = 0;
@@ -2336,6 +2450,30 @@
           }
         }
 
+        async function fnLoadItemOptions() {
+          try {
+            const items = await fnFetchItems();
+            const normalized = Array.isArray(items)
+              ? items
+                  .filter((item) => item && item.name)
+                  .map((item) => ({
+                    id: item.id ?? null,
+                    name: item.name || "",
+                  }))
+              : [];
+            normalized.sort((a, b) => a.name.localeCompare(b.name, undefined, {
+              sensitivity: "base",
+            }));
+            m_arrItemOptions = normalized;
+            ["nc-item", "rb-item", "ns-item", "rs-item"].forEach((id) => {
+              const select = document.getElementById(id);
+              if (select) fnPopulateItemSelect(select, normalized);
+            });
+          } catch (err) {
+            console.error("Failed to load inventory items", err);
+          }
+        }
+
         // ====== VALIDATION HELPERS ======
         // Tiny validation helpers shared by multiple forms.
         function fnMust(cond, msg) {
@@ -2415,8 +2553,8 @@
           preview.dataset.defaultMessage = defaultText;
           let token = 0;
 
-          const update = fnDebounce(async () => {
-            const query = input.value.trim();
+          const runLookup = async () => {
+            const query = (input.value || "").trim();
             const currentToken = ++token;
             if (!query) {
               preview.textContent = defaultText;
@@ -2436,17 +2574,75 @@
               preview.textContent =
                 "Unable to determine due date for that item.";
             }
-          }, 250);
+          };
 
-          input.addEventListener("input", () => {
-            if (!input.value.trim()) {
-              preview.textContent = defaultText;
-            }
-            update();
-          });
-          input.addEventListener("blur", () => {
-            setTimeout(update, 0);
-          });
+          const isSelect = input.tagName === "SELECT";
+          const update = isSelect ? runLookup : fnDebounce(runLookup, 250);
+
+          if (isSelect) {
+            input.addEventListener("change", () => {
+              if (!input.value) {
+                preview.textContent = defaultText;
+                token++;
+                return;
+              }
+              update();
+            });
+          } else {
+            input.addEventListener("input", () => {
+              if (!input.value.trim()) {
+                preview.textContent = defaultText;
+              }
+              update();
+            });
+            input.addEventListener("blur", () => {
+              setTimeout(update, 0);
+            });
+          }
+        }
+
+        function fnSetNewCustomerDialogMode(dialog, mode) {
+          const dlg = dialog || document.getElementById("dlg-new-customer");
+          if (!dlg) return;
+          const action = mode === "service" ? "service" : "borrow";
+          dlg.dataset.action = action;
+          dlg
+            .querySelectorAll('[data-bind="borrow"]')
+            .forEach((el) => (el.style.display = action === "borrow" ? "" : "none"));
+          dlg
+            .querySelectorAll('[data-bind="service"]')
+            .forEach((el) => (el.style.display = action === "service" ? "" : "none"));
+        }
+
+        function fnPopulateItemSelect(select, items) {
+          if (!select) return;
+          const existingPlaceholder = Array.from(select.querySelectorAll("option"))
+            .find((opt) => opt.value === "")?.textContent;
+          const placeholderText = (existingPlaceholder || "Select an item…").trim();
+          const previousValue = select.value;
+          select.textContent = "";
+          const placeholder = document.createElement("option");
+          placeholder.value = "";
+          placeholder.textContent = placeholderText;
+          select.appendChild(placeholder);
+          items
+            .filter((item) => item && item.name)
+            .forEach((item) => {
+              const option = document.createElement("option");
+              option.value = item.name;
+              option.textContent = item.name;
+              if (item.id != null) option.dataset.itemId = item.id;
+              select.appendChild(option);
+            });
+          if (
+            previousValue &&
+            Array.from(select.options).some((opt) => opt.value === previousValue)
+          ) {
+            select.value = previousValue;
+            select.dispatchEvent(new Event("change"));
+          } else {
+            select.value = "";
+          }
         }
 
         function fnSetupBorrowerLookup({
@@ -2725,6 +2921,15 @@
           return res.json();
         }
 
+        async function fnFetchItems() {
+          const res = await fnApi(`/items`, { method: "GET" });
+          const payload = await res.json();
+          if (Array.isArray(payload)) return payload;
+          if (Array.isArray(payload?.entries)) return payload.entries;
+          if (Array.isArray(payload?.data)) return payload.data;
+          return [];
+        }
+
         async function fnCreateCustomerAlias(id, alias) {
           const res = await fnApi(
             `/customers/${encodeURIComponent(id)}/aliases`,
@@ -2867,7 +3072,7 @@
           }
         }
 
-        function fnRenderAuditLog(entries) {
+        function fnRenderAuditLogTable(entries) {
           const tbody = document.getElementById("tbl-admin-log");
           if (!tbody) return;
           tbody.textContent = "";
@@ -2899,6 +3104,42 @@
             });
             tbody.appendChild(tr);
           });
+        }
+
+        function fnFilterAuditLogEntries(entries, term) {
+          if (!Array.isArray(entries)) return [];
+          const normalized = term.trim().toLowerCase();
+          if (!normalized) return entries.slice();
+          return entries.filter((entry) => {
+            const parts = [
+              fnFormatAuditUser(entry),
+              fnFormatAuditTrace(entry),
+              fnFormatAuditAction(entry),
+              fnFormatAuditDateTime(entry),
+              fnFormatAuditDetails(entry),
+            ]
+              .map((val) => (val || "").toString().toLowerCase())
+              .join(" ");
+            return parts.includes(normalized);
+          });
+        }
+
+        function fnRenderAuditLog(entries) {
+          m_arrAuditLogEntries = Array.isArray(entries) ? entries.slice() : [];
+          const filtered = fnFilterAuditLogEntries(
+            m_arrAuditLogEntries,
+            m_strAuditLogSearchTerm,
+          );
+          fnRenderAuditLogTable(filtered);
+        }
+
+        function fnUpdateAuditLogSearch(term) {
+          m_strAuditLogSearchTerm = (term || "").trim();
+          const filtered = fnFilterAuditLogEntries(
+            m_arrAuditLogEntries,
+            m_strAuditLogSearchTerm,
+          );
+          fnRenderAuditLogTable(filtered);
         }
 
         async function fnLoadAuditLog() {
@@ -3095,7 +3336,8 @@
           fnWithAsyncBusy(fnSelectElement("#nc-save"), async () => {
             const first = fnSelectElement("#nc-first").value.trim();
             const last = fnSelectElement("#nc-last").value.trim();
-            const action = fnSelectElement("#nc-action").value;
+            const dlg = document.getElementById("dlg-new-customer");
+            const action = dlg?.dataset.action === "service" ? "service" : "borrow";
             fnMust(first && last, "First/Last required.");
             if (action === "borrow") {
               fnMust(
@@ -3114,11 +3356,11 @@
             }
             // optional patterns
             const id = fnSelectElement("#nc-schoolid").value;
-            if (id && !/^\d{5,10}$/.test(id))
-              throw new Error("ID must be 5–10 digits.");
+            if (id && !/^\d{5,8}$/.test(id))
+              throw new Error("ID must be 5–8 digits.");
             const phone = fnSelectElement("#nc-phone").value;
-            if (phone && !/^\(\d{3}\) \d{3}-\d{4}$/.test(phone))
-              throw new Error("Phone format: (###) ###-####");
+            if (phone && !/^\d{10}$/.test(phone))
+              throw new Error("Phone must be 10 digits.");
 
             await fnApi("/customers", {
               method: "POST",
@@ -3129,7 +3371,6 @@
                 phone: phone || null,
                 room: fnSelectElement("#nc-room").value || null,
                 instructor: fnSelectElement("#nc-instructor").value || null,
-                dept: fnSelectElement("#nc-dept").value || null,
               }),
             });
 
@@ -3236,7 +3477,6 @@
             const form = document.getElementById("form-create-item");
             const name = fnSelectElement("#ci-name").value.trim();
             fnMust(name, "Item name required.");
-            const number = fnSelectElement("#ci-number").value.trim();
             const dept = fnSelectElement("#ci-dept").value.trim();
             const owned = fnSelectElement("#ci-owned").value !== "external";
             const description = fnSelectElement("#ci-description").value.trim();
@@ -3245,7 +3485,6 @@
 
             const payload = {
               name,
-              number: number || null,
               department: dept || null,
               schoolOwned: owned,
               description: description || null,
@@ -3354,6 +3593,16 @@
             alert("User deleted.");
           }),
         );
+
+        const auditSearchInput = document.getElementById("search-action-log");
+        if (auditSearchInput) {
+          const debouncedAuditSearch = fnDebounce(() => {
+            fnUpdateAuditLogSearch(auditSearchInput.value || "");
+          }, 200);
+          auditSearchInput.addEventListener("input", () => {
+            debouncedAuditSearch();
+          });
+        }
 
         // Admin: Customer Profiles
         const profileSearchInput = document.getElementById("search-profiles");
@@ -3515,6 +3764,7 @@
         fnLoadBorrowingData();
         fnLoadServiceData();
         fnLoadAuditLog();
+        fnLoadItemOptions();
 
         // keep row colors consistent if DOM changes later
         // Watch for table updates (e.g., new rows inserted) so the status tinting
