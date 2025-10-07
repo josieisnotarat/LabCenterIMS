@@ -1121,7 +1121,7 @@
                   <tbody id="tbl-admin-users">
                     <tr>
                       <td
-                        colspan="5"
+                        colspan="4"
                         style="
                           text-align: center;
                           color: var(--muted);
@@ -2627,6 +2627,205 @@
           }
           entries.forEach((item) => {
             const tr = document.createElement("tr");
+            tr.classList.add("clickable");
+            tr.dataset.itemId = item.id != null ? item.id : "";
+            fnAppendTableCell(tr, item.name || "—");
+            fnAppendTableCell(tr, item.number || "—");
+            fnAppendTableCell(tr, item.department || "—");
+            fnAppendTableCell(tr, fnFormatItemDuePolicy(item));
+            tbody.appendChild(tr);
+          });
+        }
+
+        function fnFilterInventoryEntries(entries, term) {
+          if (!Array.isArray(entries)) return [];
+          const normalized = (term || "").trim().toLowerCase();
+          if (!normalized) return entries.slice();
+          return entries.filter((item) => {
+            const parts = [
+              item.name,
+              item.number,
+              item.department,
+              item.duePolicy,
+              item.duePolicyDescription,
+              fnFormatItemDuePolicy(item),
+            ];
+            return parts.some((part) =>
+              (part || "").toString().toLowerCase().includes(normalized),
+            );
+          });
+        }
+
+        function fnUpdateInventorySearch(term) {
+          m_strInventorySearchTerm = (term || "").trim();
+          const filtered = fnFilterInventoryEntries(
+            m_arrInventoryItems,
+            m_strInventorySearchTerm,
+          );
+          fnRenderInventoryTable(filtered);
+        }
+
+        async function fnLoadInventoryData({ showStatus = true } = {}) {
+          if (!USE_BACKEND) {
+            m_arrInventoryItems = [];
+            ["nc-item", "rb-item", "ns-item", "rs-item"].forEach((id) => {
+              const select = document.getElementById(id);
+              if (select) fnPopulateItemSelect(select, []);
+            });
+            fnRenderInventoryTable([]);
+            return;
+          }
+          if (showStatus) {
+            fnShowTableMessage("tbl-admin-inventory", "Loading inventory…");
+          }
+          try {
+            const items = await fnFetchItems();
+            const sorted = Array.isArray(items)
+              ? items
+                  .slice()
+                  .sort((a, b) =>
+                    (a.name || "").localeCompare(b.name || "", undefined, {
+                      sensitivity: "base",
+                    }),
+                  )
+              : [];
+            m_arrInventoryItems = sorted;
+            const optionList = sorted
+              .filter((item) => item && item.name)
+              .map((item) => ({
+                id: item.id ?? null,
+                name: item.name || "",
+              }));
+            ["nc-item", "rb-item", "ns-item", "rs-item"].forEach((id) => {
+              const select = document.getElementById(id);
+              if (select) fnPopulateItemSelect(select, optionList);
+            });
+            fnUpdateInventorySearch(m_strInventorySearchTerm);
+          } catch (err) {
+            console.error("Failed to load inventory items", err);
+            fnShowTableMessage(
+              "tbl-admin-inventory",
+              "Unable to load inventory items.",
+              "error",
+            );
+          }
+        }
+
+        function fnRenderAdminUsersTable(entries) {
+          const tbodyId = "tbl-admin-users";
+          const tbody = document.getElementById(tbodyId);
+          if (!tbody) return;
+          tbody.textContent = "";
+          if (!USE_BACKEND) {
+            fnShowTableMessage(
+              tbodyId,
+              "Enable backend to load user profiles.",
+            );
+            return;
+          }
+          if (!Array.isArray(entries) || entries.length === 0) {
+            const message = m_arrAdminUsers.length
+              ? "No user profiles match your search."
+              : "No user profiles found.";
+            fnShowTableMessage(tbodyId, message);
+            return;
+          }
+          entries.forEach((user) => {
+            const tr = document.createElement("tr");
+            tr.classList.add("clickable");
+            tr.dataset.username = user.username || "";
+            fnAppendTableCell(tr, user.username || "—");
+            fnAppendTableCell(tr, user.displayName || "—");
+            fnAppendTableCell(tr, fnFormatUserRole(user.role));
+            fnAppendTableCell(
+              tr,
+              user.createdUtc ? fnFormatLocalDateTime(user.createdUtc) : "—",
+            );
+            tbody.appendChild(tr);
+          });
+        }
+
+        function fnFilterAdminUsers(entries, term) {
+          if (!Array.isArray(entries)) return [];
+          const normalized = (term || "").trim().toLowerCase();
+          if (!normalized) return entries.slice();
+          return entries.filter((user) => {
+            const fields = [
+              user.username,
+              user.displayName,
+              user.role,
+              fnFormatUserRole(user.role),
+            ];
+            return fields.some((field) =>
+              (field || "").toString().toLowerCase().includes(normalized),
+            );
+          });
+        }
+
+        function fnUpdateAdminUserSearch(term) {
+          m_strAdminUserSearchTerm = (term || "").trim();
+          const filtered = fnFilterAdminUsers(
+            m_arrAdminUsers,
+            m_strAdminUserSearchTerm,
+          );
+          fnRenderAdminUsersTable(filtered);
+        }
+
+        async function fnLoadAdminUsers({ showStatus = true } = {}) {
+          if (!USE_BACKEND) {
+            m_arrAdminUsers = [];
+            fnRenderAdminUsersTable([]);
+            return;
+          }
+          if (showStatus) {
+            fnShowTableMessage("tbl-admin-users", "Loading user profiles…");
+          }
+          try {
+            const users = await fnFetchUsers();
+            const sorted = Array.isArray(users)
+              ? users
+                  .slice()
+                  .sort((a, b) =>
+                    (a.username || "").localeCompare(
+                      b.username || "",
+                      undefined,
+                      { sensitivity: "base" },
+                    ),
+                  )
+              : [];
+            m_arrAdminUsers = sorted;
+            fnUpdateAdminUserSearch(m_strAdminUserSearchTerm);
+          } catch (err) {
+            console.error("Failed to load user profiles", err);
+            fnShowTableMessage(
+              "tbl-admin-users",
+              "Unable to load user profiles.",
+              "error",
+            );
+          }
+        }
+
+        function fnRenderInventoryTable(entries) {
+          const tbodyId = "tbl-admin-inventory";
+          const tbody = document.getElementById(tbodyId);
+          if (!tbody) return;
+          tbody.textContent = "";
+          if (!USE_BACKEND) {
+            fnShowTableMessage(
+              tbodyId,
+              "Enable backend to manage inventory items.",
+            );
+            return;
+          }
+          if (!Array.isArray(entries) || entries.length === 0) {
+            const message = m_arrInventoryItems.length
+              ? "No inventory items match your search."
+              : "No inventory items found.";
+            fnShowTableMessage(tbodyId, message);
+            return;
+          }
+          entries.forEach((item) => {
+            const tr = document.createElement("tr");
             fnAppendTableCell(tr, item.name || "—");
             fnAppendTableCell(tr, item.number || "—");
             fnAppendTableCell(tr, item.department || "—");
@@ -2977,6 +3176,80 @@
           if (canonical && USER_ROLE_LABELS.has(canonical)) {
             return USER_ROLE_LABELS.get(canonical);
           }
+          if (!role) return "—";
+          return role
+            .toString()
+            .split(/[_\s]+/)
+            .filter(Boolean)
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(" ");
+        }
+
+        function fnFormatItemDuePolicy(item) {
+          if (!item) return "—";
+          if (item.duePolicyDescription) return item.duePolicyDescription;
+          const policy = (item.duePolicy || "").toUpperCase();
+          if (!policy) return "—";
+          if (policy === "NEXT_DAY_6PM") return "Next day at 6:00 PM";
+          if (policy === "OFFSET") {
+            const days = Number.isFinite(item.dueDaysOffset)
+              ? item.dueDaysOffset
+              : null;
+            const hours = Number.isFinite(item.dueHoursOffset)
+              ? item.dueHoursOffset
+              : null;
+            const time = fnFormatTimeForInput(item.dueTime) || "";
+            const parts = [];
+            if (days != null) {
+              parts.push(
+                `${days} day${days === 1 ? "" : "s"}`,
+              );
+            }
+            if (hours != null && hours !== 0) {
+              parts.push(
+                `${hours} hour${hours === 1 ? "" : "s"}`,
+              );
+            }
+            if (time) {
+              parts.push(`at ${time}`);
+            }
+            return parts.length
+              ? `Offset ${parts.join(" ")}`
+              : "Custom offset";
+          }
+          if (policy === "SEMESTER" || policy === "FIXED") {
+            const fixed = fnNormalizeDueText(item.fixedDueLocal);
+            return fixed ? `Due ${fixed}` : "Semester due date not set";
+          }
+          return policy.replace(/_/g, " ");
+        }
+
+        function fnFormatDateTimeLocalInput(value) {
+          const dt = fnSafeDate(value);
+          if (!dt) return "";
+          const pad = (num) => String(num).padStart(2, "0");
+          const year = dt.getFullYear();
+          const month = pad(dt.getMonth() + 1);
+          const day = pad(dt.getDate());
+          const hours = pad(dt.getHours());
+          const minutes = pad(dt.getMinutes());
+          return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
+        function fnFormatTimeForInput(value) {
+          if (!value) return "";
+          if (typeof value === "string") {
+            const trimmed = value.trim();
+            if (!trimmed) return "";
+            return trimmed.substring(0, 5);
+          }
+          const dt = fnSafeDate(`1970-01-01T${value}`);
+          if (!dt) return "";
+          const pad = (num) => String(num).padStart(2, "0");
+          return `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+        }
+
+        function fnFormatUserRole(role) {
           if (!role) return "—";
           return role
             .toString()
@@ -4074,6 +4347,99 @@
           }
         }
 
+        async function fnDeleteCustomerProfile(button, id) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage customer profiles.");
+            return;
+          }
+          if (!id) return;
+          if (
+            !window.confirm(
+              "Delete this customer profile? This removes all associated records.",
+            )
+          ) {
+            return;
+          }
+          try {
+            if (button) fnSetBusyState(button, true);
+            await fnApi(`/customers/${encodeURIComponent(id)}`, {
+              method: "DELETE",
+            });
+            if (
+              m_objActiveCustomerProfile &&
+              String(m_objActiveCustomerProfile.id || "") === String(id)
+            ) {
+              m_objActiveCustomerProfile = null;
+              fnCloseDialogById("dlg-manage-customer");
+            }
+            alert("Customer deleted.");
+            await fnRunCustomerProfileSearch(m_strLastProfileSearchTerm, {
+              showStatus: false,
+            });
+          } catch (err) {
+            console.error("Failed to delete customer", err);
+            alert(err?.message || "Unable to delete customer profile.");
+          } finally {
+            if (button) fnSetBusyState(button, false);
+          }
+        }
+
+        async function fnClearAuditLog(button) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage the action log.");
+            return;
+          }
+          if (!window.confirm("Clear all action log entries?")) return;
+          try {
+            if (button) fnSetBusyState(button, true);
+            await fnApi(`/admin/audit-log`, { method: "DELETE" });
+            alert("Action log cleared.");
+            await fnLoadAuditLog();
+          } catch (err) {
+            console.error("Failed to clear action log", err);
+            alert(err?.message || "Unable to clear action log.");
+          } finally {
+            if (button) fnSetBusyState(button, false);
+          }
+        }
+
+        async function fnClearDatabase(button) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage the database.");
+            return;
+          }
+          if (
+            !window.confirm(
+              "Clear the entire database? This removes all customers, inventory, users, loans, tickets, and log entries.",
+            )
+          ) {
+            return;
+          }
+          try {
+            if (button) fnSetBusyState(button, true);
+            await fnApi(`/admin/clear-database`, { method: "POST" });
+            m_objActiveCustomerProfile = null;
+            m_objActiveInventoryItem = null;
+            m_objActiveUser = null;
+            fnCloseDialogById("dlg-manage-customer");
+            fnCloseDialogById("dlg-manage-item");
+            fnCloseDialogById("dlg-edit-user");
+            alert("Database cleared.");
+            await fnLoadHomeData();
+            await fnLoadBorrowingData();
+            await fnLoadServiceData();
+            await fnLoadAuditLog();
+            await fnLoadInventoryData({ showStatus: true });
+            await fnLoadAdminUsers({ showStatus: true });
+            await fnRunCustomerProfileSearch("", { showStatus: true });
+          } catch (err) {
+            console.error("Failed to clear database", err);
+            alert(err?.message || "Unable to clear database.");
+          } finally {
+            if (button) fnSetBusyState(button, false);
+          }
+        }
+
         // ====== SAVE HANDLERS ======
         // New Customer (borrow/service)
         fnSelectElement("#nc-save").addEventListener(
@@ -4329,6 +4695,16 @@
             await fnLoadAdminUsers({ showStatus: false });
           }),
         );
+
+        const auditSearchInput = document.getElementById("search-action-log");
+        if (auditSearchInput) {
+          const debouncedAuditSearch = fnDebounce(() => {
+            fnUpdateAuditLogSearch(auditSearchInput.value || "");
+          }, 200);
+          auditSearchInput.addEventListener("input", () => {
+            debouncedAuditSearch();
+          });
+        }
 
         const auditSearchInput = document.getElementById("search-action-log");
         if (auditSearchInput) {

@@ -1423,6 +1423,127 @@ app.delete('/api/items/:id', asyncHandler(async (req, res) => {
   res.json({ success: true });
 }));
 
+app.get('/api/items/:id', asyncHandler(async (req, res) => {
+  const itemId = Number.parseInt(req.params.id, 10);
+  if(!Number.isFinite(itemId)){
+    return res.status(400).json({ error: 'Invalid item id.' });
+  }
+
+  const pool = await getPool();
+  const row = await loadItemRow(pool, itemId);
+  if(!row){
+    return res.status(404).json({ error: 'Item not found.' });
+  }
+
+  res.json(mapItemRow(row));
+}));
+
+app.put('/api/items/:id', asyncHandler(async (req, res) => {
+  const itemId = Number.parseInt(req.params.id, 10);
+  if(!Number.isFinite(itemId)){
+    return res.status(400).json({ error: 'Invalid item id.' });
+  }
+
+  const {
+    name,
+    number,
+    department,
+    schoolOwned,
+    description,
+    duePolicy,
+    offsetDays,
+    offsetHours,
+    dueTime,
+    fixedDue
+  } = req.body || {};
+
+  const itemName = normalizeString(name);
+  if(!itemName){
+    return res.status(400).json({ error: 'Item name is required.' });
+  }
+
+  const policy = (normalizeString(duePolicy) || 'NEXT_DAY_6PM').toUpperCase();
+  const pool = await getPool();
+
+  const existing = await loadItemRow(pool, itemId);
+  if(!existing){
+    return res.status(404).json({ error: 'Item not found.' });
+  }
+
+  const departmentId = await ensureDepartment(pool, department);
+  const days = toIntOrNull(offsetDays);
+  const hours = toIntOrNull(offsetHours);
+  const timeSql = normalizeTimeForSql(dueTime);
+  const fixedDueDate = parseLocalDateTime(fixedDue);
+
+  try {
+    const request = pool.request();
+    request.input('ItemID', sql.Int, itemId);
+    request.input('strItemName', sql.VarChar(120), itemName);
+    request.input('strItemNumber', sql.VarChar(60), normalizeString(number) || null);
+    request.input('blnIsSchoolOwned', sql.Bit, schoolOwned === false ? 0 : 1);
+    request.input('intDepartmentID', sql.Int, departmentId ?? null);
+    request.input('strDescription', sql.VarChar(400), normalizeString(description) || null);
+    request.input('strDuePolicy', sql.VarChar(30), policy);
+    request.input('intDueDaysOffset', sql.Int, (policy === 'OFFSET' || policy === 'NEXT_DAY_6PM') ? days : null);
+    request.input('intDueHoursOffset', sql.Int, policy === 'OFFSET' ? hours : null);
+    request.input('tDueTime', sql.Time, (policy === 'OFFSET' || policy === 'NEXT_DAY_6PM') ? (timeSql || null) : null);
+    request.input('dtmFixedDueLocal', sql.DateTime2, (policy === 'SEMESTER' || policy === 'FIXED') ? fixedDueDate : null);
+    await request.query(`
+      UPDATE dbo.TItems
+      SET strItemName = @strItemName,
+          strItemNumber = @strItemNumber,
+          blnIsSchoolOwned = @blnIsSchoolOwned,
+          intDepartmentID = @intDepartmentID,
+          strDescription = @strDescription,
+          strDuePolicy = @strDuePolicy,
+          intDueDaysOffset = @intDueDaysOffset,
+          intDueHoursOffset = @intDueHoursOffset,
+          tDueTime = @tDueTime,
+          dtmFixedDueLocal = @dtmFixedDueLocal,
+          dtmUpdated = SYSUTCDATETIME()
+      WHERE intItemID = @ItemID;
+    `);
+  } catch(err){
+    if(err && (err.number === 2627 || err.number === 2601)){
+      return res.status(409).json({ error: 'An item with that name already exists.' });
+    }
+    throw err;
+  }
+
+  const updated = await loadItemRow(pool, itemId);
+  res.json(mapItemRow(updated));
+}));
+
+app.delete('/api/items/:id', asyncHandler(async (req, res) => {
+  const itemId = Number.parseInt(req.params.id, 10);
+  if(!Number.isFinite(itemId)){
+    return res.status(400).json({ error: 'Invalid item id.' });
+  }
+
+  const pool = await getPool();
+
+  try {
+    const result = await pool.request()
+      .input('ItemID', sql.Int, itemId)
+      .query(`
+        DELETE FROM dbo.TItems WHERE intItemID = @ItemID;
+        SELECT @@ROWCOUNT AS deleted;
+      `);
+    const deleted = result.recordset?.[0]?.deleted ?? 0;
+    if(!deleted){
+      return res.status(404).json({ error: 'Item not found.' });
+    }
+  } catch(err){
+    if(err && err.number === 547){
+      return res.status(409).json({ error: 'Cannot delete item that is referenced by loans or tickets.' });
+    }
+    throw err;
+  }
+
+  res.json({ success: true });
+}));
+
 const LOAN_STATUS_SET = new Set(['On Time', 'Overdue', 'Returned']);
 const TICKET_STATUS_SET = new Set(['Diagnosing', 'Awaiting Parts', 'Ready for Pickup', 'Quarantined', 'Returned']);
 
