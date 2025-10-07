@@ -23,7 +23,27 @@ const dbConfig = {
 };
 
 let pool;
-let cachedLabTechId = null;
+let cachedDefaultUserId = null;
+
+const USER_ROLE_LABELS = {
+  admin: 'Admin',
+  'co-op': 'Co-Op'
+};
+
+const USER_ROLE_ALIASES = new Map([
+  ['admin', 'admin'],
+  ['administrator', 'admin'],
+  ['labtech', 'admin'],
+  ['lab tech', 'admin'],
+  ['lab_tech', 'admin'],
+  ['lab-tech', 'admin'],
+  ['labtechnician', 'admin'],
+  ['lab technician', 'admin'],
+  ['co-op', 'co-op'],
+  ['coop', 'co-op'],
+  ['co op', 'co-op'],
+  ['co_op', 'co-op']
+]);
 
 const USER_ROLE_LABELS = {
   labtech: 'Lab Tech',
@@ -51,7 +71,7 @@ async function getPool(){
     try { await pool.close(); } catch { /* ignore */ }
   }
   pool = await new sql.ConnectionPool(dbConfig).connect();
-  cachedLabTechId = null;
+  cachedDefaultUserId = null;
   return pool;
 }
 
@@ -619,9 +639,9 @@ async function loadAliasesForBorrowers(pool, borrowerIds){
   return map;
 }
 
-async function getDefaultLabTechId(pool){
-  if(cachedLabTechId != null){
-    return cachedLabTechId;
+async function getDefaultUserId(pool){
+  if(cachedDefaultUserId != null){
+    return cachedDefaultUserId;
   }
   const result = await pool.request().query(`
     SELECT TOP (1) intLabTechID
@@ -631,9 +651,9 @@ async function getDefaultLabTechId(pool){
   `);
   const id = result.recordset?.[0]?.intLabTechID;
   if(!id){
-    throw new Error('No active lab tech available for checkout.');
+    throw new Error('No active user available for checkout.');
   }
-  cachedLabTechId = id;
+  cachedDefaultUserId = id;
   return id;
 }
 
@@ -795,14 +815,21 @@ function parseLocalDateTime(value){
 
 async function ensureUserTable(pool){
   await pool.request().query(`
-    IF OBJECT_ID('dbo.TAppUsers','U') IS NULL
+    IF OBJECT_ID('dbo.TLabTechs','U') IS NULL
     BEGIN
-      CREATE TABLE dbo.TAppUsers
+      CREATE TABLE dbo.TLabTechs
       (
-        strUsername    VARCHAR(120) NOT NULL PRIMARY KEY,
+        intLabTechID   INT IDENTITY(1,1) PRIMARY KEY,
+        strUsername    VARCHAR(120) NOT NULL UNIQUE,
         strDisplayName VARCHAR(150) NOT NULL,
+        strFirstName   VARCHAR(50)  NOT NULL,
+        strLastName    VARCHAR(50)  NOT NULL,
+        strEmail       VARCHAR(120) NULL,
+        strPhoneNumber VARCHAR(25)  NULL,
         strRole        VARCHAR(50)  NOT NULL,
-        dtmCreated     DATETIME2(0) NOT NULL CONSTRAINT DF_TAppUsers_Created DEFAULT (SYSUTCDATETIME())
+        blnIsActive    BIT          NOT NULL CONSTRAINT DF_TLabTechs_IsActive DEFAULT (1),
+        dtmCreated     DATETIME2(0) NOT NULL CONSTRAINT DF_TLabTechs_Created DEFAULT (SYSUTCDATETIME()),
+        CONSTRAINT CK_TLabTechs_Role CHECK (strRole IN ('admin','co-op'))
       );
     END;
   `);
@@ -1176,12 +1203,12 @@ app.post('/api/loans/checkout', asyncHandler(async (req, res) => {
   const dueInfo = await resolveItemDue(pool, itemId);
   const dueDate = dueInfo?.dueUtc ? new Date(dueInfo.dueUtc) : null;
 
-  const labTechId = await getDefaultLabTechId(pool);
+  const userId = await getDefaultUserId(pool);
 
   const request = pool.request();
   request.input('intItemID', sql.Int, itemId);
   request.input('intBorrowerID', sql.Int, borrowerId);
-  request.input('intCheckoutLabTechID', sql.Int, labTechId);
+  request.input('intCheckoutLabTechID', sql.Int, userId);
   request.input('dtmDueUTC', sql.DateTime2, dueDate);
   request.input('strCheckoutNotes', sql.VarChar(400), normalizeString(notes) || null);
 
@@ -1210,7 +1237,7 @@ app.post('/api/tickets', asyncHandler(async (req, res) => {
   const ticketLabel = itemId ? null : normalizeString(item);
 
   const publicId = await generatePublicTicketId(pool);
-  const labTechId = await getDefaultLabTechId(pool);
+  const userId = await getDefaultUserId(pool);
 
   const request = pool.request();
   request.input('strPublicTicketID', sql.VarChar(20), publicId);
@@ -1218,7 +1245,7 @@ app.post('/api/tickets', asyncHandler(async (req, res) => {
   request.input('intItemID', sql.Int, itemId ?? null);
   request.input('strItemLabel', sql.VarChar(120), ticketLabel);
   request.input('strIssue', sql.VarChar(1000), issueText);
-  request.input('intAssignedLabTechID', sql.Int, labTechId);
+  request.input('intAssignedLabTechID', sql.Int, userId);
 
   const result = await request.execute('dbo.usp_ServiceTicketCreate');
   const ticketId = result.recordset?.[0]?.intServiceTicketID ?? null;
@@ -1396,7 +1423,7 @@ app.post('/api/status', asyncHandler(async (req, res) => {
   }
 
   const pool = await getPool();
-  const labTechId = await getDefaultLabTechId(pool);
+  const userId = await getDefaultUserId(pool);
   const trimmedNote = normalizeString(note) || null;
 
   if(type === 'Loan'){
@@ -1423,7 +1450,7 @@ app.post('/api/status', asyncHandler(async (req, res) => {
     if(statusText === 'Returned'){
       const checkinReq = pool.request();
       checkinReq.input('intItemLoanID', sql.Int, loanId);
-      checkinReq.input('intCheckinLabTechID', sql.Int, labTechId);
+      checkinReq.input('intCheckinLabTechID', sql.Int, userId);
       checkinReq.input('strCheckinNotes', sql.VarChar(400), trimmedNote);
       await checkinReq.execute('dbo.usp_CheckinItem');
     } else {
@@ -1448,7 +1475,7 @@ app.post('/api/status', asyncHandler(async (req, res) => {
       if(trimmedNote){
         const noteReq = pool.request();
         noteReq.input('intItemLoanID', sql.Int, loanId);
-        noteReq.input('intLabTechID', sql.Int, labTechId);
+        noteReq.input('intLabTechID', sql.Int, userId);
         noteReq.input('strNote', sql.VarChar(1000), trimmedNote);
         await noteReq.execute('dbo.usp_AddLoanNote');
       }
@@ -1469,13 +1496,13 @@ app.post('/api/status', asyncHandler(async (req, res) => {
     const statusReq = pool.request();
     statusReq.input('intServiceTicketID', sql.Int, ticketId);
     statusReq.input('strStatus', sql.VarChar(30), statusText);
-    statusReq.input('intLabTechID', sql.Int, labTechId);
+    statusReq.input('intLabTechID', sql.Int, userId);
     await statusReq.execute('dbo.usp_ServiceTicketSetStatus');
 
     if(trimmedNote){
       const noteReq = pool.request();
       noteReq.input('intServiceTicketID', sql.Int, ticketId);
-      noteReq.input('intLabTechID', sql.Int, labTechId);
+      noteReq.input('intLabTechID', sql.Int, userId);
       noteReq.input('strNote', sql.VarChar(1000), trimmedNote);
       await noteReq.execute('dbo.usp_AddServiceTicketNote');
     }
@@ -1522,11 +1549,13 @@ app.post('/api/users', asyncHandler(async (req, res) => {
   try {
     await pool.request()
       .input('Username', sql.VarChar(120), user)
-      .input('Display', sql.VarChar(150), displayName)
+      .input('Display', sql.VarChar(150), cappedDisplayName)
+      .input('First', sql.VarChar(50), firstLimited)
+      .input('Last', sql.VarChar(50), lastLimited)
       .input('Role', sql.VarChar(50), roleName)
       .query(`
-        INSERT INTO dbo.TAppUsers(strUsername,strDisplayName,strRole)
-        VALUES (@Username,@Display,@Role);
+        INSERT INTO dbo.TLabTechs(strUsername,strDisplayName,strFirstName,strLastName,strRole)
+        VALUES (@Username,@Display,@First,@Last,@Role);
       `);
   } catch(err){
     if(err && (err.number === 2627 || err.number === 2601)){
@@ -1593,10 +1622,88 @@ app.delete('/api/users/:username', asyncHandler(async (req, res) => {
 
   const result = await pool.request()
     .input('Username', sql.VarChar(120), username)
+    .input('Display', sql.VarChar(150), cappedDisplayName)
+    .input('First', sql.VarChar(50), firstLimited)
+    .input('Last', sql.VarChar(50), lastLimited)
+    .input('Role', sql.VarChar(50), roleName)
     .query(`
-      DELETE FROM dbo.TAppUsers WHERE strUsername = @Username;
+      UPDATE dbo.TLabTechs
+      SET strDisplayName = @Display,
+          strFirstName = @First,
+          strLastName = @Last,
+          strRole = @Role
+      WHERE strUsername = @Username;
+      SELECT @@ROWCOUNT AS updated;
+    `);
+
+  const updated = result.recordset?.[0]?.updated ?? 0;
+  if(!updated){
+    return res.status(404).json({ error: 'User not found.' });
+  }
+
+  const detail = await pool.request()
+    .input('Username', sql.VarChar(120), username)
+    .query(`
+      SELECT intLabTechID, strUsername, strDisplayName, strRole, dtmCreated
+      FROM dbo.TLabTechs
+      WHERE strUsername = @Username;
+    `);
+
+  res.json(mapUserRow(detail.recordset?.[0] || null));
+}));
+
+app.delete('/api/users/:username', asyncHandler(async (req, res) => {
+  const username = normalizeString(req.params.username).toLowerCase();
+  if(!username){
+    return res.status(400).json({ error: 'Username required.' });
+  }
+
+  const pool = await getPool();
+  await ensureUserTable(pool);
+
+  const lookup = await pool.request()
+    .input('Username', sql.VarChar(120), username)
+    .query(`
+      SELECT intLabTechID
+      FROM dbo.TLabTechs
+      WHERE strUsername = @Username;
+    `);
+
+  const userId = lookup.recordset?.[0]?.intLabTechID ?? null;
+  if(!userId){
+    return res.status(404).json({ error: 'User not found.' });
+  }
+
+  const dependency = await pool.request()
+    .input('UserId', sql.Int, userId)
+    .query(`
+      SELECT
+        (SELECT COUNT(*) FROM dbo.TItemLoans WHERE intCheckoutLabTechID = @UserId OR intCheckinLabTechID = @UserId) AS LoanCount,
+        (SELECT COUNT(*) FROM dbo.TItemLoanNotes WHERE intLabTechID = @UserId) AS LoanNoteCount,
+        (SELECT COUNT(*) FROM dbo.TServiceTickets WHERE intAssignedLabTechID = @UserId) AS TicketCount,
+        (SELECT COUNT(*) FROM dbo.TServiceTicketNotes WHERE intLabTechID = @UserId) AS TicketNoteCount,
+        (SELECT COUNT(*) FROM dbo.TAuditLog WHERE intLabTechID = @UserId) AS AuditCount;
+    `);
+
+  const row = dependency.recordset?.[0] || {};
+  const totalReferences =
+    (row.LoanCount ?? 0) +
+    (row.LoanNoteCount ?? 0) +
+    (row.TicketCount ?? 0) +
+    (row.TicketNoteCount ?? 0) +
+    (row.AuditCount ?? 0);
+
+  if(totalReferences > 0){
+    return res.status(409).json({ error: 'Cannot delete user with historical activity. Clear related records first.' });
+  }
+
+  const result = await pool.request()
+    .input('UserId', sql.Int, userId)
+    .query(`
+      DELETE FROM dbo.TLabTechs WHERE intLabTechID = @UserId;
       SELECT @@ROWCOUNT AS deleted;
     `);
+
   const deleted = result.recordset?.[0]?.deleted ?? 0;
   if(!deleted){
     return res.status(404).json({ error: 'User not found.' });

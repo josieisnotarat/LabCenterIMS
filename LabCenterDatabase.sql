@@ -28,6 +28,7 @@ IF OBJECT_ID('dbo.TItems','U')             IS NOT NULL DROP TABLE dbo.TItems;
 IF OBJECT_ID('dbo.TBorrowerAliases','U')   IS NOT NULL DROP TABLE dbo.TBorrowerAliases;
 IF OBJECT_ID('dbo.TBorrowers','U')         IS NOT NULL DROP TABLE dbo.TBorrowers;
 IF OBJECT_ID('dbo.TLabTechs','U')          IS NOT NULL DROP TABLE dbo.TLabTechs;
+IF OBJECT_ID('dbo.TAppUsers','U')          IS NOT NULL DROP TABLE dbo.TAppUsers; -- legacy cleanup
 IF OBJECT_ID('dbo.TDepartments','U')       IS NOT NULL DROP TABLE dbo.TDepartments;
 GO
 
@@ -41,12 +42,16 @@ CREATE TABLE dbo.TDepartments
 CREATE TABLE dbo.TLabTechs
 (
     intLabTechID        INT IDENTITY(1,1) PRIMARY KEY,
+    strUsername         VARCHAR(120) NOT NULL UNIQUE,
+    strDisplayName      VARCHAR(150) NOT NULL,
     strFirstName        VARCHAR(50)  NOT NULL,
     strLastName         VARCHAR(50)  NOT NULL,
     strEmail            VARCHAR(120) NULL,
     strPhoneNumber      VARCHAR(25)  NULL,
+    strRole             VARCHAR(50)  NOT NULL,
     blnIsActive         BIT          NOT NULL CONSTRAINT DF_TLabTechs_IsActive DEFAULT (1),
-    dtmCreated          DATETIME2(0) NOT NULL CONSTRAINT DF_TLabTechs_Created  DEFAULT (SYSUTCDATETIME())
+    dtmCreated          DATETIME2(0) NOT NULL CONSTRAINT DF_TLabTechs_Created  DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT CK_TLabTechs_Role CHECK (strRole IN ('admin','co-op'))
 );
 
 CREATE TABLE dbo.TBorrowers
@@ -191,7 +196,11 @@ CREATE INDEX IX_TAuditLog_EventUTC ON dbo.TAuditLog(dtmEventUTC DESC);
 
 -- Basic seed (optional)
 INSERT dbo.TDepartments(strDepartmentName) VALUES ('Electrical Engineering Tech'),('IT / Software'),('Media');
-INSERT dbo.TLabTechs(strFirstName,strLastName,strEmail) VALUES ('Josie','Wooldridge','j.wooldridge@example.edu'),('Alex','Smith','a.smith@example.edu'),('Kris','Jones','k.jones@example.edu');
+INSERT dbo.TLabTechs(strUsername,strDisplayName,strFirstName,strLastName,strEmail,strRole)
+VALUES
+    ('jwooldridge','Josie Wooldridge','Josie','Wooldridge','j.wooldridge@example.edu','admin'),
+    ('asmith','Alex Smith','Alex','Smith','a.smith@example.edu','admin'),
+    ('kjones','Kris Jones','Kris','Jones','k.jones@example.edu','co-op');
 
 
 

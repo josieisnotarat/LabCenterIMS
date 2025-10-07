@@ -1200,10 +1200,7 @@
               Borrowing: New vs Returning handles different required fields.
             </li>
             <li>Service: Diagnose → Awaiting Parts → Ready for Pickup.</li>
-            <li>
-              Admin: Create/Delete Users with role: <em>inventory</em>,
-              <em>order</em>, <em>runner</em>.
-            </li>
+            <li>Admin: Manage users with <em>Admin</em> or <em>Co-Op</em> roles.</li>
           </ul>
         </div>
         <div class="modal-ft">
@@ -1676,24 +1673,37 @@
       </form>
     </dialog>
 
-    <!-- Admin: Delete User -->
-    <dialog id="dlg-delete-user">
-      <form method="dialog" id="form-delete-user" novalidate>
+    <!-- Admin: Edit User -->
+    <dialog id="dlg-edit-user">
+      <form method="dialog" id="form-edit-user" novalidate>
         <div class="modal-hd">
-          <strong>Delete User</strong>
+          <strong>Edit User</strong>
           <button class="btn" value="close">Close</button>
         </div>
         <div class="modal-bd">
-          <label>Username</label>
-          <input id="du-username" required placeholder="j.wooldridge" />
-          <p class="hint">
-            This action writes to the audit log with a trace #.
-          </p>
+          <input type="hidden" id="eu-username-hidden" />
+          <div class="form-grid">
+            <div>
+              <label>Username</label>
+              <input id="eu-username" readonly />
+            </div>
+            <div>
+              <label>Display Name</label>
+              <input id="eu-display" required />
+            </div>
+            <div class="full">
+              <label>Role</label>
+              <select id="eu-role" required>
+                <option value="admin">Admin</option>
+                <option value="co-op">Co-Op</option>
+              </select>
+            </div>
+          </div>
         </div>
         <div class="modal-ft">
           <button class="btn" value="close">Cancel</button>
-          <button class="btn primary" id="du-delete">
-            <span>Delete</span><span class="spinner" aria-hidden="true"></span>
+          <button class="btn primary" id="eu-save">
+            <span>Save Changes</span><span class="spinner" aria-hidden="true"></span>
           </button>
         </div>
       </form>
@@ -2167,7 +2177,7 @@
             meta.className = "note-meta";
 
             const author = document.createElement("span");
-            author.textContent = entry.author || "Lab Tech";
+            author.textContent = entry.author || "User";
 
             const time = document.createElement("time");
             if (entry.timestamp) {
@@ -4283,6 +4293,29 @@
             if (id) {
               fnOpenInventoryItemDialog(id);
             }
+            const deleteBtn = event.target.closest("[data-delete-item]");
+            if (deleteBtn) {
+              const id = deleteBtn.dataset.deleteItem;
+              if (id) {
+                fnDeleteInventoryItem(deleteBtn, id);
+              }
+            }
+          });
+        }
+
+        const clearLogButton = document.getElementById("btn-clear-log");
+        if (clearLogButton) {
+          clearLogButton.addEventListener("click", () => {
+            fnClearAuditLog(clearLogButton);
+          });
+        }
+
+        const clearDatabaseButton = document.getElementById(
+          "btn-clear-database",
+        );
+        if (clearDatabaseButton) {
+          clearDatabaseButton.addEventListener("click", () => {
+            fnClearDatabase(clearDatabaseButton);
           });
         }
 
