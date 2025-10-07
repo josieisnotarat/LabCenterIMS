@@ -921,7 +921,7 @@ app.delete('/api/customers/:id/aliases/:aliasId', asyncHandler(async (req, res) 
 }));
 
 app.post('/api/customers', asyncHandler(async (req, res) => {
-  const { first, last, schoolId, phone, room, instructor, dept } = req.body || {};
+  const { first, last, schoolId, phone, room, instructor } = req.body || {};
   const firstName = normalizeString(first);
   const lastName = normalizeString(last);
   if(!firstName || !lastName){
@@ -929,7 +929,6 @@ app.post('/api/customers', asyncHandler(async (req, res) => {
   }
 
   const pool = await getPool();
-  const departmentId = await ensureDepartment(pool, dept);
 
   try {
     const request = pool.request();
@@ -939,7 +938,6 @@ app.post('/api/customers', asyncHandler(async (req, res) => {
     request.input('strPhoneNumber', sql.VarChar(25), normalizeString(phone) || null);
     request.input('strRoomNumber', sql.VarChar(25), normalizeString(room) || null);
     request.input('strInstructor', sql.VarChar(100), normalizeString(instructor) || null);
-    request.input('intDepartmentID', sql.Int, departmentId ?? null);
     const result = await request.execute('dbo.usp_CreateBorrower');
     const borrowerId = result.recordset?.[0]?.intBorrowerID ?? null;
     res.status(201).json({ id: borrowerId });
@@ -949,6 +947,21 @@ app.post('/api/customers', asyncHandler(async (req, res) => {
     }
     throw err;
   }
+}));
+
+app.get('/api/items', asyncHandler(async (req, res) => {
+  const pool = await getPool();
+  const request = pool.request();
+  const result = await request.query(`
+    SELECT intItemID, strItemName
+    FROM dbo.TItems
+    ORDER BY strItemName ASC;
+  `);
+  const entries = result.recordset?.map(row => ({
+    id: row.intItemID ?? null,
+    name: row.strItemName || ''
+  })) || [];
+  res.json({ entries });
 }));
 
 app.get('/api/items/due-preview', asyncHandler(async (req, res) => {
@@ -1081,7 +1094,7 @@ app.post('/api/items', asyncHandler(async (req, res) => {
     res.status(201).json({ itemId });
   } catch(err){
     if(err && (err.number === 2627 || err.number === 2601)){
-      return res.status(409).json({ error: 'An item with that number already exists.' });
+      return res.status(409).json({ error: 'An item with that name already exists.' });
     }
     throw err;
   }

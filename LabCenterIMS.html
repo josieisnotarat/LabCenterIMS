@@ -1104,17 +1104,20 @@
               <input
                 id="nc-schoolid"
                 pattern="\\d{5,8}"
-                placeholder="e.g., 0234567"
+                placeholder="e.g., 12345"
+                inputmode="numeric"
               />
-              <div class="hint">5–7 digits, 0 as first digit.</div>
+              <div class="hint">5–8 digits, numbers only.</div>
             </div>
             <div>
               <label>Phone</label>
               <input
                 id="nc-phone"
                 placeholder="5555555555"
-                length=10
+                pattern="\\d{10}"
+                inputmode="numeric"
               />
+              <div class="hint">10 digits, no formatting.</div>
             </div>
             <div>
               <label>Room</label>
@@ -1128,12 +1131,10 @@
 
             <!-- Borrow specifics -->
             <div class="full" data-bind="borrow">
-              <label>Item (name or number)</label>
-              <input
-                id="nc-item"
-                placeholder="e.g., Oscilloscope #S7"
-                autocomplete="off"
-              />
+              <label>Item</label>
+              <select id="nc-item">
+                <option value="">Select an item…</option>
+              </select>
             </div>
             <div
               class="full due-preview"
@@ -1154,7 +1155,9 @@
             <!-- Service specifics -->
             <div class="full" data-bind="service" style="display: none">
               <label>Item Being Serviced</label>
-              <input id="ns-item" placeholder="e.g., Lab Laptop 15" />
+              <select id="ns-item">
+                <option value="">Select an item…</option>
+              </select>
             </div>
             <div class="full" data-bind="service" style="display: none">
               <label>Issue Description</label>
@@ -1190,7 +1193,8 @@
               <input
                 id="rb-id"
                 placeholder="or leave blank & use name lookup"
-                pattern="\\d{5,10}"
+                pattern="\\d{5,8}"
+                inputmode="numeric"
               />
             </div>
             <div>
@@ -1212,12 +1216,10 @@
               </div>
             </div>
             <div class="full">
-              <label>Item (name or number)</label>
-              <input
-                id="rb-item"
-                required
-                placeholder="e.g., Raspberry Pi 5 or #S7"
-              />
+              <label>Item</label>
+              <select id="rb-item" required>
+                <option value="">Select an item…</option>
+              </select>
             </div>
             <div
               class="full due-preview"
@@ -1258,7 +1260,8 @@
               <input
                 id="rs-id"
                 placeholder="or name lookup"
-                pattern="\\d{5,10}"
+                pattern="\\d{5,8}"
+                inputmode="numeric"
               />
             </div>
             <div>
@@ -1281,11 +1284,9 @@
             </div>
             <div class="full">
               <label>Item Being Serviced</label>
-              <input
-                id="rs-item"
-                required
-                placeholder="e.g., Multimeter #A12"
-              />
+              <select id="rs-item" required>
+                <option value="">Select an item…</option>
+              </select>
             </div>
             <div class="full">
               <label>Issue</label>
@@ -1374,10 +1375,6 @@
             <div class="full">
               <label>Item Name</label>
               <input id="ci-name" required placeholder="e.g., Trainer #34" />
-            </div>
-            <div>
-              <label>Item Number</label>
-              <input id="ci-number" placeholder="optional" />
             </div>
             <div>
               <label>Department</label>
@@ -1730,12 +1727,21 @@
             const elDialog = document.getElementById(strDialogId);
             if (!elDialog) return;
             const strAction = elTrigger.dataset.action;
-            if (strDialogId === "dlg-new-customer" && strAction) {
-              const elActionSelect = elDialog.querySelector("#nc-action");
-              if (elActionSelect) {
-                elActionSelect.value = strAction;
-                elActionSelect.dispatchEvent(new Event("change"));
+            if (strDialogId === "dlg-new-customer") {
+              const elForm = elDialog.querySelector("form");
+              elForm?.reset();
+              fnSetNewCustomerDialogMode(elDialog, strAction);
+              const preview = elDialog.querySelector("#nc-due-preview");
+              if (preview) {
+                const message =
+                  preview.dataset.defaultMessage ||
+                  "Due date will be assigned automatically from the item's policy.";
+                preview.textContent = message;
               }
+              requestAnimationFrame(() => {
+                const focusTarget = elDialog.querySelector("#nc-first");
+                focusTarget?.focus();
+              });
             }
             if (strDialogId === "dlg-returning-borrow") {
               const elForm = document.getElementById("form-returning-borrow");
@@ -1831,24 +1837,11 @@
         fnApplyRowStatusStyles();
 
         // ====== NEW CUSTOMER action-type toggle ======
-        (function () {
-          const dlg = document.getElementById("dlg-new-customer");
-          const sel = dlg.querySelector("#nc-action");
-          const toggle = () => {
-            const isBorrow = sel.value === "borrow";
-            dlg
-              .querySelectorAll('[data-bind="borrow"]')
-              .forEach((el) => (el.style.display = isBorrow ? "" : "none"));
-            dlg
-              .querySelectorAll('[data-bind="service"]')
-              .forEach((el) => (el.style.display = isBorrow ? "none" : ""));
-          };
-          sel.addEventListener("change", toggle);
-          toggle();
-        })();
+        fnSetNewCustomerDialogMode(null, "borrow");
 
         // ====== NOTE HISTORY SUPPORT ======
         const m_mapDetailNoteCache = new Map();
+        let m_arrItemOptions = [];
         let m_strActiveDetailNoteKey = null;
         let m_objActiveCustomerProfile = null;
         let m_intProfileSearchToken = 0;
@@ -2336,6 +2329,30 @@
           }
         }
 
+        async function fnLoadItemOptions() {
+          try {
+            const items = await fnFetchItems();
+            const normalized = Array.isArray(items)
+              ? items
+                  .filter((item) => item && item.name)
+                  .map((item) => ({
+                    id: item.id ?? null,
+                    name: item.name || "",
+                  }))
+              : [];
+            normalized.sort((a, b) => a.name.localeCompare(b.name, undefined, {
+              sensitivity: "base",
+            }));
+            m_arrItemOptions = normalized;
+            ["nc-item", "rb-item", "ns-item", "rs-item"].forEach((id) => {
+              const select = document.getElementById(id);
+              if (select) fnPopulateItemSelect(select, normalized);
+            });
+          } catch (err) {
+            console.error("Failed to load inventory items", err);
+          }
+        }
+
         // ====== VALIDATION HELPERS ======
         // Tiny validation helpers shared by multiple forms.
         function fnMust(cond, msg) {
@@ -2415,8 +2432,8 @@
           preview.dataset.defaultMessage = defaultText;
           let token = 0;
 
-          const update = fnDebounce(async () => {
-            const query = input.value.trim();
+          const runLookup = async () => {
+            const query = (input.value || "").trim();
             const currentToken = ++token;
             if (!query) {
               preview.textContent = defaultText;
@@ -2436,17 +2453,75 @@
               preview.textContent =
                 "Unable to determine due date for that item.";
             }
-          }, 250);
+          };
 
-          input.addEventListener("input", () => {
-            if (!input.value.trim()) {
-              preview.textContent = defaultText;
-            }
-            update();
-          });
-          input.addEventListener("blur", () => {
-            setTimeout(update, 0);
-          });
+          const isSelect = input.tagName === "SELECT";
+          const update = isSelect ? runLookup : fnDebounce(runLookup, 250);
+
+          if (isSelect) {
+            input.addEventListener("change", () => {
+              if (!input.value) {
+                preview.textContent = defaultText;
+                token++;
+                return;
+              }
+              update();
+            });
+          } else {
+            input.addEventListener("input", () => {
+              if (!input.value.trim()) {
+                preview.textContent = defaultText;
+              }
+              update();
+            });
+            input.addEventListener("blur", () => {
+              setTimeout(update, 0);
+            });
+          }
+        }
+
+        function fnSetNewCustomerDialogMode(dialog, mode) {
+          const dlg = dialog || document.getElementById("dlg-new-customer");
+          if (!dlg) return;
+          const action = mode === "service" ? "service" : "borrow";
+          dlg.dataset.action = action;
+          dlg
+            .querySelectorAll('[data-bind="borrow"]')
+            .forEach((el) => (el.style.display = action === "borrow" ? "" : "none"));
+          dlg
+            .querySelectorAll('[data-bind="service"]')
+            .forEach((el) => (el.style.display = action === "service" ? "" : "none"));
+        }
+
+        function fnPopulateItemSelect(select, items) {
+          if (!select) return;
+          const existingPlaceholder = Array.from(select.querySelectorAll("option"))
+            .find((opt) => opt.value === "")?.textContent;
+          const placeholderText = (existingPlaceholder || "Select an item…").trim();
+          const previousValue = select.value;
+          select.textContent = "";
+          const placeholder = document.createElement("option");
+          placeholder.value = "";
+          placeholder.textContent = placeholderText;
+          select.appendChild(placeholder);
+          items
+            .filter((item) => item && item.name)
+            .forEach((item) => {
+              const option = document.createElement("option");
+              option.value = item.name;
+              option.textContent = item.name;
+              if (item.id != null) option.dataset.itemId = item.id;
+              select.appendChild(option);
+            });
+          if (
+            previousValue &&
+            Array.from(select.options).some((opt) => opt.value === previousValue)
+          ) {
+            select.value = previousValue;
+            select.dispatchEvent(new Event("change"));
+          } else {
+            select.value = "";
+          }
         }
 
         function fnSetupBorrowerLookup({
@@ -2723,6 +2798,15 @@
             method: "GET",
           });
           return res.json();
+        }
+
+        async function fnFetchItems() {
+          const res = await fnApi(`/items`, { method: "GET" });
+          const payload = await res.json();
+          if (Array.isArray(payload)) return payload;
+          if (Array.isArray(payload?.entries)) return payload.entries;
+          if (Array.isArray(payload?.data)) return payload.data;
+          return [];
         }
 
         async function fnCreateCustomerAlias(id, alias) {
@@ -3095,7 +3179,8 @@
           fnWithAsyncBusy(fnSelectElement("#nc-save"), async () => {
             const first = fnSelectElement("#nc-first").value.trim();
             const last = fnSelectElement("#nc-last").value.trim();
-            const action = fnSelectElement("#nc-action").value;
+            const dlg = document.getElementById("dlg-new-customer");
+            const action = dlg?.dataset.action === "service" ? "service" : "borrow";
             fnMust(first && last, "First/Last required.");
             if (action === "borrow") {
               fnMust(
@@ -3114,11 +3199,11 @@
             }
             // optional patterns
             const id = fnSelectElement("#nc-schoolid").value;
-            if (id && !/^\d{5,10}$/.test(id))
-              throw new Error("ID must be 5–10 digits.");
+            if (id && !/^\d{5,8}$/.test(id))
+              throw new Error("ID must be 5–8 digits.");
             const phone = fnSelectElement("#nc-phone").value;
-            if (phone && !/^\(\d{3}\) \d{3}-\d{4}$/.test(phone))
-              throw new Error("Phone format: (###) ###-####");
+            if (phone && !/^\d{10}$/.test(phone))
+              throw new Error("Phone must be 10 digits.");
 
             await fnApi("/customers", {
               method: "POST",
@@ -3129,7 +3214,6 @@
                 phone: phone || null,
                 room: fnSelectElement("#nc-room").value || null,
                 instructor: fnSelectElement("#nc-instructor").value || null,
-                dept: fnSelectElement("#nc-dept").value || null,
               }),
             });
 
@@ -3236,7 +3320,6 @@
             const form = document.getElementById("form-create-item");
             const name = fnSelectElement("#ci-name").value.trim();
             fnMust(name, "Item name required.");
-            const number = fnSelectElement("#ci-number").value.trim();
             const dept = fnSelectElement("#ci-dept").value.trim();
             const owned = fnSelectElement("#ci-owned").value !== "external";
             const description = fnSelectElement("#ci-description").value.trim();
@@ -3245,7 +3328,6 @@
 
             const payload = {
               name,
-              number: number || null,
               department: dept || null,
               schoolOwned: owned,
               description: description || null,
@@ -3515,6 +3597,7 @@
         fnLoadBorrowingData();
         fnLoadServiceData();
         fnLoadAuditLog();
+        fnLoadItemOptions();
 
         // keep row colors consistent if DOM changes later
         // Watch for table updates (e.g., new rows inserted) so the status tinting
