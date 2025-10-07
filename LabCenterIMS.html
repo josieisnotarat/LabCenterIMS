@@ -1717,7 +1717,7 @@
         "use strict";
 
         // ====== CONFIG ======
-        const USE_BACKEND = false; // flip to true when your API is running
+        const USE_BACKEND = true; // flip to true when your API is running
         const API_BASE = "/api";
 
         // ====== UTIL ======
@@ -1777,336 +1777,6 @@
           dateStyle: "medium",
           timeStyle: "short",
         });
-
-        // ====== STUB DATA ======
-        let m_intStubLoanId = 4001;
-        let m_intStubTicketId = 7001;
-        let m_intStubCustomerId = 9001;
-        let m_intStubAliasId = 12001;
-        let m_intStubNoteId = 15001;
-        let m_intStubItemId = 6001;
-
-        const STUB_ITEMS = [
-          {
-            id: 501,
-            name: "Nikon D750 Camera",
-            department: "Media Lab",
-            schoolOwned: true,
-            description: "Full-frame DSLR kit with 24-120mm lens.",
-            duePolicy: "NEXT_DAY_6PM",
-            offsetDays: 1,
-            offsetHours: 0,
-            dueTime: "18:00",
-            fixedDue: null,
-            isActive: true,
-            itemNumber: "CAM-51",
-            createdUtc: "2023-08-10T14:00:00Z",
-          },
-          {
-            id: 502,
-            name: "Focusrite Scarlett 2i2",
-            department: "Audio Lab",
-            schoolOwned: true,
-            description: "USB audio interface, 3rd gen.",
-            duePolicy: "SAME_DAY_9PM",
-            offsetDays: 0,
-            offsetHours: 0,
-            dueTime: "21:00",
-            fixedDue: null,
-            isActive: true,
-            itemNumber: "AUD-12",
-            createdUtc: "2023-09-02T16:35:00Z",
-          },
-          {
-            id: 503,
-            name: "Dell Precision 5570",
-            department: "Staff Pool",
-            schoolOwned: false,
-            description: "Loaner laptop for faculty presenters.",
-            duePolicy: "SEMESTER",
-            offsetDays: null,
-            offsetHours: null,
-            dueTime: null,
-            fixedDue: "2024-05-20T22:00:00Z",
-            isActive: false,
-            itemNumber: "LAP-07",
-            createdUtc: "2022-01-14T12:15:00Z",
-          },
-        ];
-
-        const STUB_BORROWERS = [
-          {
-            id: 2401,
-            firstName: "Alice",
-            lastName: "Chen",
-            schoolId: "0123401",
-            phone: "5551237890",
-            room: "ATLC 204",
-            instructor: "Prof. Nguyen",
-            createdUtc: "2023-11-12T18:22:00Z",
-            aliases: [
-              { id: 9101, alias: "Ali", createdUtc: "2023-12-02T14:00:00Z" },
-            ],
-          },
-          {
-            id: 2402,
-            firstName: "Jordan",
-            lastName: "Martinez",
-            schoolId: "0123420",
-            phone: "5559871234",
-            room: "ENG 118",
-            instructor: "Dr. Patel",
-            createdUtc: "2024-01-04T15:10:00Z",
-            aliases: [],
-          },
-          {
-            id: 2403,
-            firstName: "Priya",
-            lastName: "Singh",
-            schoolId: "0123477",
-            phone: "5555551212",
-            room: "SCI 220",
-            instructor: "Dr. Harris",
-            createdUtc: "2024-02-18T12:45:00Z",
-            aliases: [
-              { id: 9102, alias: "P. Singh", createdUtc: "2024-02-18T12:47:00Z" },
-            ],
-          },
-        ];
-
-        const STUB_USERS = [
-          {
-            username: "j.wooldridge",
-            display: "Jamie Wooldridge",
-            role: "Admin",
-            createdUtc: "2023-02-10T15:00:00Z",
-          },
-          {
-            username: "t.nguyen",
-            display: "Trinh Nguyen",
-            role: "Staff",
-            createdUtc: "2023-08-22T13:30:00Z",
-          },
-          {
-            username: "a.patel",
-            display: "Amir Patel",
-            role: "Staff",
-            createdUtc: "2024-01-12T17:05:00Z",
-          },
-        ];
-
-        const STUB_LOANS = [
-          {
-            id: 3101,
-            traceNumber: "003101",
-            itemId: 501,
-            borrowerId: 2401,
-            itemName: "Nikon D750 Camera",
-            itemNumber: "CAM-51",
-            borrowerName: "Alice Chen",
-            borrowerSchoolId: "0123401",
-            room: "ATLC 204",
-            checkoutUtc: "2024-05-04T18:15:00Z",
-            dueUtc: "2024-05-07T22:00:00Z",
-            status: "On Time",
-          },
-          {
-            id: 3102,
-            traceNumber: "003102",
-            itemId: 502,
-            borrowerId: 2402,
-            itemName: "Focusrite Scarlett 2i2",
-            itemNumber: "AUD-12",
-            borrowerName: "Jordan Martinez",
-            borrowerSchoolId: "0123420",
-            room: "ENG 118",
-            checkoutUtc: "2024-05-06T14:05:00Z",
-            dueUtc: "2024-05-06T23:00:00Z",
-            status: "Overdue",
-            checkinUtc: null,
-          },
-          {
-            id: 3103,
-            traceNumber: "003103",
-            itemId: 503,
-            borrowerId: 2403,
-            itemName: "Dell Precision 5570",
-            itemNumber: "LAP-07",
-            borrowerName: "Priya Singh",
-            borrowerSchoolId: "0123477",
-            room: "SCI 220",
-            checkoutUtc: "2024-01-10T16:45:00Z",
-            dueUtc: "2024-05-20T22:00:00Z",
-            status: "Returned",
-            checkinUtc: "2024-04-18T12:20:00Z",
-          },
-        ];
-
-        const STUB_TICKETS = [
-          {
-            id: 5101,
-            publicId: "SR-1021",
-            itemId: 501,
-            borrowerId: 2402,
-            itemName: "Nikon D750 Camera",
-            issue: "Auto-focus motor grinding",
-            loggedUtc: "2024-05-03T13:15:00Z",
-            assignedName: "Jamie Wooldridge",
-            borrowerName: "Jordan Martinez",
-            status: "Diagnosing",
-            loggedByName: "Jamie Wooldridge",
-          },
-          {
-            id: 5102,
-            publicId: "SR-1022",
-            itemId: 502,
-            borrowerId: 2403,
-            itemName: "Focusrite Scarlett 2i2",
-            issue: "USB port loose",
-            loggedUtc: "2024-05-05T17:30:00Z",
-            assignedName: "Trinh Nguyen",
-            borrowerName: "Priya Singh",
-            status: "Awaiting Parts",
-            loggedByName: "Trinh Nguyen",
-          },
-          {
-            id: 5103,
-            publicId: "SR-1018",
-            itemId: 503,
-            borrowerId: 2401,
-            itemName: "Dell Precision 5570",
-            issue: "Won't power on",
-            loggedUtc: "2024-04-12T15:42:00Z",
-            assignedName: "Amir Patel",
-            borrowerName: "Alice Chen",
-            status: "Completed",
-            loggedByName: "Amir Patel",
-          },
-        ];
-
-        const STUB_AUDIT_LOG = [
-          {
-            username: "j.wooldridge",
-            action: "CHECKOUT",
-            trace: 3101,
-            timestamp: "2024-05-04T18:16:00Z",
-            details: {
-              item: "Nikon D750 Camera",
-              itemNumber: "CAM-51",
-              borrower: "Alice Chen",
-              schoolId: "0123401",
-              dueUTC: "2024-05-07T22:00:00Z",
-            },
-          },
-          {
-            username: "t.nguyen",
-            action: "TICKET_CREATE",
-            trace: "SR-1022",
-            timestamp: "2024-05-05T17:31:00Z",
-            details: {
-              item: "Focusrite Scarlett 2i2",
-              borrower: "Priya Singh",
-              issue: "USB port loose",
-            },
-          },
-          {
-            username: "a.patel",
-            action: "NOTE_ADD",
-            trace: "SR-1018",
-            timestamp: "2024-04-13T09:12:00Z",
-            details: {
-              note: "Replaced power adapter and battery.",
-            },
-          },
-        ];
-
-        const STUB_LOAN_NOTES = {
-          3101: [
-            {
-              id: 8101,
-              author: "Jamie Wooldridge",
-              timestamp: "2024-05-04T18:16:30Z",
-              note: "Lens inspected before checkout.",
-            },
-          ],
-          3102: [
-            {
-              id: 8102,
-              author: "Trinh Nguyen",
-              timestamp: "2024-05-06T21:05:00Z",
-              note: "Left voicemail regarding overdue return.",
-            },
-          ],
-        };
-
-        const STUB_TICKET_NOTES = {
-          5101: [
-            {
-              id: 8201,
-              author: "Jamie Wooldridge",
-              timestamp: "2024-05-03T14:02:00Z",
-              note: "Issue replicated; opening body for inspection.",
-            },
-          ],
-          5102: [
-            {
-              id: 8202,
-              author: "Trinh Nguyen",
-              timestamp: "2024-05-06T09:45:00Z",
-              note: "Ordered replacement USB jack from vendor.",
-            },
-          ],
-        };
-
-        const STUB_DUE_POLICIES = {
-          NEXT_DAY_6PM: {
-            label: "Next Day 6:00 PM",
-            compute(now) {
-              const due = new Date(now);
-              due.setDate(due.getDate() + 1);
-              due.setHours(18, 0, 0, 0);
-              return {
-                dueUtc: due.toISOString(),
-                policyDescription: "Due next business day at 6:00 PM",
-              };
-            },
-          },
-          SAME_DAY_9PM: {
-            label: "Same Day 9:00 PM",
-            compute(now) {
-              const due = new Date(now);
-              due.setHours(21, 0, 0, 0);
-              if (due < now) {
-                due.setDate(due.getDate() + 1);
-              }
-              return {
-                dueUtc: due.toISOString(),
-                policyDescription: "Due by facility close (9:00 PM)",
-              };
-            },
-          },
-          SEMESTER: {
-            label: "Semester Loan",
-            compute(now, item) {
-              if (item?.fixedDue) {
-                return {
-                  dueUtc: new Date(item.fixedDue).toISOString(),
-                  policyDescription: "Due at end of semester",
-                };
-              }
-              const due = new Date(now);
-              due.setMonth(due.getMonth() + 4);
-              return {
-                dueUtc: due.toISOString(),
-                policyDescription: "Due at end of term",
-              };
-            },
-          },
-        };
-
-        function fnClone(value) {
-          return structuredClone ? structuredClone(value) : JSON.parse(JSON.stringify(value));
-        }
 
         let m_arrAuditLogEntries = [];
         let m_strAuditSearchTerm = "";
@@ -3071,6 +2741,10 @@
         }
 
         function fnOpenItemForEdit(itemId) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage inventory.");
+            return;
+          }
           const match = m_arrInventoryItems.find(
             (entry) => String(entry.id) === String(itemId),
           );
@@ -3083,6 +2757,10 @@
         }
 
         function fnOpenUserEditModal(username) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage users.");
+            return;
+          }
           const normalized = (username || "").toLowerCase();
           const match = m_arrUserProfiles.find(
             (user) => (user.username || "").toLowerCase() === normalized,
@@ -3162,6 +2840,13 @@
         async function fnLoadUsers() {
           const tbody = document.getElementById("tbl-users");
           if (!tbody) return;
+          if (!USE_BACKEND) {
+            fnShowTableMessage(
+              "tbl-users",
+              "Enable backend to manage users.",
+            );
+            return;
+          }
           try {
             const users = await fnFetchUsers();
             m_arrUserProfiles = (users || []).map((user) => ({
@@ -3180,6 +2865,13 @@
         async function fnLoadInventoryItems() {
           const tbody = document.getElementById("tbl-items");
           if (!tbody) return;
+          if (!USE_BACKEND) {
+            fnShowTableMessage(
+              "tbl-items",
+              "Enable backend to manage inventory.",
+            );
+            return;
+          }
           try {
             const items = await fnFetchItems({ top: 200 });
             const mapped = (items || []).map((item) => ({
@@ -3235,6 +2927,7 @@
         }
 
         async function fnLoadActiveItems() {
+          if (!USE_BACKEND) return;
           try {
             const items = await fnFetchItems({ active: true, top: 200 });
             m_arrActiveItemOptions = (items || []).map((item) => ({
@@ -3482,6 +3175,10 @@
               menu.textContent = "";
               return;
             }
+            if (!USE_BACKEND) {
+              render([], "Enable backend to search names.");
+              return;
+            }
             const token = ++queryToken;
             render([], "Searching…");
             try {
@@ -3584,678 +3281,11 @@
          * USE_BACKEND is false. When a backend is provided this funnels through
          * fetch() and raises if the response is not ok.
          */
-        function fnStubCreateResponse(payload, status = 200) {
-          return {
-            ok: status >= 200 && status < 300,
-            status,
-            async json() {
-              return fnClone(payload);
-            },
-            async text() {
-              if (payload == null) return "";
-              if (typeof payload === "string") return payload;
-              try {
-                return JSON.stringify(payload);
-              } catch {
-                return String(payload);
-              }
-            },
-          };
-        }
-
-        function fnStubNormalizePath(path) {
-          const url = new URL(path, window.location.origin + API_BASE + "/");
-          const segments = url.pathname.replace(/^\/+/, "").split("/");
-          if (segments[0] === "api") segments.shift();
-          return { url, segments };
-        }
-
-        function fnStubFindItemByQuery(query) {
-          const normalized = query.trim().toLowerCase();
-          return STUB_ITEMS.find((item) => {
-            return (
-              item.name.toLowerCase().includes(normalized) ||
-              (item.itemNumber || "").toLowerCase().includes(normalized)
-            );
-          });
-        }
-
-        function fnStubComputeDuePreview(item, now = new Date()) {
-          const policyKey = (item?.duePolicy || "").toUpperCase();
-          const handler = STUB_DUE_POLICIES[policyKey];
-          if (handler) {
-            const result = handler.compute(now, item);
-            if (result) return { ...result, policy: handler.label };
-          }
-          if (item?.fixedDue) {
-            return {
-              dueUtc: new Date(item.fixedDue).toISOString(),
-              policyDescription: "Due on scheduled date",
-            };
-          }
-          const fallback = new Date(now);
-          fallback.setDate(fallback.getDate() + 1);
-          return {
-            dueUtc: fallback.toISOString(),
-            policyDescription: "Due next day",
-          };
-        }
-
-        function fnStubAppendAudit({ action, details, trace, username }) {
-          const entry = {
-            username: username || "system",
-            action,
-            trace: trace ?? null,
-            timestamp: new Date().toISOString(),
-            details: details || null,
-          };
-          STUB_AUDIT_LOG.unshift(entry);
-          if (STUB_AUDIT_LOG.length > 200) STUB_AUDIT_LOG.length = 200;
-        }
-
-        async function fnStubApi(path, opts = {}) {
-          const method = (opts.method || "GET").toUpperCase();
-          const { url, segments } = fnStubNormalizePath(path);
-          const search = url.searchParams;
-
-          const readBody = () => {
-            if (!opts.body) return {};
-            try {
-              return JSON.parse(opts.body);
-            } catch {
-              return {};
-            }
-          };
-
-          const sendNotFound = () =>
-            fnStubCreateResponse({ message: "Not found" }, 404);
-
-          // Dashboard stats
-          if (segments[0] === "dashboard-stats" && method === "GET") {
-            const activeLoans = STUB_LOANS.filter(
-              (loan) => loan.status !== "Returned" && !loan.checkinUtc,
-            );
-            const overdue = activeLoans.filter((loan) => loan.status === "Overdue").length;
-            const dueToday = activeLoans.filter((loan) => {
-              const due = new Date(loan.dueUtc);
-              const now = new Date();
-              return (
-                due.getUTCFullYear() === now.getUTCFullYear() &&
-                due.getUTCMonth() === now.getUTCMonth() &&
-                due.getUTCDate() === now.getUTCDate()
-              );
-            }).length;
-            const stats = {
-              outNow: activeLoans.length,
-              dueToday,
-              repairs: STUB_TICKETS.filter(
-                (ticket) => !["Completed", "Cancelled"].includes(ticket.status),
-              ).length,
-              overdue,
-            };
-            return fnStubCreateResponse(stats);
-          }
-
-          // Loans collection
-          if (segments[0] === "loans" && segments.length === 1 && method === "GET") {
-            const statusFilter = (search.get("status") || "").trim().toLowerCase();
-            const searchTerm = (search.get("search") || "").trim().toLowerCase();
-            let results = STUB_LOANS.slice();
-            if (statusFilter) {
-              results = results.filter((loan) =>
-                (loan.status || "").toLowerCase() === statusFilter,
-              );
-            }
-            if (searchTerm) {
-              results = results.filter((loan) => {
-                return [
-                  loan.itemName,
-                  loan.itemNumber,
-                  loan.borrowerName,
-                  loan.borrowerSchoolId,
-                  loan.traceNumber,
-                ]
-                  .filter(Boolean)
-                  .some((value) => value.toLowerCase().includes(searchTerm));
-              });
-            }
-            results.sort((a, b) =>
-              new Date(b.checkoutUtc || 0) - new Date(a.checkoutUtc || 0),
-            );
-            const top = Number.parseInt(search.get("top") || "", 10);
-            if (Number.isFinite(top) && top > 0) {
-              results = results.slice(0, top);
-            }
-            return fnStubCreateResponse({ entries: results });
-          }
-
-          // Loan notes
-          if (segments[0] === "loans" && segments[2] === "notes" && method === "GET") {
-            const id = Number.parseInt(segments[1], 10);
-            const entries = STUB_LOAN_NOTES[id] ? STUB_LOAN_NOTES[id].slice() : [];
-            return fnStubCreateResponse({ entries });
-          }
-
-          // Service tickets collection
-          if (
-            segments[0] === "service-tickets" &&
-            segments.length === 1 &&
-            method === "GET"
-          ) {
-            const statusFilter = (search.get("status") || "").trim().toLowerCase();
-            const searchTerm = (search.get("search") || "").trim().toLowerCase();
-            let results = STUB_TICKETS.slice();
-            if (statusFilter) {
-              results = results.filter((ticket) =>
-                (ticket.status || "").toLowerCase() === statusFilter,
-              );
-            }
-            if (searchTerm) {
-              results = results.filter((ticket) => {
-                return [
-                  ticket.itemName,
-                  ticket.borrowerName,
-                  ticket.publicId,
-                  ticket.issue,
-                ]
-                  .filter(Boolean)
-                  .some((value) => value.toLowerCase().includes(searchTerm));
-              });
-            }
-            results.sort((a, b) =>
-              new Date(b.loggedUtc || 0) - new Date(a.loggedUtc || 0),
-            );
-            const top = Number.parseInt(search.get("top") || "", 10);
-            if (Number.isFinite(top) && top > 0) {
-              results = results.slice(0, top);
-            }
-            return fnStubCreateResponse({ entries: results });
-          }
-
-          // Ticket notes
-          if (
-            segments[0] === "service-tickets" &&
-            segments[2] === "notes" &&
-            method === "GET"
-          ) {
-            const id = Number.parseInt(segments[1], 10);
-            const entries = STUB_TICKET_NOTES[id] ? STUB_TICKET_NOTES[id].slice() : [];
-            return fnStubCreateResponse({ entries });
-          }
-
-          // Borrower lookup
-          if (segments[0] === "borrowers" && segments[1] === "search" && method === "GET") {
-            const term = (search.get("query") || search.get("q") || "")
-              .trim()
-              .toLowerCase();
-            const limit = Math.min(Number.parseInt(search.get("top") || "8", 10) || 8, 50);
-            if (term.length < 2) {
-              return fnStubCreateResponse({ entries: [] });
-            }
-            const entries = STUB_BORROWERS.filter((borrower) => {
-              const haystack = [
-                borrower.firstName,
-                borrower.lastName,
-                borrower.schoolId,
-                ...(borrower.aliases || []).map((a) => a.alias),
-              ]
-                .filter(Boolean)
-                .map((value) => value.toLowerCase());
-              return haystack.some((value) => value.includes(term));
-            })
-              .slice(0, limit)
-              .map((borrower) => ({
-                id: borrower.id,
-                name: `${borrower.firstName} ${borrower.lastName}`.trim(),
-                schoolId: borrower.schoolId || null,
-              }));
-            return fnStubCreateResponse({ entries });
-          }
-
-          // Customer profiles list
-          if (segments[0] === "customers" && segments.length === 1 && method === "GET") {
-            const searchTerm = (search.get("search") || "").trim().toLowerCase();
-            let results = STUB_BORROWERS.slice();
-            if (searchTerm) {
-              results = results.filter((borrower) => {
-                const haystack = [
-                  borrower.firstName,
-                  borrower.lastName,
-                  borrower.schoolId,
-                  borrower.phone,
-                  borrower.room,
-                  ...(borrower.aliases || []).map((a) => a.alias),
-                ]
-                  .filter(Boolean)
-                  .map((value) => value.toLowerCase());
-                return haystack.some((value) => value.includes(searchTerm));
-              });
-            }
-            const top = Number.parseInt(search.get("top") || "", 10);
-            if (Number.isFinite(top) && top > 0) results = results.slice(0, top);
-            const entries = results.map((borrower) => ({
-              id: borrower.id,
-              name: `${borrower.firstName} ${borrower.lastName}`.trim(),
-              schoolId: borrower.schoolId || "",
-              phone: borrower.phone || "",
-              room: borrower.room || "",
-            }));
-            return fnStubCreateResponse({ entries });
-          }
-
-          // Customer detail
-          if (segments[0] === "customers" && segments.length === 2 && method === "GET") {
-            const id = Number.parseInt(segments[1], 10);
-            const match = STUB_BORROWERS.find((borrower) => borrower.id === id);
-            if (!match) return sendNotFound();
-            return fnStubCreateResponse(match);
-          }
-
-          if (segments[0] === "customers" && method === "POST") {
-            const body = readBody();
-            const id = m_intStubCustomerId++;
-            const first = body.first || body.firstName || "";
-            const last = body.last || body.lastName || "";
-            const now = new Date().toISOString();
-            const entry = {
-              id,
-              firstName: first,
-              lastName: last,
-              schoolId: body.schoolId || null,
-              phone: body.phone || null,
-              room: body.room || null,
-              instructor: body.instructor || null,
-              createdUtc: now,
-              aliases: [],
-            };
-            STUB_BORROWERS.unshift(entry);
-            fnStubAppendAudit({
-              action: "BORROWER_CREATE",
-              username: body.createdBy || "system",
-              trace: id,
-              details: {
-                borrower: `${first} ${last}`.trim(),
-                schoolId: body.schoolId || null,
-              },
-            });
-            return fnStubCreateResponse({ id });
-          }
-
-          if (
-            segments[0] === "customers" &&
-            segments.length === 2 &&
-            (method === "PATCH" || method === "PUT")
-          ) {
-            const id = Number.parseInt(segments[1], 10);
-            const match = STUB_BORROWERS.find((borrower) => borrower.id === id);
-            if (!match) return sendNotFound();
-            const body = readBody();
-            match.firstName = body.first ?? body.firstName ?? match.firstName;
-            match.lastName = body.last ?? body.lastName ?? match.lastName;
-            match.schoolId = body.schoolId ?? match.schoolId;
-            match.phone = body.phone ?? match.phone;
-            match.room = body.room ?? match.room;
-            match.instructor = body.instructor ?? match.instructor;
-            fnStubAppendAudit({
-              action: "NOTE_ADD",
-              trace: id,
-              details: {
-                note: `Updated profile for ${match.firstName} ${match.lastName}`.trim(),
-              },
-            });
-            return fnStubCreateResponse({ success: true });
-          }
-
-          if (
-            segments[0] === "customers" &&
-            segments.length === 2 &&
-            method === "DELETE"
-          ) {
-            const id = Number.parseInt(segments[1], 10);
-            const index = STUB_BORROWERS.findIndex((borrower) => borrower.id === id);
-            if (index === -1) return sendNotFound();
-            const [removed] = STUB_BORROWERS.splice(index, 1);
-            fnStubAppendAudit({
-              action: "NOTE_ADD",
-              trace: id,
-              details: {
-                note: `Deleted profile for ${removed.firstName} ${removed.lastName}`.trim(),
-              },
-            });
-            return fnStubCreateResponse({ success: true });
-          }
-
-          if (
-            segments[0] === "customers" &&
-            segments[2] === "aliases" &&
-            method === "POST"
-          ) {
-            const id = Number.parseInt(segments[1], 10);
-            const body = readBody();
-            const match = STUB_BORROWERS.find((borrower) => borrower.id === id);
-            if (!match) return sendNotFound();
-            const alias = {
-              id: body.id || m_intStubAliasId++,
-              alias: body.alias || body.name || "",
-              createdUtc: new Date().toISOString(),
-            };
-            match.aliases = match.aliases || [];
-            match.aliases.push(alias);
-            fnStubAppendAudit({
-              action: "NOTE_ADD",
-              trace: id,
-              details: { note: `Alias added: ${alias.alias}` },
-            });
-            return fnStubCreateResponse(alias, 201);
-          }
-
-          if (
-            segments[0] === "customers" &&
-            segments[2] === "aliases" &&
-            method === "DELETE"
-          ) {
-            const id = Number.parseInt(segments[1], 10);
-            const aliasId = Number.parseInt(segments[3], 10);
-            const match = STUB_BORROWERS.find((borrower) => borrower.id === id);
-            if (!match) return sendNotFound();
-            match.aliases = (match.aliases || []).filter((alias) => alias.id !== aliasId);
-            fnStubAppendAudit({
-              action: "NOTE_ADD",
-              trace: id,
-              details: { note: `Alias removed (${aliasId})` },
-            });
-            return fnStubCreateResponse({ success: true });
-          }
-
-          if (segments[0] === "loans" && segments[1] === "checkout" && method === "POST") {
-            const body = readBody();
-            const now = new Date();
-            const query = body.item || "";
-            const item = fnStubFindItemByQuery(query) || STUB_ITEMS[0];
-            const borrowerName =
-              body.customerName || body.name || body.borrowerName || "Guest Borrower";
-            const due = fnStubComputeDuePreview(item, now);
-            const id = m_intStubLoanId++;
-            const trace = String(id).padStart(6, "0");
-            const entry = {
-              id,
-              traceNumber: trace,
-              itemId: item?.id ?? null,
-              borrowerId: body.borrowerId ? Number.parseInt(body.borrowerId, 10) : null,
-              itemName: item?.name || query,
-              itemNumber: item?.itemNumber || "",
-              borrowerName,
-              borrowerSchoolId: body.schoolId || null,
-              room: body.room || "",
-              checkoutUtc: now.toISOString(),
-              dueUtc: due?.dueUtc || null,
-              status: "On Time",
-            };
-            STUB_LOANS.unshift(entry);
-            fnStubAppendAudit({
-              action: "CHECKOUT",
-              trace: entry.traceNumber,
-              username: body.actor || "system",
-              details: {
-                item: entry.itemName,
-                borrower: borrowerName,
-                schoolId: entry.borrowerSchoolId || undefined,
-                dueUTC: entry.dueUtc,
-              },
-            });
-            return fnStubCreateResponse({
-              dueUtc: entry.dueUtc,
-              policyDescription: due?.policyDescription || due?.policy,
-            });
-          }
-
-          if (segments[0] === "tickets" && method === "POST") {
-            const body = readBody();
-            const now = new Date();
-            const item = fnStubFindItemByQuery(body.item || "") || STUB_ITEMS[0];
-            const id = m_intStubTicketId++;
-            const publicId = `SR-${id}`;
-            const entry = {
-              id,
-              publicId,
-              itemId: item?.id ?? null,
-              borrowerId: body.borrowerId ? Number.parseInt(body.borrowerId, 10) : null,
-              itemName: item?.name || body.item || "Unknown Item",
-              issue: body.issue || "",
-              loggedUtc: now.toISOString(),
-              assignedName: "Jamie Wooldridge",
-              borrowerName: body.name || body.customerName || "Walk-in",
-              status: "Diagnosing",
-              loggedByName: "Jamie Wooldridge",
-            };
-            STUB_TICKETS.unshift(entry);
-            fnStubAppendAudit({
-              action: "TICKET_CREATE",
-              trace: publicId,
-              username: body.actor || "system",
-              details: {
-                item: entry.itemName,
-                borrower: entry.borrowerName,
-                issue: entry.issue,
-              },
-            });
-            return fnStubCreateResponse({ id, publicId }, 201);
-          }
-
-          if (segments[0] === "status" && method === "POST") {
-            const body = readBody();
-            const id = body.id;
-            const type = (body.type || "").toLowerCase();
-            const note = body.note;
-            const status = body.status;
-            const now = new Date().toISOString();
-            let entry;
-            if (type === "loan") {
-              entry = STUB_LOANS.find((loan) => String(loan.id) === String(id));
-              if (entry) {
-                entry.status = status || entry.status;
-                if (status === "Returned") {
-                  entry.checkinUtc = now;
-                }
-                if (note) {
-                  STUB_LOAN_NOTES[entry.id] = STUB_LOAN_NOTES[entry.id] || [];
-                  STUB_LOAN_NOTES[entry.id].unshift({
-                    id: m_intStubNoteId++,
-                    author: "Lab Tech",
-                    timestamp: now,
-                    note,
-                  });
-                }
-              }
-            } else if (type === "service ticket") {
-              entry = STUB_TICKETS.find((ticket) => String(ticket.id) === String(id));
-              if (entry) {
-                entry.status = status || entry.status;
-                if (note) {
-                  STUB_TICKET_NOTES[entry.id] = STUB_TICKET_NOTES[entry.id] || [];
-                  STUB_TICKET_NOTES[entry.id].unshift({
-                    id: m_intStubNoteId++,
-                    author: "Lab Tech",
-                    timestamp: now,
-                    note,
-                  });
-                }
-              }
-            }
-            fnStubAppendAudit({
-              action: "NOTE_ADD",
-              trace: id,
-              details: {
-                note: note || "Status updated",
-              },
-            });
-            return fnStubCreateResponse({ success: true });
-          }
-
-          if (segments[0] === "users" && segments.length === 1 && method === "GET") {
-            return fnStubCreateResponse({ entries: STUB_USERS.slice() });
-          }
-
-          if (segments[0] === "users" && method === "POST") {
-            const body = readBody();
-            const username = body.username?.trim();
-            if (!username) {
-              return fnStubCreateResponse({ message: "Username required" }, 400);
-            }
-            if (STUB_USERS.some((user) => user.username === username)) {
-              return fnStubCreateResponse({ message: "Username already exists" }, 409);
-            }
-            const entry = {
-              username,
-              display: body.display || body.displayName || username,
-              role: body.role || "Staff",
-              createdUtc: new Date().toISOString(),
-            };
-            STUB_USERS.unshift(entry);
-            fnStubAppendAudit({
-              action: "ITEM_CREATE",
-              trace: username,
-              details: { note: `Created user ${username}` },
-            });
-            return fnStubCreateResponse(entry, 201);
-          }
-
-          if (
-            segments[0] === "users" &&
-            segments.length === 2 &&
-            (method === "PATCH" || method === "PUT")
-          ) {
-            const username = decodeURIComponent(segments[1]);
-            const match = STUB_USERS.find((user) => user.username === username);
-            if (!match) return sendNotFound();
-            const body = readBody();
-            match.display = body.display ?? match.display;
-            match.role = body.role ?? match.role;
-            fnStubAppendAudit({
-              action: "NOTE_ADD",
-              trace: username,
-              details: { note: `Updated user ${username}` },
-            });
-            return fnStubCreateResponse({ success: true });
-          }
-
-          if (segments[0] === "users" && segments.length === 2 && method === "DELETE") {
-            const username = decodeURIComponent(segments[1]);
-            const index = STUB_USERS.findIndex((user) => user.username === username);
-            if (index === -1) return sendNotFound();
-            STUB_USERS.splice(index, 1);
-            fnStubAppendAudit({
-              action: "NOTE_ADD",
-              trace: username,
-              details: { note: `Deleted user ${username}` },
-            });
-            return fnStubCreateResponse({ success: true });
-          }
-
-          if (segments[0] === "items" && segments.length === 1 && method === "GET") {
-            const activeOnly = search.get("active");
-            let items = STUB_ITEMS.slice();
-            if (activeOnly && activeOnly !== "false") {
-              items = items.filter((item) => item.isActive !== false);
-            }
-            const top = Number.parseInt(search.get("top") || "", 10);
-            if (Number.isFinite(top) && top > 0) items = items.slice(0, top);
-            return fnStubCreateResponse({ entries: items });
-          }
-
-          if (segments[0] === "items" && segments[1] === "due-preview" && method === "GET") {
-            const query = (search.get("item") || "").trim();
-            const item = query ? fnStubFindItemByQuery(query) : null;
-            if (!item) {
-              return fnStubCreateResponse({
-                message: "Unable to determine due date for that item.",
-              });
-            }
-            const result = fnStubComputeDuePreview(item, new Date());
-            return fnStubCreateResponse({
-              ...result,
-              policyLabel: result?.policy || STUB_DUE_POLICIES[item.duePolicy]?.label,
-            });
-          }
-
-          if (segments[0] === "items" && method === "POST") {
-            const body = readBody();
-            const id = body.id || m_intStubItemId++;
-            const entry = {
-              id,
-              name: body.name || "Untitled Item",
-              department: body.department || "General",
-              schoolOwned: body.schoolOwned !== false,
-              description: body.description || "",
-              duePolicy: (body.duePolicy || "NEXT_DAY_6PM").toUpperCase(),
-              offsetDays: body.offsetDays ?? null,
-              offsetHours: body.offsetHours ?? null,
-              dueTime: body.dueTime ?? null,
-              fixedDue: body.fixedDue ?? null,
-              isActive: body.isActive !== false,
-              itemNumber: body.itemNumber || `NEW-${id}`,
-              createdUtc: new Date().toISOString(),
-            };
-            STUB_ITEMS.unshift(entry);
-            fnStubAppendAudit({
-              action: "ITEM_CREATE",
-              trace: id,
-              details: { item: entry.name },
-            });
-            return fnStubCreateResponse({ itemId: id, message: "Item saved." }, 201);
-          }
-
-          if (segments[0] === "items" && segments.length === 2 && method === "PUT") {
-            const id = Number.parseInt(segments[1], 10);
-            const match = STUB_ITEMS.find((item) => item.id === id);
-            if (!match) return sendNotFound();
-            const body = readBody();
-            Object.assign(match, {
-              name: body.name ?? match.name,
-              department: body.department ?? match.department,
-              schoolOwned:
-                body.schoolOwned === undefined ? match.schoolOwned : body.schoolOwned !== false,
-              description: body.description ?? match.description,
-              duePolicy: (body.duePolicy || match.duePolicy || "NEXT_DAY_6PM").toUpperCase(),
-              offsetDays: body.offsetDays ?? match.offsetDays,
-              offsetHours: body.offsetHours ?? match.offsetHours,
-              dueTime: body.dueTime ?? match.dueTime,
-              fixedDue: body.fixedDue ?? match.fixedDue,
-              isActive: body.isActive === undefined ? match.isActive : body.isActive !== false,
-            });
-            fnStubAppendAudit({
-              action: "NOTE_ADD",
-              trace: id,
-              details: { item: match.name, note: "Inventory updated" },
-            });
-            return fnStubCreateResponse({ success: true });
-          }
-
-          if (segments[0] === "items" && segments.length === 2 && method === "DELETE") {
-            const id = Number.parseInt(segments[1], 10);
-            const index = STUB_ITEMS.findIndex((item) => item.id === id);
-            if (index === -1) return sendNotFound();
-            const [removed] = STUB_ITEMS.splice(index, 1);
-            fnStubAppendAudit({
-              action: "NOTE_ADD",
-              trace: id,
-              details: { item: removed.name, note: "Item deleted" },
-            });
-            return fnStubCreateResponse({ success: true });
-          }
-
-          if (segments[0] === "audit-log" && method === "GET") {
-            const top = Number.parseInt(search.get("top") || "50", 10);
-            const entries = STUB_AUDIT_LOG.slice(0, Number.isFinite(top) ? top : 50);
-            return fnStubCreateResponse({ entries });
-          }
-
-          return fnStubCreateResponse({ message: "Not implemented" }, 501);
-        }
-
         async function fnApi(path, opts = {}) {
           if (!USE_BACKEND) {
-            return fnStubApi(path, opts);
+            throw new Error(
+              "Backend integration is disabled. Enable USE_BACKEND to load live data.",
+            );
           }
           const res = await fetch(API_BASE + path, {
             ...opts,
@@ -4651,6 +3681,10 @@
         }
 
         async function fnOpenCustomerProfileModal(borrowerId) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage customer profiles.");
+            return;
+          }
           const dlg = document.getElementById("dlg-manage-customer");
           if (!dlg) return;
           fnResetCustomerProfileModal();
@@ -4694,6 +3728,13 @@
           const tbody = document.getElementById(tbodyId);
           if (!tbody) return;
           m_strLastProfileSearchTerm = (term || "").trim();
+          if (!USE_BACKEND) {
+            fnShowTableMessage(
+              tbodyId,
+              "Enable backend to manage customer profiles.",
+            );
+            return;
+          }
           if (
             m_strLastProfileSearchTerm &&
             m_strLastProfileSearchTerm.length < 2
@@ -5430,9 +4471,27 @@
         fnShowTableMessage("tbl-borrow", "Loading recent loans…");
         fnShowTableMessage("tbl-service", "Loading service tickets…");
         fnShowTableMessage("tbl-admin-log", "Loading activity…");
-        fnShowTableMessage("tbl-customer-profiles", "Loading customer profiles…");
-        fnShowTableMessage("tbl-users", "Loading users…");
-        fnShowTableMessage("tbl-items", "Loading inventory…");
+        if (USE_BACKEND) {
+          fnShowTableMessage(
+            "tbl-customer-profiles",
+            "Loading customer profiles…",
+          );
+          fnShowTableMessage("tbl-users", "Loading users…");
+          fnShowTableMessage("tbl-items", "Loading inventory…");
+        } else {
+          fnShowTableMessage(
+            "tbl-customer-profiles",
+            "Enable backend to manage customer profiles.",
+          );
+          fnShowTableMessage(
+            "tbl-users",
+            "Enable backend to manage users.",
+          );
+          fnShowTableMessage(
+            "tbl-items",
+            "Enable backend to manage inventory.",
+          );
+        }
 
         fnLoadHomeData();
         fnLoadBorrowingData();
