@@ -1,4 +1,5 @@
 const path = require('path');
+const crypto = require('crypto');
 const express = require('express');
 const sql = require('mssql');
 
@@ -24,6 +25,10 @@ const dbConfig = {
 
 let pool;
 let cachedDefaultUserId = null;
+
+const SESSION_TIMEOUT_MS = 15 * 60 * 1000;
+const DEFAULT_USER_PASSWORD = 'password123';
+const sessions = new Map();
 
 const USER_ROLE_LABELS = {
   admin: 'Admin',
@@ -119,6 +124,166 @@ function mapTicketRow(row){
     loggedByName: assignedName
   };
 }
+
+function readAuthToken(req){
+  const header = req.headers?.authorization;
+  if(typeof header === 'string'){
+    const match = header.match(/^Bearer\s+(.+)$/i);
+    if(match){
+      const token = match[1]?.trim();
+      if(token){
+        return token;
+      }
+    }
+  }
+  return null;
+}
+
+function getActiveSession(token){
+  if(!token) return null;
+  const record = sessions.get(token);
+  if(!record) return null;
+  if(Date.now() - record.lastActive > SESSION_TIMEOUT_MS){
+    sessions.delete(token);
+    return null;
+  }
+  record.lastActive = Date.now();
+  return record;
+}
+
+function createSession(user){
+  if(!user || user.id == null){
+    throw new Error('Cannot create session without a user id.');
+  }
+  const token = crypto.randomBytes(32).toString('hex');
+  const payload = {
+    id: user.id,
+    username: user.username || null,
+    displayName: user.displayName || null,
+    role: user.role || null,
+    roleLabel: user.roleLabel || getUserRoleLabel(user.role),
+    createdUtc: user.createdUtc || null
+  };
+  sessions.set(token, { user: payload, lastActive: Date.now() });
+  return { token, user: payload };
+}
+
+function destroySession(token){
+  if(!token) return;
+  sessions.delete(token);
+}
+
+function invalidateSessionsForUser(userId){
+  if(userId == null) return;
+  for(const [token, session] of sessions.entries()){
+    if(session.user?.id === userId){
+      sessions.delete(token);
+    }
+  }
+}
+
+function updateSessionsForUser(user){
+  if(!user || user.id == null) return;
+  for(const [, session] of sessions.entries()){
+    if(session.user?.id === user.id){
+      session.user = {
+        id: user.id,
+        username: user.username || null,
+        displayName: user.displayName || null,
+        role: user.role || null,
+        roleLabel: user.roleLabel || getUserRoleLabel(user.role),
+        createdUtc: user.createdUtc || null
+      };
+      session.lastActive = Date.now();
+    }
+  }
+}
+
+function isApiRequest(req){
+  return typeof req.path === 'string' && req.path.startsWith('/api');
+}
+
+function isPublicApiRoute(req){
+  if(req.method === 'POST' && req.path === '/api/login') return true;
+  if(req.method === 'GET' && req.path === '/api/session') return true;
+  return false;
+}
+
+app.use((req, res, next) => {
+  if(!isApiRequest(req)){
+    return next();
+  }
+
+  const token = readAuthToken(req);
+  if(token){
+    const session = getActiveSession(token);
+    if(session){
+      req.user = session.user;
+      req.sessionToken = token;
+    }
+  }
+
+  if(isPublicApiRoute(req)){
+    return next();
+  }
+
+  if(!req.user){
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+
+  return next();
+});
+
+app.post('/api/login', asyncHandler(async (req, res) => {
+  const username = normalizeString(req.body?.username).toLowerCase();
+  const password = normalizeString(req.body?.password);
+  if(!username || !password){
+    return res.status(400).json({ error: 'Username and password are required.' });
+  }
+
+  const pool = await getPool();
+  await ensureUserCredentials(pool);
+
+  const result = await pool.request()
+    .input('Username', sql.VarChar(120), username)
+    .input('Password', sql.VarChar(255), password)
+    .query(`
+      SELECT TOP (1)
+             lt.intLabTechID,
+             lt.strUsername,
+             lt.strDisplayName,
+             lt.strRole,
+             lt.dtmCreated
+      FROM dbo.TLabTechs AS lt
+      INNER JOIN dbo.TLabTechCredentials AS cred ON cred.intLabTechID = lt.intLabTechID
+      WHERE lt.blnIsActive = 1
+        AND lt.strUsername = @Username
+        AND cred.strPasswordHash = HASHBYTES('SHA2_256', @Password);
+    `);
+
+  const row = result.recordset?.[0] || null;
+  if(!row){
+    return res.status(401).json({ error: 'Invalid username or password.' });
+  }
+
+  const user = mapUserRow(row);
+  const session = createSession(user);
+  res.json({ token: session.token, user: session.user });
+}));
+
+app.get('/api/session', asyncHandler(async (req, res) => {
+  if(!req.user){
+    return res.status(401).json({ error: 'Not authenticated.' });
+  }
+  res.json({ user: req.user });
+}));
+
+app.post('/api/logout', asyncHandler(async (req, res) => {
+  if(req.sessionToken){
+    destroySession(req.sessionToken);
+  }
+  res.json({ success: true });
+}));
 
 app.get('/api/dashboard-stats', asyncHandler(async (req, res) => {
   const pool = await getPool();
@@ -823,6 +988,34 @@ async function ensureUserTable(pool){
   `);
 }
 
+async function ensureUserCredentialTable(pool){
+  await pool.request().query(`
+    IF OBJECT_ID('dbo.TLabTechCredentials','U') IS NULL
+    BEGIN
+      CREATE TABLE dbo.TLabTechCredentials
+      (
+        intLabTechID   INT NOT NULL PRIMARY KEY REFERENCES dbo.TLabTechs(intLabTechID) ON DELETE CASCADE,
+        strPasswordHash VARBINARY(32) NOT NULL,
+        dtmUpdated     DATETIME2(0) NOT NULL CONSTRAINT DF_TLabTechCredentials_Updated DEFAULT (SYSUTCDATETIME())
+      );
+    END;
+  `);
+}
+
+async function ensureUserCredentials(pool){
+  await ensureUserTable(pool);
+  await ensureUserCredentialTable(pool);
+  await pool.request()
+    .input('DefaultPassword', sql.VarChar(255), DEFAULT_USER_PASSWORD)
+    .query(`
+      INSERT INTO dbo.TLabTechCredentials(intLabTechID, strPasswordHash)
+      SELECT lt.intLabTechID, HASHBYTES('SHA2_256', @DefaultPassword)
+      FROM dbo.TLabTechs AS lt
+      LEFT JOIN dbo.TLabTechCredentials AS cred ON cred.intLabTechID = lt.intLabTechID
+      WHERE cred.intLabTechID IS NULL;
+    `);
+}
+
 function mapUserRow(row){
   if(!row) return null;
   const canonicalRole = normalizeUserRole(row.strRole);
@@ -1221,7 +1414,7 @@ app.post('/api/loans/checkout', asyncHandler(async (req, res) => {
   const dueInfo = await resolveItemDue(pool, itemId);
   const dueDate = dueInfo?.dueUtc ? new Date(dueInfo.dueUtc) : null;
 
-  const userId = await getDefaultUserId(pool);
+  const userId = req.user?.id ?? await getDefaultUserId(pool);
 
   const request = pool.request();
   request.input('intItemID', sql.Int, itemId);
@@ -1255,7 +1448,7 @@ app.post('/api/tickets', asyncHandler(async (req, res) => {
   const ticketLabel = itemId ? null : normalizeString(item);
 
   const publicId = await generatePublicTicketId(pool);
-  const userId = await getDefaultUserId(pool);
+  const userId = req.user?.id ?? await getDefaultUserId(pool);
 
   const request = pool.request();
   request.input('strPublicTicketID', sql.VarChar(20), publicId);
@@ -1561,7 +1754,7 @@ app.post('/api/status', asyncHandler(async (req, res) => {
   }
 
   const pool = await getPool();
-  const userId = await getDefaultUserId(pool);
+  const userId = req.user?.id ?? await getDefaultUserId(pool);
   const trimmedNote = normalizeString(note) || null;
 
   if(type === 'Loan'){
@@ -1709,6 +1902,8 @@ app.post('/api/users', asyncHandler(async (req, res) => {
     throw err;
   }
 
+  await ensureUserCredentials(pool);
+
   res.status(201).json({ username: user });
 }));
 
@@ -1764,7 +1959,11 @@ app.put('/api/users/:username', asyncHandler(async (req, res) => {
       WHERE strUsername = @Username;
     `);
 
-  res.json(mapUserRow(detail.recordset?.[0] || null));
+  const mapped = mapUserRow(detail.recordset?.[0] || null);
+  if(mapped){
+    updateSessionsForUser(mapped);
+  }
+  res.json(mapped);
 }));
 
 app.delete('/api/users/:username', asyncHandler(async (req, res) => {
@@ -1823,6 +2022,8 @@ app.delete('/api/users/:username', asyncHandler(async (req, res) => {
   if(!deleted){
     return res.status(404).json({ error: 'User not found.' });
   }
+
+  invalidateSessionsForUser(userId);
 
   res.json({ success: true });
 }));
