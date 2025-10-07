@@ -193,7 +193,13 @@
         background: var(--surface);
         border-color: var(--line);
       }
-      body:has(#admin.screen:target) .nav-link[href="#admin"] {
+      body:has(#admin-action-log.screen:target)
+        .nav-link[href="#admin-action-log"],
+      body:has(#admin-customers.screen:target)
+        .nav-link[href="#admin-customers"],
+      body:has(#admin-users.screen:target) .nav-link[href="#admin-users"],
+      body:has(#admin-inventory.screen:target)
+        .nav-link[href="#admin-inventory"] {
         background: var(--surface);
         border-color: var(--line);
       }
@@ -331,6 +337,9 @@
       tr.clickable {
         cursor: pointer;
       }
+      tr.clickable:hover {
+        background: rgba(17, 24, 39, 0.04);
+      }
 
       /* consistent row emphasis */
       tr.is-overdue {
@@ -407,6 +416,14 @@
       }
       .btn.primary:hover {
         filter: brightness(0.96);
+      }
+      .btn.danger {
+        background: var(--overdue-bg);
+        color: var(--overdue-fg);
+        border-color: rgba(185, 28, 28, 0.35);
+      }
+      .btn.danger:hover {
+        filter: brightness(0.98);
       }
       .spinner {
         width: 14px;
@@ -695,7 +712,10 @@
         <div class="push-bottom">
           <div class="nav-title">Admin</div>
           <nav>
-            <a class="nav-link" href="#admin">Admin Options</a>
+            <a class="nav-link" href="#admin-action-log">Action Log</a>
+            <a class="nav-link" href="#admin-customers">Customer Management</a>
+            <a class="nav-link" href="#admin-users">User Management</a>
+            <a class="nav-link" href="#admin-inventory">Inventory Management</a>
           </nav>
         </div>
       </aside>
@@ -922,102 +942,47 @@
             </div>
           </section>
 
-          <!-- ADMIN -->
-          <section id="admin" class="screen" aria-labelledby="admin-title">
-            <div class="card" style="margin-bottom: 14px">
-              <h2 id="admin-title">Admin Options</h2>
-              <div class="body">
-                <div class="toolbar" style="justify-content: space-between">
-                  <div style="display: flex; gap: 8px; flex-wrap: wrap">
-                    <button class="btn" data-open="dlg-create-item">
-                      <span>Add Inventory Item</span>
-                    </button>
-                    <button class="btn" data-open="dlg-create-user">
-                      <span>Create User</span>
-                    </button>
-                    <button class="btn" data-open="dlg-delete-user">
-                      <span>Delete User</span>
-                    </button>
-                  </div>
-                  <div class="search" role="search">
-                    <input
-                      id="search-admin"
-                      type="text"
-                      placeholder="Search user or action…"
-                      aria-label="Search"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="card" style="margin-bottom: 14px">
-              <h2
-                style="
-                  border-bottom: 1px solid var(--line);
-                  padding: 12px 14px;
-                  margin: 0;
-                "
-              >
-                Customer Profiles
-              </h2>
+          <!-- ADMIN: ACTION LOG -->
+          <section
+            id="admin-action-log"
+            class="screen"
+            aria-labelledby="admin-action-title"
+          >
+            <div class="card">
+              <h2 id="admin-action-title">Action Log</h2>
               <div class="body">
                 <div
                   class="toolbar"
-                  style="justify-content: space-between; align-items: center"
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    gap: 12px;
+                    flex-wrap: wrap;
+                    align-items: center;
+                  "
                 >
-                  <p class="hint" style="margin: 0; max-width: 420px">
-                    Search for an existing customer to review their details and
-                    manage profile aliases.
-                  </p>
-                  <div class="search" role="search">
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                    <button class="btn" type="button" id="btn-clear-log">
+                      <span>Clear Log</span>
+                    </button>
+                    <button
+                      class="btn danger"
+                      type="button"
+                      id="btn-clear-database"
+                    >
+                      <span>Clear Database</span>
+                    </button>
+                  </div>
+                  <div class="search" role="search" style="max-width: 320px">
                     <input
-                      id="search-profiles"
+                      id="search-action-log"
                       type="text"
-                      placeholder="Search name, alias, or ID…"
-                      aria-label="Search customer profiles"
+                      placeholder="Search by user, action, or detail…"
+                      aria-label="Search action log"
                     />
                   </div>
                 </div>
               </div>
-              <div class="body table">
-                <table>
-                  <thead>
-                    <tr>
-                      <th scope="col">Name</th>
-                      <th scope="col">School ID</th>
-                      <th scope="col">Aliases</th>
-                      <th scope="col">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody id="tbl-customer-profiles">
-                    <tr>
-                      <td
-                        colspan="4"
-                        style="
-                          text-align: center;
-                          color: var(--muted);
-                          padding: 18px 12px;
-                        "
-                      >
-                        Search to view customer profiles.
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div class="card">
-              <h2
-                style="
-                  border-bottom: 1px solid var(--line);
-                  padding: 12px 14px;
-                  margin: 0;
-                "
-              >
-                User Action Log
-              </h2>
               <div class="body table">
                 <table>
                   <thead>
@@ -1040,6 +1005,193 @@
                         "
                       >
                         Loading recent activity…
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- ADMIN: CUSTOMER MANAGEMENT -->
+          <section
+            id="admin-customers"
+            class="screen"
+            aria-labelledby="admin-customers-title"
+          >
+            <div class="card">
+              <h2 id="admin-customers-title">Customer Management</h2>
+              <div class="body">
+                <div
+                  class="toolbar"
+                  style="
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 12px;
+                    flex-wrap: wrap;
+                  "
+                >
+                  <div class="search" role="search" style="flex: 1 1 260px">
+                    <input
+                      id="search-profiles"
+                      type="text"
+                      placeholder="Search name, alias, or ID…"
+                      aria-label="Search customer profiles"
+                    />
+                  </div>
+                  <p class="hint" style="margin: 0; max-width: 420px">
+                    Select a profile to review details, manage aliases, or
+                    perform maintenance tasks.
+                  </p>
+                </div>
+              </div>
+              <div class="body table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Name</th>
+                      <th scope="col">School ID</th>
+                      <th scope="col">Aliases</th>
+                      <th scope="col">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbl-customer-profiles">
+                    <tr>
+                      <td
+                        colspan="4"
+                        style="
+                          text-align: center;
+                          color: var(--muted);
+                          padding: 18px 12px;
+                        "
+                      >
+                        Loading customer profiles…
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- ADMIN: USER MANAGEMENT -->
+          <section
+            id="admin-users"
+            class="screen"
+            aria-labelledby="admin-users-title"
+          >
+            <div class="card">
+              <h2 id="admin-users-title">User Management</h2>
+              <div class="body">
+                <div
+                  class="toolbar"
+                  style="
+                    justify-content: space-between;
+                    gap: 12px;
+                    flex-wrap: wrap;
+                    align-items: center;
+                  "
+                >
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                    <button class="btn" data-open="dlg-create-user">
+                      <span>Create User</span>
+                    </button>
+                  </div>
+                  <div class="search" role="search" style="flex: 1 1 240px">
+                    <input
+                      id="search-admin-users"
+                      type="text"
+                      placeholder="Search users…"
+                      aria-label="Search user profiles"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div class="body table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Username</th>
+                      <th scope="col">Display Name</th>
+                      <th scope="col">Role</th>
+                      <th scope="col">Created</th>
+                      <th scope="col">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbl-admin-users">
+                    <tr>
+                      <td
+                        colspan="5"
+                        style="
+                          text-align: center;
+                          color: var(--muted);
+                          padding: 18px 12px;
+                        "
+                      >
+                        Enable backend to load user profiles.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- ADMIN: INVENTORY MANAGEMENT -->
+          <section
+            id="admin-inventory"
+            class="screen"
+            aria-labelledby="admin-inventory-title"
+          >
+            <div class="card">
+              <h2 id="admin-inventory-title">Inventory Management</h2>
+              <div class="body">
+                <div
+                  class="toolbar"
+                  style="
+                    justify-content: space-between;
+                    gap: 12px;
+                    flex-wrap: wrap;
+                    align-items: center;
+                  "
+                >
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                    <button class="btn" data-open="dlg-create-item">
+                      <span>Add Inventory Item</span>
+                    </button>
+                  </div>
+                  <div class="search" role="search" style="flex: 1 1 240px">
+                    <input
+                      id="search-admin-inventory"
+                      type="text"
+                      placeholder="Search inventory…"
+                      aria-label="Search inventory items"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div class="body table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Item Name</th>
+                      <th scope="col">Item Number</th>
+                      <th scope="col">Department</th>
+                      <th scope="col">Due Policy</th>
+                      <th scope="col">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbl-admin-inventory">
+                    <tr>
+                      <td
+                        colspan="5"
+                        style="
+                          text-align: center;
+                          color: var(--muted);
+                          padding: 18px 12px;
+                        "
+                      >
+                        Enable backend to load inventory items.
                       </td>
                     </tr>
                   </tbody>
@@ -1070,10 +1222,7 @@
               Borrowing: New vs Returning handles different required fields.
             </li>
             <li>Service: Diagnose → Awaiting Parts → Ready for Pickup.</li>
-            <li>
-              Admin: Create/Delete Users with role: <em>inventory</em>,
-              <em>order</em>, <em>runner</em>.
-            </li>
+            <li>Admin: Manage users with <em>Admin</em> or <em>Co-Op</em> roles.</li>
           </ul>
         </div>
         <div class="modal-ft">
@@ -1104,17 +1253,20 @@
               <input
                 id="nc-schoolid"
                 pattern="\\d{5,8}"
-                placeholder="e.g., 0234567"
+                placeholder="e.g., 12345"
+                inputmode="numeric"
               />
-              <div class="hint">5–7 digits, 0 as first digit.</div>
+              <div class="hint">5–8 digits, numbers only.</div>
             </div>
             <div>
               <label>Phone</label>
               <input
                 id="nc-phone"
                 placeholder="5555555555"
-                length=10
+                pattern="\\d{10}"
+                inputmode="numeric"
               />
+              <div class="hint">10 digits, no formatting.</div>
             </div>
             <div>
               <label>Room</label>
@@ -1128,12 +1280,10 @@
 
             <!-- Borrow specifics -->
             <div class="full" data-bind="borrow">
-              <label>Item (name or number)</label>
-              <input
-                id="nc-item"
-                placeholder="e.g., Oscilloscope #S7"
-                autocomplete="off"
-              />
+              <label>Item</label>
+              <select id="nc-item">
+                <option value="">Select an item…</option>
+              </select>
             </div>
             <div
               class="full due-preview"
@@ -1154,7 +1304,9 @@
             <!-- Service specifics -->
             <div class="full" data-bind="service" style="display: none">
               <label>Item Being Serviced</label>
-              <input id="ns-item" placeholder="e.g., Lab Laptop 15" />
+              <select id="ns-item">
+                <option value="">Select an item…</option>
+              </select>
             </div>
             <div class="full" data-bind="service" style="display: none">
               <label>Issue Description</label>
@@ -1190,7 +1342,8 @@
               <input
                 id="rb-id"
                 placeholder="or leave blank & use name lookup"
-                pattern="\\d{5,10}"
+                pattern="\\d{5,8}"
+                inputmode="numeric"
               />
             </div>
             <div>
@@ -1212,12 +1365,10 @@
               </div>
             </div>
             <div class="full">
-              <label>Item (name or number)</label>
-              <input
-                id="rb-item"
-                required
-                placeholder="e.g., Raspberry Pi 5 or #S7"
-              />
+              <label>Item</label>
+              <select id="rb-item" required>
+                <option value="">Select an item…</option>
+              </select>
             </div>
             <div
               class="full due-preview"
@@ -1258,7 +1409,8 @@
               <input
                 id="rs-id"
                 placeholder="or name lookup"
-                pattern="\\d{5,10}"
+                pattern="\\d{5,8}"
+                inputmode="numeric"
               />
             </div>
             <div>
@@ -1281,11 +1433,9 @@
             </div>
             <div class="full">
               <label>Item Being Serviced</label>
-              <input
-                id="rs-item"
-                required
-                placeholder="e.g., Multimeter #A12"
-              />
+              <select id="rs-item" required>
+                <option value="">Select an item…</option>
+              </select>
             </div>
             <div class="full">
               <label>Issue</label>
@@ -1376,10 +1526,6 @@
               <input id="ci-name" required placeholder="e.g., Trainer #34" />
             </div>
             <div>
-              <label>Item Number</label>
-              <input id="ci-number" placeholder="optional" />
-            </div>
-            <div>
               <label>Department</label>
               <input
                 id="ci-dept"
@@ -1438,6 +1584,80 @@
       </form>
     </dialog>
 
+    <!-- Admin: Manage Item -->
+    <dialog id="dlg-manage-item">
+      <form method="dialog" id="form-manage-item" novalidate>
+        <div class="modal-hd">
+          <strong>Manage Inventory Item</strong>
+          <button class="btn" value="close">Close</button>
+        </div>
+        <div class="modal-bd">
+          <input type="hidden" id="mi-id" />
+          <div class="form-grid">
+            <div class="full">
+              <label>Item Name</label>
+              <input id="mi-name" required />
+            </div>
+            <div>
+              <label>Item Number</label>
+              <input id="mi-number" placeholder="optional" />
+            </div>
+            <div>
+              <label>Department</label>
+              <input id="mi-dept" placeholder="e.g., Electrical Engineering Tech" />
+            </div>
+            <div>
+              <label>Ownership</label>
+              <select id="mi-owned">
+                <option value="school">School-owned</option>
+                <option value="external">External / donated</option>
+              </select>
+            </div>
+            <div class="full">
+              <label>Description</label>
+              <textarea id="mi-description" placeholder="optional"></textarea>
+            </div>
+            <div class="full">
+              <label>Due Policy</label>
+              <select id="mi-due-policy">
+                <option value="NEXT_DAY_6PM">Next day at 6:00 PM</option>
+                <option value="OFFSET">Custom offset</option>
+                <option value="SEMESTER">Semester / fixed date</option>
+              </select>
+            </div>
+            <div class="due-config" data-policy="OFFSET">
+              <label>Offset (days)</label>
+              <input id="mi-offset-days" type="number" min="0" />
+            </div>
+            <div class="due-config" data-policy="OFFSET">
+              <label>Offset (hours)</label>
+              <input id="mi-offset-hours" type="number" min="0" />
+            </div>
+            <div class="due-config" data-policy="OFFSET">
+              <label>Due Time (local)</label>
+              <input id="mi-offset-time" type="time" />
+            </div>
+            <div class="due-config full" data-policy="SEMESTER">
+              <label>Fixed Due (local)</label>
+              <input id="mi-fixed-due" type="datetime-local" />
+              <div class="hint">Set the semester end date/time for this item.</div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-ft" style="display: flex; gap: 12px; justify-content: space-between; flex-wrap: wrap">
+          <button class="btn danger" type="button" id="mi-delete">
+            <span>Delete Item</span><span class="spinner" aria-hidden="true"></span>
+          </button>
+          <div style="display: flex; gap: 8px">
+            <button class="btn" value="close">Cancel</button>
+            <button class="btn primary" id="mi-save">
+              <span>Save Changes</span><span class="spinner" aria-hidden="true"></span>
+            </button>
+          </div>
+        </div>
+      </form>
+    </dialog>
+
     <!-- Admin: Create User -->
     <dialog id="dlg-create-user">
       <form method="dialog" id="form-create-user" novalidate>
@@ -1457,15 +1677,13 @@
               <label>Role</label>
               <select id="cu-role" required>
                 <option value="">Select…</option>
-                <option value="inventory">Inventory</option>
-                <option value="order">Order Management</option>
-                <option value="runner">Runner</option>
                 <option value="admin">Admin</option>
+                <option value="co-op">Co-Op</option>
               </select>
             </div>
           </div>
           <div class="hint">
-            Users of this program are “Users.” Borrowing = “Customer”.
+            Roles are limited to Admin and Co-Op to match staffing duties.
           </div>
         </div>
         <div class="modal-ft">
@@ -1477,24 +1695,37 @@
       </form>
     </dialog>
 
-    <!-- Admin: Delete User -->
-    <dialog id="dlg-delete-user">
-      <form method="dialog" id="form-delete-user" novalidate>
+    <!-- Admin: Edit User -->
+    <dialog id="dlg-edit-user">
+      <form method="dialog" id="form-edit-user" novalidate>
         <div class="modal-hd">
-          <strong>Delete User</strong>
+          <strong>Edit User</strong>
           <button class="btn" value="close">Close</button>
         </div>
         <div class="modal-bd">
-          <label>Username</label>
-          <input id="du-username" required placeholder="j.wooldridge" />
-          <p class="hint">
-            This action writes to the audit log with a trace #.
-          </p>
+          <input type="hidden" id="eu-username-hidden" />
+          <div class="form-grid">
+            <div>
+              <label>Username</label>
+              <input id="eu-username" readonly />
+            </div>
+            <div>
+              <label>Display Name</label>
+              <input id="eu-display" required />
+            </div>
+            <div class="full">
+              <label>Role</label>
+              <select id="eu-role" required>
+                <option value="admin">Admin</option>
+                <option value="co-op">Co-Op</option>
+              </select>
+            </div>
+          </div>
         </div>
         <div class="modal-ft">
           <button class="btn" value="close">Cancel</button>
-          <button class="btn primary" id="du-delete">
-            <span>Delete</span><span class="spinner" aria-hidden="true"></span>
+          <button class="btn primary" id="eu-save">
+            <span>Save Changes</span><span class="spinner" aria-hidden="true"></span>
           </button>
         </div>
       </form>
@@ -1639,6 +1870,25 @@
           timeStyle: "short",
         });
 
+        const USER_ROLE_LABELS = new Map([
+          ["admin", "Admin"],
+          ["co-op", "Co-Op"],
+        ]);
+        const USER_ROLE_ALIASES = new Map([
+          ["admin", "admin"],
+          ["administrator", "admin"],
+          ["labtech", "admin"],
+          ["lab tech", "admin"],
+          ["lab_tech", "admin"],
+          ["lab-tech", "admin"],
+          ["labtechnician", "admin"],
+          ["lab technician", "admin"],
+          ["co-op", "co-op"],
+          ["coop", "co-op"],
+          ["co op", "co-op"],
+          ["co_op", "co-op"],
+        ]);
+
         function fnCreateStatusPill(strStatus) {
           const elPill = document.createElement("span");
           elPill.className = "pill";
@@ -1730,12 +1980,21 @@
             const elDialog = document.getElementById(strDialogId);
             if (!elDialog) return;
             const strAction = elTrigger.dataset.action;
-            if (strDialogId === "dlg-new-customer" && strAction) {
-              const elActionSelect = elDialog.querySelector("#nc-action");
-              if (elActionSelect) {
-                elActionSelect.value = strAction;
-                elActionSelect.dispatchEvent(new Event("change"));
+            if (strDialogId === "dlg-new-customer") {
+              const elForm = elDialog.querySelector("form");
+              elForm?.reset();
+              fnSetNewCustomerDialogMode(elDialog, strAction);
+              const preview = elDialog.querySelector("#nc-due-preview");
+              if (preview) {
+                const message =
+                  preview.dataset.defaultMessage ||
+                  "Due date will be assigned automatically from the item's policy.";
+                preview.textContent = message;
               }
+              requestAnimationFrame(() => {
+                const focusTarget = elDialog.querySelector("#nc-first");
+                focusTarget?.focus();
+              });
             }
             if (strDialogId === "dlg-returning-borrow") {
               const elForm = document.getElementById("form-returning-borrow");
@@ -1831,26 +2090,20 @@
         fnApplyRowStatusStyles();
 
         // ====== NEW CUSTOMER action-type toggle ======
-        (function () {
-          const dlg = document.getElementById("dlg-new-customer");
-          const sel = dlg.querySelector("#nc-action");
-          const toggle = () => {
-            const isBorrow = sel.value === "borrow";
-            dlg
-              .querySelectorAll('[data-bind="borrow"]')
-              .forEach((el) => (el.style.display = isBorrow ? "" : "none"));
-            dlg
-              .querySelectorAll('[data-bind="service"]')
-              .forEach((el) => (el.style.display = isBorrow ? "none" : ""));
-          };
-          sel.addEventListener("change", toggle);
-          toggle();
-        })();
+        fnSetNewCustomerDialogMode(null, "borrow");
 
         // ====== NOTE HISTORY SUPPORT ======
         const m_mapDetailNoteCache = new Map();
+        let m_arrInventoryItems = [];
+        let m_arrAdminUsers = [];
+        let m_arrAuditLogEntries = [];
+        let m_strAuditLogSearchTerm = "";
+        let m_strInventorySearchTerm = "";
+        let m_strAdminUserSearchTerm = "";
         let m_strActiveDetailNoteKey = null;
         let m_objActiveCustomerProfile = null;
+        let m_objActiveInventoryItem = null;
+        let m_objActiveUser = null;
         let m_intProfileSearchToken = 0;
         let m_strLastProfileSearchTerm = "";
 
@@ -1910,7 +2163,7 @@
             meta.className = "note-meta";
 
             const author = document.createElement("span");
-            author.textContent = entry.author || "Lab Tech";
+            author.textContent = entry.author || "User";
 
             const time = document.createElement("time");
             if (entry.timestamp) {
@@ -2261,16 +2514,30 @@
                 : "—";
             fnAppendTableCell(tr, aliases);
             const actionCell = document.createElement("td");
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "btn";
-            btn.dataset.manageProfile = profile.id ?? "";
-            btn.innerHTML = "<span>Manage</span>";
-            btn.setAttribute(
+            const wrap = document.createElement("div");
+            wrap.style.display = "flex";
+            wrap.style.gap = "6px";
+            wrap.style.flexWrap = "wrap";
+            const editBtn = document.createElement("button");
+            editBtn.type = "button";
+            editBtn.className = "btn";
+            editBtn.dataset.editProfile = profile.id ?? "";
+            editBtn.textContent = "Edit";
+            editBtn.setAttribute(
               "aria-label",
-              `Manage profile for ${profile.name || "customer"}`,
+              `Edit profile for ${profile.name || "customer"}`,
             );
-            actionCell.appendChild(btn);
+            const deleteBtn = document.createElement("button");
+            deleteBtn.type = "button";
+            deleteBtn.className = "btn danger";
+            deleteBtn.dataset.deleteProfile = profile.id ?? "";
+            deleteBtn.textContent = "Delete";
+            deleteBtn.setAttribute(
+              "aria-label",
+              `Delete profile for ${profile.name || "customer"}`,
+            );
+            wrap.append(editBtn, deleteBtn);
+            actionCell.appendChild(wrap);
             tr.appendChild(actionCell);
             tbody.appendChild(tr);
           });
@@ -2336,6 +2603,310 @@
           }
         }
 
+        function fnRenderInventoryTable(entries) {
+          const tbodyId = "tbl-admin-inventory";
+          const tbody = document.getElementById(tbodyId);
+          if (!tbody) return;
+          tbody.textContent = "";
+          if (!USE_BACKEND) {
+            fnShowTableMessage(
+              tbodyId,
+              "Enable backend to manage inventory items.",
+            );
+            return;
+          }
+          if (!Array.isArray(entries) || entries.length === 0) {
+            const message = m_arrInventoryItems.length
+              ? "No inventory items match your search."
+              : "No inventory items found.";
+            fnShowTableMessage(tbodyId, message);
+            return;
+          }
+          entries.forEach((item) => {
+            const tr = document.createElement("tr");
+            fnAppendTableCell(tr, item.name || "—");
+            fnAppendTableCell(tr, item.number || "—");
+            fnAppendTableCell(tr, item.department || "—");
+            fnAppendTableCell(tr, fnFormatItemDuePolicy(item));
+            const actionCell = document.createElement("td");
+            const wrap = document.createElement("div");
+            wrap.style.display = "flex";
+            wrap.style.gap = "6px";
+            wrap.style.flexWrap = "wrap";
+            const editBtn = document.createElement("button");
+            editBtn.type = "button";
+            editBtn.className = "btn";
+            editBtn.dataset.editItem = item.id != null ? item.id : "";
+            editBtn.textContent = "Edit";
+            const deleteBtn = document.createElement("button");
+            deleteBtn.type = "button";
+            deleteBtn.className = "btn danger";
+            deleteBtn.dataset.deleteItem = item.id != null ? item.id : "";
+            deleteBtn.textContent = "Delete";
+            wrap.append(editBtn, deleteBtn);
+            actionCell.appendChild(wrap);
+            tr.appendChild(actionCell);
+            tbody.appendChild(tr);
+          });
+        }
+
+        function fnFilterInventoryEntries(entries, term) {
+          if (!Array.isArray(entries)) return [];
+          const normalized = (term || "").trim().toLowerCase();
+          if (!normalized) return entries.slice();
+          return entries.filter((item) => {
+            const parts = [
+              item.name,
+              item.number,
+              item.department,
+              item.duePolicy,
+              item.duePolicyDescription,
+              fnFormatItemDuePolicy(item),
+            ];
+            return parts.some((part) =>
+              (part || "").toString().toLowerCase().includes(normalized),
+            );
+          });
+        }
+
+        function fnUpdateInventorySearch(term) {
+          m_strInventorySearchTerm = (term || "").trim();
+          const filtered = fnFilterInventoryEntries(
+            m_arrInventoryItems,
+            m_strInventorySearchTerm,
+          );
+          fnRenderInventoryTable(filtered);
+        }
+
+        async function fnLoadInventoryData({ showStatus = true } = {}) {
+          if (!USE_BACKEND) {
+            m_arrInventoryItems = [];
+            ["nc-item", "rb-item", "ns-item", "rs-item"].forEach((id) => {
+              const select = document.getElementById(id);
+              if (select) fnPopulateItemSelect(select, []);
+            });
+            fnRenderInventoryTable([]);
+            return;
+          }
+          if (showStatus) {
+            fnShowTableMessage("tbl-admin-inventory", "Loading inventory…");
+          }
+          try {
+            const items = await fnFetchItems();
+            const sorted = Array.isArray(items)
+              ? items
+                  .slice()
+                  .sort((a, b) =>
+                    (a.name || "").localeCompare(b.name || "", undefined, {
+                      sensitivity: "base",
+                    }),
+                  )
+              : [];
+            m_arrInventoryItems = sorted;
+            const optionList = sorted
+              .filter((item) => item && item.name)
+              .map((item) => ({
+                id: item.id ?? null,
+                name: item.name || "",
+              }));
+            ["nc-item", "rb-item", "ns-item", "rs-item"].forEach((id) => {
+              const select = document.getElementById(id);
+              if (select) fnPopulateItemSelect(select, optionList);
+            });
+            fnUpdateInventorySearch(m_strInventorySearchTerm);
+          } catch (err) {
+            console.error("Failed to load inventory items", err);
+            fnShowTableMessage(
+              "tbl-admin-inventory",
+              "Unable to load inventory items.",
+              "error",
+            );
+          }
+        }
+
+        async function fnDeleteInventoryItem(button, id) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage inventory items.");
+            return;
+          }
+          if (!id) return;
+          if (
+            !window.confirm(
+              "Delete this item? This action cannot be undone.",
+            )
+          ) {
+            return;
+          }
+          try {
+            if (button) fnSetBusyState(button, true);
+            await fnApi(`/items/${encodeURIComponent(id)}`, {
+              method: "DELETE",
+            });
+            if (
+              m_objActiveInventoryItem &&
+              String(m_objActiveInventoryItem.id || "") === String(id)
+            ) {
+              m_objActiveInventoryItem = null;
+              fnCloseDialogById("dlg-manage-item");
+            }
+            alert("Item deleted.");
+            await fnLoadInventoryData({ showStatus: false });
+          } catch (err) {
+            console.error("Failed to delete item", err);
+            alert(err?.message || "Unable to delete item.");
+          } finally {
+            if (button) fnSetBusyState(button, false);
+          }
+        }
+
+        function fnRenderAdminUsersTable(entries) {
+          const tbodyId = "tbl-admin-users";
+          const tbody = document.getElementById(tbodyId);
+          if (!tbody) return;
+          tbody.textContent = "";
+          if (!USE_BACKEND) {
+            fnShowTableMessage(
+              tbodyId,
+              "Enable backend to load user profiles.",
+            );
+            return;
+          }
+          if (!Array.isArray(entries) || entries.length === 0) {
+            const message = m_arrAdminUsers.length
+              ? "No user profiles match your search."
+              : "No user profiles found.";
+            fnShowTableMessage(tbodyId, message);
+            return;
+          }
+          entries.forEach((user) => {
+            const tr = document.createElement("tr");
+            fnAppendTableCell(tr, user.username || "—");
+            fnAppendTableCell(tr, user.displayName || "—");
+            fnAppendTableCell(
+              tr,
+              fnFormatUserRole(user.roleLabel || user.role),
+            );
+            fnAppendTableCell(
+              tr,
+              user.createdUtc ? fnFormatLocalDateTime(user.createdUtc) : "—",
+            );
+            const actionCell = document.createElement("td");
+            const wrap = document.createElement("div");
+            wrap.style.display = "flex";
+            wrap.style.gap = "6px";
+            wrap.style.flexWrap = "wrap";
+            const editBtn = document.createElement("button");
+            editBtn.type = "button";
+            editBtn.className = "btn";
+            editBtn.dataset.editUser = user.username || "";
+            editBtn.textContent = "Edit";
+            const deleteBtn = document.createElement("button");
+            deleteBtn.type = "button";
+            deleteBtn.className = "btn danger";
+            deleteBtn.dataset.deleteUser = user.username || "";
+            deleteBtn.textContent = "Delete";
+            wrap.append(editBtn, deleteBtn);
+            actionCell.appendChild(wrap);
+            tr.appendChild(actionCell);
+            tbody.appendChild(tr);
+          });
+        }
+
+        function fnFilterAdminUsers(entries, term) {
+          if (!Array.isArray(entries)) return [];
+          const normalized = (term || "").trim().toLowerCase();
+          if (!normalized) return entries.slice();
+          return entries.filter((user) => {
+            const fields = [
+              user.username,
+              user.displayName,
+              user.role,
+              fnFormatUserRole(user.role),
+            ];
+            return fields.some((field) =>
+              (field || "").toString().toLowerCase().includes(normalized),
+            );
+          });
+        }
+
+        function fnUpdateAdminUserSearch(term) {
+          m_strAdminUserSearchTerm = (term || "").trim();
+          const filtered = fnFilterAdminUsers(
+            m_arrAdminUsers,
+            m_strAdminUserSearchTerm,
+          );
+          fnRenderAdminUsersTable(filtered);
+        }
+
+        async function fnLoadAdminUsers({ showStatus = true } = {}) {
+          if (!USE_BACKEND) {
+            m_arrAdminUsers = [];
+            fnRenderAdminUsersTable([]);
+            return;
+          }
+          if (showStatus) {
+            fnShowTableMessage("tbl-admin-users", "Loading user profiles…");
+          }
+          try {
+            const users = await fnFetchUsers();
+            const sorted = Array.isArray(users)
+              ? users
+                  .slice()
+                  .sort((a, b) =>
+                    (a.username || "").localeCompare(
+                      b.username || "",
+                      undefined,
+                      { sensitivity: "base" },
+                    ),
+                  )
+              : [];
+            m_arrAdminUsers = sorted;
+            fnUpdateAdminUserSearch(m_strAdminUserSearchTerm);
+          } catch (err) {
+            console.error("Failed to load user profiles", err);
+            fnShowTableMessage(
+              "tbl-admin-users",
+              "Unable to load user profiles.",
+              "error",
+            );
+          }
+        }
+
+        async function fnDeleteUser(button, username) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage user profiles.");
+            return;
+          }
+          if (!username) return;
+          if (
+            !window.confirm(
+              "Delete this user account? Only allowed when no historical activity exists.",
+            )
+          )
+            return;
+          try {
+            if (button) fnSetBusyState(button, true);
+            await fnApi(`/users/${encodeURIComponent(username)}`, {
+              method: "DELETE",
+            });
+            if (
+              m_objActiveUser &&
+              (m_objActiveUser.username || "").toLowerCase() ===
+                username.toLowerCase()
+            ) {
+              m_objActiveUser = null;
+              fnCloseDialogById("dlg-edit-user");
+            }
+            alert("User deleted.");
+            await fnLoadAdminUsers({ showStatus: false });
+          } catch (err) {
+            console.error("Failed to delete user", err);
+            alert(err?.message || "Unable to delete user.");
+          } finally {
+            if (button) fnSetBusyState(button, false);
+          }
+        }
+
         // ====== VALIDATION HELPERS ======
         // Tiny validation helpers shared by multiple forms.
         function fnMust(cond, msg) {
@@ -2357,6 +2928,98 @@
           if (!value) return null;
           const formatted = fnFormatLocalDateTime(value);
           return formatted && formatted !== "—" ? formatted : null;
+        }
+
+        function fnFormatDateTimeLocalInput(value) {
+          const dt = fnSafeDate(value);
+          if (!dt) return "";
+          const pad = (num) => String(num).padStart(2, "0");
+          const year = dt.getFullYear();
+          const month = pad(dt.getMonth() + 1);
+          const day = pad(dt.getDate());
+          const hours = pad(dt.getHours());
+          const minutes = pad(dt.getMinutes());
+          return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
+        function fnFormatTimeForInput(value) {
+          if (!value) return "";
+          if (typeof value === "string") {
+            const trimmed = value.trim();
+            if (!trimmed) return "";
+            return trimmed.substring(0, 5);
+          }
+          const dt = fnSafeDate(`1970-01-01T${value}`);
+          if (!dt) return "";
+          const pad = (num) => String(num).padStart(2, "0");
+          return `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+        }
+
+        function fnNormalizeUserRole(value) {
+          if (value == null) return null;
+          const text = value.toString().trim().toLowerCase();
+          if (!text) return null;
+          if (USER_ROLE_ALIASES.has(text)) return USER_ROLE_ALIASES.get(text);
+          const collapsedSpaces = text.replace(/[\s_]+/g, " ");
+          if (USER_ROLE_ALIASES.has(collapsedSpaces))
+            return USER_ROLE_ALIASES.get(collapsedSpaces);
+          const collapsed = text.replace(/[\s_-]+/g, "");
+          if (USER_ROLE_ALIASES.has(collapsed))
+            return USER_ROLE_ALIASES.get(collapsed);
+          return null;
+        }
+
+        function fnFormatUserRole(role) {
+          const canonical = fnNormalizeUserRole(role);
+          if (canonical && USER_ROLE_LABELS.has(canonical)) {
+            return USER_ROLE_LABELS.get(canonical);
+          }
+          if (!role) return "—";
+          return role
+            .toString()
+            .split(/[_\s]+/)
+            .filter(Boolean)
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(" ");
+        }
+
+        function fnFormatItemDuePolicy(item) {
+          if (!item) return "—";
+          if (item.duePolicyDescription) return item.duePolicyDescription;
+          const policy = (item.duePolicy || "").toUpperCase();
+          if (!policy) return "—";
+          if (policy === "NEXT_DAY_6PM") return "Next day at 6:00 PM";
+          if (policy === "OFFSET") {
+            const days = Number.isFinite(item.dueDaysOffset)
+              ? item.dueDaysOffset
+              : null;
+            const hours = Number.isFinite(item.dueHoursOffset)
+              ? item.dueHoursOffset
+              : null;
+            const time = fnFormatTimeForInput(item.dueTime) || "";
+            const parts = [];
+            if (days != null) {
+              parts.push(
+                `${days} day${days === 1 ? "" : "s"}`,
+              );
+            }
+            if (hours != null && hours !== 0) {
+              parts.push(
+                `${hours} hour${hours === 1 ? "" : "s"}`,
+              );
+            }
+            if (time) {
+              parts.push(`at ${time}`);
+            }
+            return parts.length
+              ? `Offset ${parts.join(" ")}`
+              : "Custom offset";
+          }
+          if (policy === "SEMESTER" || policy === "FIXED") {
+            const fixed = fnNormalizeDueText(item.fixedDueLocal);
+            return fixed ? `Due ${fixed}` : "Semester due date not set";
+          }
+          return policy.replace(/_/g, " ");
         }
 
         function fnFormatCheckoutConfirmation(payload) {
@@ -2415,8 +3078,8 @@
           preview.dataset.defaultMessage = defaultText;
           let token = 0;
 
-          const update = fnDebounce(async () => {
-            const query = input.value.trim();
+          const runLookup = async () => {
+            const query = (input.value || "").trim();
             const currentToken = ++token;
             if (!query) {
               preview.textContent = defaultText;
@@ -2436,17 +3099,75 @@
               preview.textContent =
                 "Unable to determine due date for that item.";
             }
-          }, 250);
+          };
 
-          input.addEventListener("input", () => {
-            if (!input.value.trim()) {
-              preview.textContent = defaultText;
-            }
-            update();
-          });
-          input.addEventListener("blur", () => {
-            setTimeout(update, 0);
-          });
+          const isSelect = input.tagName === "SELECT";
+          const update = isSelect ? runLookup : fnDebounce(runLookup, 250);
+
+          if (isSelect) {
+            input.addEventListener("change", () => {
+              if (!input.value) {
+                preview.textContent = defaultText;
+                token++;
+                return;
+              }
+              update();
+            });
+          } else {
+            input.addEventListener("input", () => {
+              if (!input.value.trim()) {
+                preview.textContent = defaultText;
+              }
+              update();
+            });
+            input.addEventListener("blur", () => {
+              setTimeout(update, 0);
+            });
+          }
+        }
+
+        function fnSetNewCustomerDialogMode(dialog, mode) {
+          const dlg = dialog || document.getElementById("dlg-new-customer");
+          if (!dlg) return;
+          const action = mode === "service" ? "service" : "borrow";
+          dlg.dataset.action = action;
+          dlg
+            .querySelectorAll('[data-bind="borrow"]')
+            .forEach((el) => (el.style.display = action === "borrow" ? "" : "none"));
+          dlg
+            .querySelectorAll('[data-bind="service"]')
+            .forEach((el) => (el.style.display = action === "service" ? "" : "none"));
+        }
+
+        function fnPopulateItemSelect(select, items) {
+          if (!select) return;
+          const existingPlaceholder = Array.from(select.querySelectorAll("option"))
+            .find((opt) => opt.value === "")?.textContent;
+          const placeholderText = (existingPlaceholder || "Select an item…").trim();
+          const previousValue = select.value;
+          select.textContent = "";
+          const placeholder = document.createElement("option");
+          placeholder.value = "";
+          placeholder.textContent = placeholderText;
+          select.appendChild(placeholder);
+          items
+            .filter((item) => item && item.name)
+            .forEach((item) => {
+              const option = document.createElement("option");
+              option.value = item.name;
+              option.textContent = item.name;
+              if (item.id != null) option.dataset.itemId = item.id;
+              select.appendChild(option);
+            });
+          if (
+            previousValue &&
+            Array.from(select.options).some((opt) => opt.value === previousValue)
+          ) {
+            select.value = previousValue;
+            select.dispatchEvent(new Event("change"));
+          } else {
+            select.value = "";
+          }
         }
 
         function fnSetupBorrowerLookup({
@@ -2648,14 +3369,18 @@
           }
         }
 
-        function fnUpdateItemDuePolicyVisibility() {
-          const select = document.getElementById("ci-due-policy");
-          const form = document.getElementById("form-create-item");
+        function fnUpdateItemDuePolicyVisibility(
+          selectId = "ci-due-policy",
+          formId = "form-create-item",
+        ) {
+          const select = document.getElementById(selectId);
+          const form = formId
+            ? document.getElementById(formId)
+            : select?.closest("form");
           if (!select || !form) return;
           const policy = select.value;
           fnSelectAllElements(".due-config", form).forEach((el) => {
-            const active = el.dataset.policy === policy;
-            if (active) {
+            if (el.dataset.policy === policy) {
               el.classList.add("active");
             } else {
               el.classList.remove("active");
@@ -2723,6 +3448,29 @@
             method: "GET",
           });
           return res.json();
+        }
+
+        async function fnFetchItems() {
+          const res = await fnApi(`/items`, { method: "GET" });
+          const payload = await res.json();
+          if (Array.isArray(payload)) return payload;
+          if (Array.isArray(payload?.entries)) return payload.entries;
+          if (Array.isArray(payload?.data)) return payload.data;
+          return [];
+        }
+
+        async function fnFetchUsers(params = {}) {
+          const searchParams = new URLSearchParams();
+          if (params.search) searchParams.set("search", params.search);
+          const qs = searchParams.toString();
+          const res = await fnApi(`/users${qs ? `?${qs}` : ""}`, {
+            method: "GET",
+          });
+          const payload = await res.json();
+          if (Array.isArray(payload)) return payload;
+          if (Array.isArray(payload?.entries)) return payload.entries;
+          if (Array.isArray(payload?.data)) return payload.data;
+          return [];
         }
 
         async function fnCreateCustomerAlias(id, alias) {
@@ -2867,7 +3615,7 @@
           }
         }
 
-        function fnRenderAuditLog(entries) {
+        function fnRenderAuditLogTable(entries) {
           const tbody = document.getElementById("tbl-admin-log");
           if (!tbody) return;
           tbody.textContent = "";
@@ -2899,6 +3647,42 @@
             });
             tbody.appendChild(tr);
           });
+        }
+
+        function fnFilterAuditLogEntries(entries, term) {
+          if (!Array.isArray(entries)) return [];
+          const normalized = term.trim().toLowerCase();
+          if (!normalized) return entries.slice();
+          return entries.filter((entry) => {
+            const parts = [
+              fnFormatAuditUser(entry),
+              fnFormatAuditTrace(entry),
+              fnFormatAuditAction(entry),
+              fnFormatAuditDateTime(entry),
+              fnFormatAuditDetails(entry),
+            ]
+              .map((val) => (val || "").toString().toLowerCase())
+              .join(" ");
+            return parts.includes(normalized);
+          });
+        }
+
+        function fnRenderAuditLog(entries) {
+          m_arrAuditLogEntries = Array.isArray(entries) ? entries.slice() : [];
+          const filtered = fnFilterAuditLogEntries(
+            m_arrAuditLogEntries,
+            m_strAuditLogSearchTerm,
+          );
+          fnRenderAuditLogTable(filtered);
+        }
+
+        function fnUpdateAuditLogSearch(term) {
+          m_strAuditLogSearchTerm = (term || "").trim();
+          const filtered = fnFilterAuditLogEntries(
+            m_arrAuditLogEntries,
+            m_strAuditLogSearchTerm,
+          );
+          fnRenderAuditLogTable(filtered);
         }
 
         async function fnLoadAuditLog() {
@@ -3004,6 +3788,93 @@
           fnRenderCustomerAliasList(profile.aliases || []);
         }
 
+        function fnPopulateManageItemForm(item) {
+          const idInput = document.getElementById("mi-id");
+          if (idInput) idInput.value = item?.id ?? "";
+          const nameInput = document.getElementById("mi-name");
+          if (nameInput) nameInput.value = item?.name || "";
+          const numberInput = document.getElementById("mi-number");
+          if (numberInput) numberInput.value = item?.number || "";
+          const deptInput = document.getElementById("mi-dept");
+          if (deptInput) deptInput.value = item?.department || "";
+          const ownedSelect = document.getElementById("mi-owned");
+          if (ownedSelect)
+            ownedSelect.value = item?.schoolOwned === false ? "external" : "school";
+          const descriptionInput = document.getElementById("mi-description");
+          if (descriptionInput) descriptionInput.value = item?.description || "";
+          const policySelect = document.getElementById("mi-due-policy");
+          if (policySelect)
+            policySelect.value = (item?.duePolicy || "NEXT_DAY_6PM").toUpperCase();
+          const offsetDays = document.getElementById("mi-offset-days");
+          if (offsetDays)
+            offsetDays.value = Number.isFinite(item?.dueDaysOffset)
+              ? item.dueDaysOffset
+              : 0;
+          const offsetHours = document.getElementById("mi-offset-hours");
+          if (offsetHours)
+            offsetHours.value = Number.isFinite(item?.dueHoursOffset)
+              ? item.dueHoursOffset
+              : 0;
+          const offsetTime = document.getElementById("mi-offset-time");
+          if (offsetTime)
+            offsetTime.value = fnFormatTimeForInput(item?.dueTime) || "18:00";
+          const fixedDue = document.getElementById("mi-fixed-due");
+          if (fixedDue) fixedDue.value = fnFormatDateTimeLocalInput(item?.fixedDueLocal);
+          fnUpdateItemDuePolicyVisibility("mi-due-policy", "form-manage-item");
+        }
+
+        async function fnOpenInventoryItemDialog(itemId) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage inventory items.");
+            return;
+          }
+          const dlg = document.getElementById("dlg-manage-item");
+          if (!dlg) return;
+          try {
+            const res = await fnApi(`/items/${encodeURIComponent(itemId)}`, {
+              method: "GET",
+            });
+            const detail = await res.json();
+            m_objActiveInventoryItem = detail;
+            fnPopulateManageItemForm(detail);
+            dlg.showModal();
+          } catch (err) {
+            console.error("Failed to load inventory item", err);
+            alert(err?.message || "Unable to load inventory item.");
+          }
+        }
+
+        function fnOpenUserEditDialog(username) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage user profiles.");
+            return;
+          }
+          const dlg = document.getElementById("dlg-edit-user");
+          if (!dlg) return;
+          const user = m_arrAdminUsers.find(
+            (entry) => entry.username === username,
+          );
+          if (!user) {
+            alert("User not found.");
+            return;
+          }
+          m_objActiveUser = user;
+          const hidden = document.getElementById("eu-username-hidden");
+          if (hidden) hidden.value = user.username || "";
+          const usernameInput = document.getElementById("eu-username");
+          if (usernameInput) usernameInput.value = user.username || "";
+          const displayInput = document.getElementById("eu-display");
+          if (displayInput) displayInput.value = user.displayName || "";
+          const roleSelect = document.getElementById("eu-role");
+          if (roleSelect) {
+            const canonicalRole = fnNormalizeUserRole(
+              user.role || user.roleLabel || "",
+            );
+            roleSelect.value = canonicalRole || "";
+          }
+          dlg.showModal();
+        }
+
         async function fnOpenCustomerProfileModal(borrowerId) {
           if (!USE_BACKEND) {
             alert("Enable backend to manage customer profiles.");
@@ -3059,22 +3930,16 @@
             );
             return;
           }
-          if (m_strLastProfileSearchTerm.length < 2) {
-            fnShowTableMessage(
-              tbodyId,
-              "Type at least 2 characters to search profiles.",
-            );
-            return;
-          }
           const token = ++m_intProfileSearchToken;
           if (showStatus) {
-            fnShowTableMessage(tbodyId, "Searching profiles…");
+            fnShowTableMessage(tbodyId, "Loading customer profiles…");
           }
           try {
-            const entries = await fnFetchCustomerProfiles({
-              search: m_strLastProfileSearchTerm,
-              top: 25,
-            });
+            const payload = { top: 25 };
+            if (m_strLastProfileSearchTerm) {
+              payload.search = m_strLastProfileSearchTerm;
+            }
+            const entries = await fnFetchCustomerProfiles(payload);
             if (token !== m_intProfileSearchToken) return;
             fnRenderCustomerProfiles(entries);
           } catch (err) {
@@ -3088,6 +3953,99 @@
           }
         }
 
+        async function fnDeleteCustomerProfile(button, id) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage customer profiles.");
+            return;
+          }
+          if (!id) return;
+          if (
+            !window.confirm(
+              "Delete this customer profile? This is only allowed when no loans or tickets exist.",
+            )
+          ) {
+            return;
+          }
+          try {
+            if (button) fnSetBusyState(button, true);
+            await fnApi(`/customers/${encodeURIComponent(id)}`, {
+              method: "DELETE",
+            });
+            if (
+              m_objActiveCustomerProfile &&
+              String(m_objActiveCustomerProfile.id || "") === String(id)
+            ) {
+              m_objActiveCustomerProfile = null;
+              fnCloseDialogById("dlg-manage-customer");
+            }
+            alert("Customer deleted.");
+            await fnRunCustomerProfileSearch(m_strLastProfileSearchTerm, {
+              showStatus: false,
+            });
+          } catch (err) {
+            console.error("Failed to delete customer", err);
+            alert(err?.message || "Unable to delete customer profile.");
+          } finally {
+            if (button) fnSetBusyState(button, false);
+          }
+        }
+
+        async function fnClearAuditLog(button) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage the action log.");
+            return;
+          }
+          if (!window.confirm("Clear all action log entries?")) return;
+          try {
+            if (button) fnSetBusyState(button, true);
+            await fnApi(`/admin/audit-log`, { method: "DELETE" });
+            alert("Action log cleared.");
+            await fnLoadAuditLog();
+          } catch (err) {
+            console.error("Failed to clear action log", err);
+            alert(err?.message || "Unable to clear action log.");
+          } finally {
+            if (button) fnSetBusyState(button, false);
+          }
+        }
+
+        async function fnClearDatabase(button) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage the database.");
+            return;
+          }
+          if (
+            !window.confirm(
+              "Clear the entire database? This removes all customers, inventory, users, loans, tickets, and log entries.",
+            )
+          ) {
+            return;
+          }
+          try {
+            if (button) fnSetBusyState(button, true);
+            await fnApi(`/admin/clear-database`, { method: "POST" });
+            m_objActiveCustomerProfile = null;
+            m_objActiveInventoryItem = null;
+            m_objActiveUser = null;
+            fnCloseDialogById("dlg-manage-customer");
+            fnCloseDialogById("dlg-manage-item");
+            fnCloseDialogById("dlg-edit-user");
+            alert("Database cleared.");
+            await fnLoadHomeData();
+            await fnLoadBorrowingData();
+            await fnLoadServiceData();
+            await fnLoadAuditLog();
+            await fnLoadInventoryData({ showStatus: true });
+            await fnLoadAdminUsers({ showStatus: true });
+            await fnRunCustomerProfileSearch("", { showStatus: true });
+          } catch (err) {
+            console.error("Failed to clear database", err);
+            alert(err?.message || "Unable to clear database.");
+          } finally {
+            if (button) fnSetBusyState(button, false);
+          }
+        }
+
         // ====== SAVE HANDLERS ======
         // New Customer (borrow/service)
         fnSelectElement("#nc-save").addEventListener(
@@ -3095,7 +4053,8 @@
           fnWithAsyncBusy(fnSelectElement("#nc-save"), async () => {
             const first = fnSelectElement("#nc-first").value.trim();
             const last = fnSelectElement("#nc-last").value.trim();
-            const action = fnSelectElement("#nc-action").value;
+            const dlg = document.getElementById("dlg-new-customer");
+            const action = dlg?.dataset.action === "service" ? "service" : "borrow";
             fnMust(first && last, "First/Last required.");
             if (action === "borrow") {
               fnMust(
@@ -3114,11 +4073,11 @@
             }
             // optional patterns
             const id = fnSelectElement("#nc-schoolid").value;
-            if (id && !/^\d{5,10}$/.test(id))
-              throw new Error("ID must be 5–10 digits.");
+            if (id && !/^\d{5,8}$/.test(id))
+              throw new Error("ID must be 5–8 digits.");
             const phone = fnSelectElement("#nc-phone").value;
-            if (phone && !/^\(\d{3}\) \d{3}-\d{4}$/.test(phone))
-              throw new Error("Phone format: (###) ###-####");
+            if (phone && !/^\d{10}$/.test(phone))
+              throw new Error("Phone must be 10 digits.");
 
             await fnApi("/customers", {
               method: "POST",
@@ -3129,7 +4088,6 @@
                 phone: phone || null,
                 room: fnSelectElement("#nc-room").value || null,
                 instructor: fnSelectElement("#nc-instructor").value || null,
-                dept: fnSelectElement("#nc-dept").value || null,
               }),
             });
 
@@ -3236,7 +4194,6 @@
             const form = document.getElementById("form-create-item");
             const name = fnSelectElement("#ci-name").value.trim();
             fnMust(name, "Item name required.");
-            const number = fnSelectElement("#ci-number").value.trim();
             const dept = fnSelectElement("#ci-dept").value.trim();
             const owned = fnSelectElement("#ci-owned").value !== "external";
             const description = fnSelectElement("#ci-description").value.trim();
@@ -3245,7 +4202,6 @@
 
             const payload = {
               name,
-              number: number || null,
               department: dept || null,
               schoolOwned: owned,
               description: description || null,
@@ -3283,13 +4239,17 @@
             const data = await res.json().catch(() => ({}));
             form?.reset();
             fnCloseDialogById("dlg-create-item");
-            fnUpdateItemDuePolicyVisibility();
+            fnUpdateItemDuePolicyVisibility(
+              "ci-due-policy",
+              "form-create-item",
+            );
             alert(
               data?.message ||
                 (data?.itemId
                   ? `Item saved (ID ${data.itemId}).`
                   : "Item saved."),
             );
+            await fnLoadInventoryData({ showStatus: false });
           }),
         );
 
@@ -3338,22 +4298,19 @@
             });
             fnCloseDialogById("dlg-create-user");
             alert("User created.");
+            await fnLoadAdminUsers({ showStatus: false });
           }),
         );
 
-        // Admin: Delete User
-        fnSelectElement("#du-delete").addEventListener(
-          "click",
-          fnWithAsyncBusy(fnSelectElement("#du-delete"), async () => {
-            const u = fnSelectElement("#du-username").value.trim();
-            fnMust(u, "Username required.");
-            await fnApi(`/users/${encodeURIComponent(u)}`, {
-              method: "DELETE",
-            });
-            fnCloseDialogById("dlg-delete-user");
-            alert("User deleted.");
-          }),
-        );
+        const auditSearchInput = document.getElementById("search-action-log");
+        if (auditSearchInput) {
+          const debouncedAuditSearch = fnDebounce(() => {
+            fnUpdateAuditLogSearch(auditSearchInput.value || "");
+          }, 200);
+          auditSearchInput.addEventListener("input", () => {
+            debouncedAuditSearch();
+          });
+        }
 
         // Admin: Customer Profiles
         const profileSearchInput = document.getElementById("search-profiles");
@@ -3370,15 +4327,104 @@
           });
         }
 
+        const userSearchInput = document.getElementById("search-admin-users");
+        if (userSearchInput) {
+          const debouncedUserSearch = fnDebounce(() => {
+            fnUpdateAdminUserSearch(userSearchInput.value);
+          }, 200);
+          userSearchInput.addEventListener("input", () => {
+            debouncedUserSearch();
+          });
+        }
+
+        const inventorySearchInput = document.getElementById(
+          "search-admin-inventory",
+        );
+        if (inventorySearchInput) {
+          const debouncedInventorySearch = fnDebounce(() => {
+            fnUpdateInventorySearch(inventorySearchInput.value);
+          }, 200);
+          inventorySearchInput.addEventListener("input", () => {
+            debouncedInventorySearch();
+          });
+        }
+
         const profileTable = document.getElementById("tbl-customer-profiles");
         if (profileTable) {
           profileTable.addEventListener("click", (event) => {
-            const btn = event.target.closest("[data-manage-profile]");
-            if (!btn) return;
-            const id = btn.dataset.manageProfile;
-            if (id) {
-              fnOpenCustomerProfileModal(id);
+            const editBtn = event.target.closest("[data-edit-profile]");
+            if (editBtn) {
+              const id = editBtn.dataset.editProfile;
+              if (id) {
+                fnOpenCustomerProfileModal(id);
+              }
+              return;
             }
+            const deleteBtn = event.target.closest("[data-delete-profile]");
+            if (deleteBtn) {
+              const id = deleteBtn.dataset.deleteProfile;
+              if (id) {
+                fnDeleteCustomerProfile(deleteBtn, id);
+              }
+            }
+          });
+        }
+
+        const userTable = document.getElementById("tbl-admin-users");
+        if (userTable) {
+          userTable.addEventListener("click", (event) => {
+            const editBtn = event.target.closest("[data-edit-user]");
+            if (editBtn) {
+              const username = editBtn.dataset.editUser;
+              if (username) {
+                fnOpenUserEditDialog(username);
+              }
+              return;
+            }
+            const deleteBtn = event.target.closest("[data-delete-user]");
+            if (deleteBtn) {
+              const username = deleteBtn.dataset.deleteUser;
+              if (username) {
+                fnDeleteUser(deleteBtn, username);
+              }
+            }
+          });
+        }
+
+        const inventoryTable = document.getElementById("tbl-admin-inventory");
+        if (inventoryTable) {
+          inventoryTable.addEventListener("click", (event) => {
+            const editBtn = event.target.closest("[data-edit-item]");
+            if (editBtn) {
+              const id = editBtn.dataset.editItem;
+              if (id) {
+                fnOpenInventoryItemDialog(id);
+              }
+              return;
+            }
+            const deleteBtn = event.target.closest("[data-delete-item]");
+            if (deleteBtn) {
+              const id = deleteBtn.dataset.deleteItem;
+              if (id) {
+                fnDeleteInventoryItem(deleteBtn, id);
+              }
+            }
+          });
+        }
+
+        const clearLogButton = document.getElementById("btn-clear-log");
+        if (clearLogButton) {
+          clearLogButton.addEventListener("click", () => {
+            fnClearAuditLog(clearLogButton);
+          });
+        }
+
+        const clearDatabaseButton = document.getElementById(
+          "btn-clear-database",
+        );
+        if (clearDatabaseButton) {
+          clearDatabaseButton.addEventListener("click", () => {
+            fnClearDatabase(clearDatabaseButton);
           });
         }
 
@@ -3469,6 +4515,113 @@
           });
         }
 
+        const manageItemSave = document.getElementById("mi-save");
+        if (manageItemSave) {
+          manageItemSave.addEventListener(
+            "click",
+            fnWithAsyncBusy(manageItemSave, async () => {
+              const id = fnSelectElement("#mi-id").value.trim();
+              fnMust(id, "Item identifier missing.");
+              const name = fnSelectElement("#mi-name").value.trim();
+              fnMust(name, "Item name required.");
+              const number = fnSelectElement("#mi-number").value.trim();
+              const dept = fnSelectElement("#mi-dept").value.trim();
+              const owned = fnSelectElement("#mi-owned").value !== "external";
+              const description = fnSelectElement("#mi-description").value.trim();
+              const policy = fnSelectElement("#mi-due-policy").value;
+              fnMust(policy, "Due policy required.");
+
+              const payload = {
+                name,
+                number: number || null,
+                department: dept || null,
+                schoolOwned: owned,
+                description: description || null,
+                duePolicy: policy,
+              };
+
+              if (policy === "OFFSET") {
+                const daysVal = fnSelectElement("#mi-offset-days").value;
+                const hoursVal = fnSelectElement("#mi-offset-hours").value;
+                const timeVal = fnSelectElement("#mi-offset-time").value;
+                const days = Number.parseInt(daysVal, 10);
+                const hours =
+                  hoursVal === "" ? 0 : Number.parseInt(hoursVal, 10);
+                fnMust(
+                  Number.isInteger(days) && days >= 0,
+                  "Offset days must be zero or greater.",
+                );
+                fnMust(
+                  Number.isInteger(hours) && hours >= 0,
+                  "Offset hours must be zero or greater.",
+                );
+                fnMust(timeVal, "Due time required.");
+                payload.offsetDays = days;
+                payload.offsetHours = hours;
+                payload.dueTime = timeVal;
+              } else if (policy === "SEMESTER") {
+                const fixed = fnSelectElement("#mi-fixed-due").value;
+                fnMust(fixed, "Fixed due date/time required.");
+                payload.fixedDue = fixed;
+              }
+
+              await fnApi(`/items/${encodeURIComponent(id)}`, {
+                method: "PUT",
+                body: JSON.stringify(payload),
+              });
+              fnCloseDialogById("dlg-manage-item");
+              alert("Item updated.");
+              await fnLoadInventoryData({ showStatus: false });
+            }),
+          );
+        }
+
+        const manageItemDelete = document.getElementById("mi-delete");
+        if (manageItemDelete) {
+          manageItemDelete.addEventListener(
+            "click",
+            fnWithAsyncBusy(manageItemDelete, async () => {
+              const id = fnSelectElement("#mi-id").value.trim();
+              fnMust(id, "Item identifier missing.");
+              if (
+                !window.confirm(
+                  "Delete this item? This action cannot be undone.",
+                )
+              ) {
+                return;
+              }
+              await fnApi(`/items/${encodeURIComponent(id)}`, {
+                method: "DELETE",
+              });
+              fnCloseDialogById("dlg-manage-item");
+              alert("Item deleted.");
+              await fnLoadInventoryData({ showStatus: false });
+            }),
+          );
+        }
+
+        const editUserSave = document.getElementById("eu-save");
+        if (editUserSave) {
+          editUserSave.addEventListener(
+            "click",
+            fnWithAsyncBusy(editUserSave, async () => {
+              const username =
+                fnSelectElement("#eu-username-hidden").value.trim() ||
+                fnSelectElement("#eu-username").value.trim();
+              const display = fnSelectElement("#eu-display").value.trim();
+              const role = fnSelectElement("#eu-role").value;
+              fnMust(username && display && role, "All fields required.");
+              await fnApi(`/users/${encodeURIComponent(username)}`, {
+                method: "PUT",
+                body: JSON.stringify({ display, role }),
+              });
+              fnCloseDialogById("dlg-edit-user");
+              alert("User updated.");
+              await fnLoadAdminUsers({ showStatus: false });
+            }),
+          );
+        }
+
         fnSetupDuePreview("nc-item", "nc-due-preview");
         fnSetupDuePreview("rb-item", "rb-due-preview");
         fnSetupBorrowerLookup({
@@ -3486,11 +4639,17 @@
 
         const duePolicySelect = document.getElementById("ci-due-policy");
         if (duePolicySelect) {
-          duePolicySelect.addEventListener(
-            "change",
-            fnUpdateItemDuePolicyVisibility,
+          duePolicySelect.addEventListener("change", () =>
+            fnUpdateItemDuePolicyVisibility("ci-due-policy", "form-create-item"),
           );
-          fnUpdateItemDuePolicyVisibility();
+          fnUpdateItemDuePolicyVisibility("ci-due-policy", "form-create-item");
+        }
+
+        const manageDuePolicySelect = document.getElementById("mi-due-policy");
+        if (manageDuePolicySelect) {
+          manageDuePolicySelect.addEventListener("change", () =>
+            fnUpdateItemDuePolicyVisibility("mi-due-policy", "form-manage-item"),
+          );
         }
 
         fnSetStatsLoading();
@@ -3502,12 +4661,22 @@
         if (USE_BACKEND) {
           fnShowTableMessage(
             "tbl-customer-profiles",
-            "Search to view customer profiles.",
+            "Loading customer profiles…",
           );
+          fnShowTableMessage("tbl-admin-users", "Loading user profiles…");
+          fnShowTableMessage("tbl-admin-inventory", "Loading inventory…");
         } else {
           fnShowTableMessage(
             "tbl-customer-profiles",
             "Enable backend to manage customer profiles.",
+          );
+          fnShowTableMessage(
+            "tbl-admin-users",
+            "Enable backend to load user profiles.",
+          );
+          fnShowTableMessage(
+            "tbl-admin-inventory",
+            "Enable backend to manage inventory items.",
           );
         }
 
@@ -3515,6 +4684,11 @@
         fnLoadBorrowingData();
         fnLoadServiceData();
         fnLoadAuditLog();
+        fnLoadInventoryData();
+        fnLoadAdminUsers();
+        if (USE_BACKEND) {
+          fnRunCustomerProfileSearch("", { showStatus: true });
+        }
 
         // keep row colors consistent if DOM changes later
         // Watch for table updates (e.g., new rows inserted) so the status tinting
