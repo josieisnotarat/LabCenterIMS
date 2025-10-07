@@ -3929,6 +3929,8 @@
           if (!Array.isArray(entries)) return [];
           const normalized = term.trim().toLowerCase();
           if (!normalized) return entries.slice();
+          const tokens = normalized.split(/\s+/).filter(Boolean);
+          if (!tokens.length) return entries.slice();
           return entries.filter((entry) => {
             const parts = [
               fnFormatAuditUser(entry),
@@ -3939,7 +3941,7 @@
             ]
               .map((val) => (val || "").toString().toLowerCase())
               .join(" ");
-            return parts.includes(normalized);
+            return tokens.every((token) => parts.includes(token));
           });
         }
 
@@ -4695,16 +4697,6 @@
             await fnLoadAdminUsers({ showStatus: false });
           }),
         );
-
-        const auditSearchInput = document.getElementById("search-action-log");
-        if (auditSearchInput) {
-          const debouncedAuditSearch = fnDebounce(() => {
-            fnUpdateAuditLogSearch(auditSearchInput.value || "");
-          }, 200);
-          auditSearchInput.addEventListener("input", () => {
-            debouncedAuditSearch();
-          });
-        }
 
         const auditSearchInput = document.getElementById("search-action-log");
         if (auditSearchInput) {
