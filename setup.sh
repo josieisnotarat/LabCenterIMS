@@ -22,15 +22,53 @@ warn() {
   echo -e "${WARN_COLOR}[WARN]${RESET_COLOR} $*"
 }
 
-require_cmd() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    echo "Required command '$1' is not available." >&2
+run_as_root() {
+  if [ "${EUID:-$(id -u)}" -ne 0 ]; then
+    if command -v sudo >/dev/null 2>&1; then
+      sudo "$@"
+    else
+      echo "Root privileges are required to run '$*'. Please rerun this script as root or install sudo." >&2
+      exit 1
+    fi
+  else
+    "$@"
+  fi
+}
+
+APT_UPDATED=0
+apt_update_once() {
+  if [ "$APT_UPDATED" -eq 0 ]; then
+    info "Updating apt package index..."
+    run_as_root apt-get update >/dev/null
+    APT_UPDATED=1
+  fi
+}
+
+ensure_cmd() {
+  local cmd="$1"
+  local package="${2:-$1}"
+
+  if command -v "$cmd" >/dev/null 2>&1; then
+    return
+  fi
+
+  if command -v apt-get >/dev/null 2>&1; then
+    apt_update_once
+    info "Installing ${package}..."
+    run_as_root apt-get install -y "$package" >/dev/null
+  else
+    echo "Required command '$cmd' is not available and automatic installation is unsupported on this system." >&2
+    exit 1
+  fi
+
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "Failed to install required command '$cmd'." >&2
     exit 1
   fi
 }
 
-require_cmd npm
-require_cmd docker
+ensure_cmd npm npm
+ensure_cmd docker docker.io
 
 if [ ! -d "node_modules" ] || [ ! -d "node_modules/express" ] || [ ! -d "node_modules/mssql" ]; then
   info "Installing Node dependencies..."

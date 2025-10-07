@@ -17,13 +17,23 @@ The front-end now expects to communicate with a lightweight Node/Express API tha
 
 ### Automated setup
 
-Run the provided setup script to install Node dependencies, provision SQL Server inside Docker, load the schema, create the application login, and write the `.env` file that the API consumes:
+Run the provided setup script to install Node dependencies, provision SQL Server inside Docker, load the schema, create the application login, and write the `.env` file that the API consumes.
+
+On macOS/Linux (Bash):
 
 ```bash
 ./setup.sh
 ```
 
-The script requires Docker and npm to be available locally. Once it completes, start the API with `npm start` and browse to `http://localhost:3000/`.
+On Windows (PowerShell 5.1+):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\setup.ps1
+```
+
+The PowerShell helper will attempt to install Node.js via `winget` if it is missing and will verify that Docker Desktop is installed and running before proceeding. If `winget` or Docker Desktop are not available, the script will stop with guidance so you can install the prerequisite manually (running the terminal as Administrator may be required for package installation).
+
+Once the setup script completes, start the API with `npm start` and browse to `http://localhost:3000/`.
 
 1. Install the dependencies:
 
