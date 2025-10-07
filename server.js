@@ -1,4 +1,5 @@
 const path = require('path');
+const crypto = require('crypto');
 const express = require('express');
 const sql = require('mssql');
 
@@ -24,6 +25,9 @@ const dbConfig = {
 
 let pool;
 let cachedDefaultUserId = null;
+
+const SESSION_TIMEOUT_MS = 15 * 60 * 1000;
+const sessions = new Map();
 
 const USER_ROLE_LABELS = {
   admin: 'Admin',
@@ -119,6 +123,153 @@ function mapTicketRow(row){
     loggedByName: assignedName
   };
 }
+
+function readAuthToken(req){
+  const header = req.headers?.authorization;
+  if(typeof header === 'string'){
+    const match = header.match(/^Bearer\s+(.+)$/i);
+    if(match){
+      const token = match[1]?.trim();
+      if(token){
+        return token;
+      }
+    }
+  }
+  return null;
+}
+
+function getActiveSession(token){
+  if(!token) return null;
+  const record = sessions.get(token);
+  if(!record) return null;
+  if(Date.now() - record.lastActive > SESSION_TIMEOUT_MS){
+    sessions.delete(token);
+    return null;
+  }
+  record.lastActive = Date.now();
+  return record;
+}
+
+function createSession(user){
+  if(!user || user.id == null){
+    throw new Error('Cannot create session without a user id.');
+  }
+  const token = crypto.randomBytes(32).toString('hex');
+  const payload = {
+    id: user.id,
+    username: user.username || null,
+    displayName: user.displayName || null,
+    role: user.role || null,
+    roleLabel: user.roleLabel || getUserRoleLabel(user.role),
+    createdUtc: user.createdUtc || null
+  };
+  sessions.set(token, { user: payload, lastActive: Date.now() });
+  return { token, user: payload };
+}
+
+function destroySession(token){
+  if(!token) return;
+  sessions.delete(token);
+}
+
+function invalidateSessionsForUser(userId){
+  if(userId == null) return;
+  for(const [token, session] of sessions.entries()){
+    if(session.user?.id === userId){
+      sessions.delete(token);
+    }
+  }
+}
+
+function updateSessionsForUser(user){
+  if(!user || user.id == null) return;
+  for(const [, session] of sessions.entries()){
+    if(session.user?.id === user.id){
+      session.user = {
+        id: user.id,
+        username: user.username || null,
+        displayName: user.displayName || null,
+        role: user.role || null,
+        roleLabel: user.roleLabel || getUserRoleLabel(user.role),
+        createdUtc: user.createdUtc || null
+      };
+      session.lastActive = Date.now();
+    }
+  }
+}
+
+function isApiRequest(req){
+  return typeof req.path === 'string' && req.path.startsWith('/api');
+}
+
+function isPublicApiRoute(req){
+  if(req.method === 'POST' && req.path === '/api/login') return true;
+  if(req.method === 'GET' && req.path === '/api/session') return true;
+  return false;
+}
+
+app.use((req, res, next) => {
+  if(!isApiRequest(req)){
+    return next();
+  }
+
+  const token = readAuthToken(req);
+  if(token){
+    const session = getActiveSession(token);
+    if(session){
+      req.user = session.user;
+      req.sessionToken = token;
+    }
+  }
+
+  if(isPublicApiRoute(req)){
+    return next();
+  }
+
+  if(!req.user){
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+
+  return next();
+});
+
+app.post('/api/login', asyncHandler(async (req, res) => {
+  const username = normalizeString(req.body?.username).toLowerCase();
+  const password = normalizeString(req.body?.password);
+  if(!username || !password){
+    return res.status(400).json({ error: 'Username and password are required.' });
+  }
+
+  const pool = await getPool();
+  let user;
+  try {
+    user = await findUserByCredentials(pool, username, password);
+  } catch(err){
+    console.error('Unable to verify login credentials:', err);
+    return res.status(500).json({ error: 'Unable to verify login credentials.' });
+  }
+
+  if(!user){
+    return res.status(401).json({ error: 'Invalid username or password.' });
+  }
+
+  const session = createSession(user);
+  res.json({ token: session.token, user: session.user });
+}));
+
+app.get('/api/session', asyncHandler(async (req, res) => {
+  if(!req.user){
+    return res.status(401).json({ error: 'Not authenticated.' });
+  }
+  res.json({ user: req.user });
+}));
+
+app.post('/api/logout', asyncHandler(async (req, res) => {
+  if(req.sessionToken){
+    destroySession(req.sessionToken);
+  }
+  res.json({ success: true });
+}));
 
 app.get('/api/dashboard-stats', asyncHandler(async (req, res) => {
   const pool = await getPool();
@@ -814,11 +965,18 @@ async function ensureUserTable(pool){
         strLastName    VARCHAR(50)  NOT NULL,
         strEmail       VARCHAR(120) NULL,
         strPhoneNumber VARCHAR(25)  NULL,
+        strPassword    VARCHAR(255) NOT NULL CONSTRAINT DF_TLabTechs_Password DEFAULT ('password123'),
         strRole        VARCHAR(50)  NOT NULL,
         blnIsActive    BIT          NOT NULL CONSTRAINT DF_TLabTechs_IsActive DEFAULT (1),
         dtmCreated     DATETIME2(0) NOT NULL CONSTRAINT DF_TLabTechs_Created DEFAULT (SYSUTCDATETIME()),
         CONSTRAINT CK_TLabTechs_Role CHECK (strRole IN ('admin','co-op'))
       );
+    END;
+
+    IF COL_LENGTH('dbo.TLabTechs','strPassword') IS NULL
+    BEGIN
+      ALTER TABLE dbo.TLabTechs
+        ADD strPassword VARCHAR(255) NOT NULL CONSTRAINT DF_TLabTechs_Password DEFAULT ('password123') WITH VALUES;
     END;
   `);
 }
@@ -834,6 +992,25 @@ function mapUserRow(row){
     roleLabel: getUserRoleLabel(row.strRole),
     createdUtc: toIso(row.dtmCreated)
   };
+}
+
+async function findUserByCredentials(pool, username, password){
+  const result = await pool.request()
+    .input('Username', sql.VarChar(120), username)
+    .input('Password', sql.VarChar(255), password)
+    .query(`
+      SELECT TOP (1)
+             intLabTechID,
+             strUsername,
+             strDisplayName,
+             strRole,
+             dtmCreated
+      FROM dbo.TLabTechs
+      WHERE blnIsActive = 1
+        AND LOWER(strUsername) = @Username
+        AND strPassword = @Password;
+    `);
+  return mapUserRow(result.recordset?.[0] || null);
 }
 
 async function generatePublicTicketId(pool){
@@ -1221,7 +1398,7 @@ app.post('/api/loans/checkout', asyncHandler(async (req, res) => {
   const dueInfo = await resolveItemDue(pool, itemId);
   const dueDate = dueInfo?.dueUtc ? new Date(dueInfo.dueUtc) : null;
 
-  const userId = await getDefaultUserId(pool);
+  const userId = req.user?.id ?? await getDefaultUserId(pool);
 
   const request = pool.request();
   request.input('intItemID', sql.Int, itemId);
@@ -1255,7 +1432,7 @@ app.post('/api/tickets', asyncHandler(async (req, res) => {
   const ticketLabel = itemId ? null : normalizeString(item);
 
   const publicId = await generatePublicTicketId(pool);
-  const userId = await getDefaultUserId(pool);
+  const userId = req.user?.id ?? await getDefaultUserId(pool);
 
   const request = pool.request();
   request.input('strPublicTicketID', sql.VarChar(20), publicId);
@@ -1561,7 +1738,7 @@ app.post('/api/status', asyncHandler(async (req, res) => {
   }
 
   const pool = await getPool();
-  const userId = await getDefaultUserId(pool);
+  const userId = req.user?.id ?? await getDefaultUserId(pool);
   const trimmedNote = normalizeString(note) || null;
 
   if(type === 'Loan'){
@@ -1698,9 +1875,10 @@ app.post('/api/users', asyncHandler(async (req, res) => {
       .input('First', sql.VarChar(50), firstLimited)
       .input('Last', sql.VarChar(50), lastLimited)
       .input('Role', sql.VarChar(50), roleName)
+      .input('Password', sql.VarChar(255), 'password123')
       .query(`
-        INSERT INTO dbo.TLabTechs(strUsername,strDisplayName,strFirstName,strLastName,strRole)
-        VALUES (@Username,@Display,@First,@Last,@Role);
+        INSERT INTO dbo.TLabTechs(strUsername,strDisplayName,strFirstName,strLastName,strRole,strPassword)
+        VALUES (@Username,@Display,@First,@Last,@Role,@Password);
       `);
   } catch(err){
     if(err && (err.number === 2627 || err.number === 2601)){
@@ -1764,7 +1942,11 @@ app.put('/api/users/:username', asyncHandler(async (req, res) => {
       WHERE strUsername = @Username;
     `);
 
-  res.json(mapUserRow(detail.recordset?.[0] || null));
+  const mapped = mapUserRow(detail.recordset?.[0] || null);
+  if(mapped){
+    updateSessionsForUser(mapped);
+  }
+  res.json(mapped);
 }));
 
 app.delete('/api/users/:username', asyncHandler(async (req, res) => {
@@ -1823,6 +2005,8 @@ app.delete('/api/users/:username', asyncHandler(async (req, res) => {
   if(!deleted){
     return res.status(404).json({ error: 'User not found.' });
   }
+
+  invalidateSessionsForUser(userId);
 
   res.json({ success: true });
 }));
