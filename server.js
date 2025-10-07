@@ -479,7 +479,7 @@ function mapItemRow(row){
       : null,
     dueTime: formatSqlTime(row.tDueTime),
     fixedDueLocal: toIso(row.dtmFixedDueLocal),
-    lastUpdatedUtc: toIso(row.dtmLastUpdated || row.dtmUpdated || row.dtmCreated || null)
+    lastUpdatedUtc: toIso(row.dtmLastUpdated || row.dtmUpdated || null)
   };
 }
 
@@ -498,7 +498,7 @@ async function loadItemRow(pool, itemId){
              i.intDueHoursOffset,
              i.tDueTime,
              i.dtmFixedDueLocal,
-             i.dtmCreated,
+             i.dtmUpdated,
              d.strDepartmentName
       FROM dbo.TItems AS i
       LEFT JOIN dbo.TDepartments AS d ON d.intDepartmentID = i.intDepartmentID
@@ -810,12 +810,10 @@ async function ensureUserTable(pool){
 
 function mapUserRow(row){
   if(!row) return null;
-  const canonicalRole = normalizeUserRole(row.strRole);
   return {
     username: row.strUsername || null,
     displayName: row.strDisplayName || null,
-    role: canonicalRole || (row.strRole || null),
-    roleLabel: getUserRoleLabel(row.strRole),
+    role: row.strRole || null,
     createdUtc: toIso(row.dtmCreated)
   };
 }
@@ -1118,7 +1116,7 @@ app.get('/api/items', asyncHandler(async (req, res) => {
            i.intDueHoursOffset,
            i.tDueTime,
            i.dtmFixedDueLocal,
-           i.dtmCreated,
+           i.dtmUpdated,
            d.strDepartmentName
     FROM dbo.TItems AS i
     LEFT JOIN dbo.TDepartments AS d ON d.intDepartmentID = i.intDepartmentID
@@ -1343,7 +1341,8 @@ app.put('/api/items/:id', asyncHandler(async (req, res) => {
           intDueDaysOffset = @intDueDaysOffset,
           intDueHoursOffset = @intDueHoursOffset,
           tDueTime = @tDueTime,
-          dtmFixedDueLocal = @dtmFixedDueLocal
+          dtmFixedDueLocal = @dtmFixedDueLocal,
+          dtmUpdated = SYSUTCDATETIME()
       WHERE intItemID = @ItemID;
     `);
   } catch(err){
@@ -1547,9 +1546,9 @@ app.put('/api/users/:username', asyncHandler(async (req, res) => {
 
   const { display, role } = req.body || {};
   const displayName = normalizeString(display);
-  const roleName = normalizeUserRole(role);
+  const roleName = normalizeString(role)?.toLowerCase();
   if(!displayName || !roleName){
-    return res.status(400).json({ error: 'Display and a valid role are required.' });
+    return res.status(400).json({ error: 'Display and role are required.' });
   }
 
   const pool = await getPool();
