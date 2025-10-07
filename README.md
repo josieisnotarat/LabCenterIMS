@@ -15,6 +15,16 @@ To initialize a fresh environment, run the script in SQL Server Management Studi
 
 The front-end now expects to communicate with a lightweight Node/Express API that proxies the stored procedures in `LabCenterDatabase.sql`.
 
+### Automated setup
+
+Run the provided setup script to install Node dependencies, provision SQL Server inside Docker, load the schema, create the application login, and write the `.env` file that the API consumes:
+
+```bash
+./setup.sh
+```
+
+The script requires Docker and npm to be available locally. Once it completes, start the API with `npm start` and browse to `http://localhost:3000/`.
+
 1. Install the dependencies:
 
    ```bash
@@ -27,7 +37,7 @@ The front-end now expects to communicate with a lightweight Node/Express API tha
    npm start
    ```
 
-The Node server already contains the default SQL Server credentials (`sa` / `yourStrong(!)Password`) and points to `localhost:1433` with the `dbLabCenter` database. Update `server.js` directly if you need different connection details.
+The Node server reads its SQL Server connection settings from environment variables or a local `.env` file. The automated setup script writes defaults for the bundled Docker container (`labcenter_app` / `LabCenter!AppPass` against `localhost:1433`). Update `.env` or the environment as needed if you are connecting to a different SQL Server instance.
 
 The app serves both the API under `/api/*` and the static UI. Visit `http://localhost:3000/` after the server is running to see the dashboard populated with live data from SQL Server.
 
