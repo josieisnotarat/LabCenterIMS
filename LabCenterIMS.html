@@ -1042,7 +1042,7 @@
                           padding: 18px 12px;
                         "
                       >
-                        Search to view customer profiles.
+                        Loading customer profiles…
                       </td>
                     </tr>
                   </tbody>
@@ -1658,15 +1658,13 @@
               <label>Role</label>
               <select id="cu-role" required>
                 <option value="">Select…</option>
-                <option value="inventory">Inventory</option>
-                <option value="order">Order Management</option>
-                <option value="runner">Runner</option>
-                <option value="admin">Admin</option>
+                <option value="labtech">Lab Tech</option>
+                <option value="co-op">Co-Op</option>
               </select>
             </div>
           </div>
           <div class="hint">
-            Users of this program are “Users.” Borrowing = “Customer”.
+            Roles are limited to Lab Tech and Co-Op to match staffing duties.
           </div>
         </div>
         <div class="modal-ft">
@@ -1877,6 +1875,23 @@
           dateStyle: "medium",
           timeStyle: "short",
         });
+
+        const USER_ROLE_LABELS = new Map([
+          ["labtech", "Lab Tech"],
+          ["co-op", "Co-Op"],
+        ]);
+        const USER_ROLE_ALIASES = new Map([
+          ["labtech", "labtech"],
+          ["lab tech", "labtech"],
+          ["lab_tech", "labtech"],
+          ["lab-tech", "labtech"],
+          ["labtechnician", "labtech"],
+          ["lab technician", "labtech"],
+          ["co-op", "co-op"],
+          ["coop", "co-op"],
+          ["co op", "co-op"],
+          ["co_op", "co-op"],
+        ]);
 
         function fnCreateStatusPill(strStatus) {
           const elPill = document.createElement("span");
@@ -2503,16 +2518,30 @@
                 : "—";
             fnAppendTableCell(tr, aliases);
             const actionCell = document.createElement("td");
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "btn";
-            btn.dataset.manageProfile = profile.id ?? "";
-            btn.innerHTML = "<span>Manage</span>";
-            btn.setAttribute(
+            const wrap = document.createElement("div");
+            wrap.style.display = "flex";
+            wrap.style.gap = "6px";
+            wrap.style.flexWrap = "wrap";
+            const editBtn = document.createElement("button");
+            editBtn.type = "button";
+            editBtn.className = "btn";
+            editBtn.dataset.editProfile = profile.id ?? "";
+            editBtn.textContent = "Edit";
+            editBtn.setAttribute(
               "aria-label",
-              `Manage profile for ${profile.name || "customer"}`,
+              `Edit profile for ${profile.name || "customer"}`,
             );
-            actionCell.appendChild(btn);
+            const deleteBtn = document.createElement("button");
+            deleteBtn.type = "button";
+            deleteBtn.className = "btn danger";
+            deleteBtn.dataset.deleteProfile = profile.id ?? "";
+            deleteBtn.textContent = "Delete";
+            deleteBtn.setAttribute(
+              "aria-label",
+              `Delete profile for ${profile.name || "customer"}`,
+            );
+            wrap.append(editBtn, deleteBtn);
+            actionCell.appendChild(wrap);
             tr.appendChild(actionCell);
             tbody.appendChild(tr);
           });
@@ -3778,22 +3807,16 @@
             );
             return;
           }
-          if (m_strLastProfileSearchTerm.length < 2) {
-            fnShowTableMessage(
-              tbodyId,
-              "Type at least 2 characters to search profiles.",
-            );
-            return;
-          }
           const token = ++m_intProfileSearchToken;
           if (showStatus) {
-            fnShowTableMessage(tbodyId, "Searching profiles…");
+            fnShowTableMessage(tbodyId, "Loading customer profiles…");
           }
           try {
-            const entries = await fnFetchCustomerProfiles({
-              search: m_strLastProfileSearchTerm,
-              top: 25,
-            });
+            const payload = { top: 25 };
+            if (m_strLastProfileSearchTerm) {
+              payload.search = m_strLastProfileSearchTerm;
+            }
+            const entries = await fnFetchCustomerProfiles(payload);
             if (token !== m_intProfileSearchToken) return;
             fnRenderCustomerProfiles(entries);
           } catch (err) {
@@ -3804,6 +3827,99 @@
               "Unable to load customer profiles.",
               "error",
             );
+          }
+        }
+
+        async function fnDeleteCustomerProfile(button, id) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage customer profiles.");
+            return;
+          }
+          if (!id) return;
+          if (
+            !window.confirm(
+              "Delete this customer profile? This removes all associated records.",
+            )
+          ) {
+            return;
+          }
+          try {
+            if (button) fnSetBusyState(button, true);
+            await fnApi(`/customers/${encodeURIComponent(id)}`, {
+              method: "DELETE",
+            });
+            if (
+              m_objActiveCustomerProfile &&
+              String(m_objActiveCustomerProfile.id || "") === String(id)
+            ) {
+              m_objActiveCustomerProfile = null;
+              fnCloseDialogById("dlg-manage-customer");
+            }
+            alert("Customer deleted.");
+            await fnRunCustomerProfileSearch(m_strLastProfileSearchTerm, {
+              showStatus: false,
+            });
+          } catch (err) {
+            console.error("Failed to delete customer", err);
+            alert(err?.message || "Unable to delete customer profile.");
+          } finally {
+            if (button) fnSetBusyState(button, false);
+          }
+        }
+
+        async function fnClearAuditLog(button) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage the action log.");
+            return;
+          }
+          if (!window.confirm("Clear all action log entries?")) return;
+          try {
+            if (button) fnSetBusyState(button, true);
+            await fnApi(`/admin/audit-log`, { method: "DELETE" });
+            alert("Action log cleared.");
+            await fnLoadAuditLog();
+          } catch (err) {
+            console.error("Failed to clear action log", err);
+            alert(err?.message || "Unable to clear action log.");
+          } finally {
+            if (button) fnSetBusyState(button, false);
+          }
+        }
+
+        async function fnClearDatabase(button) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage the database.");
+            return;
+          }
+          if (
+            !window.confirm(
+              "Clear the entire database? This removes all customers, inventory, users, loans, tickets, and log entries.",
+            )
+          ) {
+            return;
+          }
+          try {
+            if (button) fnSetBusyState(button, true);
+            await fnApi(`/admin/clear-database`, { method: "POST" });
+            m_objActiveCustomerProfile = null;
+            m_objActiveInventoryItem = null;
+            m_objActiveUser = null;
+            fnCloseDialogById("dlg-manage-customer");
+            fnCloseDialogById("dlg-manage-item");
+            fnCloseDialogById("dlg-edit-user");
+            alert("Database cleared.");
+            await fnLoadHomeData();
+            await fnLoadBorrowingData();
+            await fnLoadServiceData();
+            await fnLoadAuditLog();
+            await fnLoadInventoryData({ showStatus: true });
+            await fnLoadAdminUsers({ showStatus: true });
+            await fnRunCustomerProfileSearch("", { showStatus: true });
+          } catch (err) {
+            console.error("Failed to clear database", err);
+            alert(err?.message || "Unable to clear database.");
+          } finally {
+            if (button) fnSetBusyState(button, false);
           }
         }
 
@@ -4128,11 +4244,20 @@
         const profileTable = document.getElementById("tbl-customer-profiles");
         if (profileTable) {
           profileTable.addEventListener("click", (event) => {
-            const btn = event.target.closest("[data-manage-profile]");
-            if (!btn) return;
-            const id = btn.dataset.manageProfile;
-            if (id) {
-              fnOpenCustomerProfileModal(id);
+            const editBtn = event.target.closest("[data-edit-profile]");
+            if (editBtn) {
+              const id = editBtn.dataset.editProfile;
+              if (id) {
+                fnOpenCustomerProfileModal(id);
+              }
+              return;
+            }
+            const deleteBtn = event.target.closest("[data-delete-profile]");
+            if (deleteBtn) {
+              const id = deleteBtn.dataset.deleteProfile;
+              if (id) {
+                fnDeleteCustomerProfile(deleteBtn, id);
+              }
             }
           });
         }
@@ -4394,7 +4519,7 @@
         if (USE_BACKEND) {
           fnShowTableMessage(
             "tbl-customer-profiles",
-            "Search to view customer profiles.",
+            "Loading customer profiles…",
           );
           fnShowTableMessage("tbl-admin-users", "Loading user profiles…");
           fnShowTableMessage("tbl-admin-inventory", "Loading inventory…");

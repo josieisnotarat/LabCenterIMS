@@ -25,6 +25,24 @@ const dbConfig = {
 let pool;
 let cachedLabTechId = null;
 
+const USER_ROLE_LABELS = {
+  labtech: 'Lab Tech',
+  'co-op': 'Co-Op'
+};
+
+const USER_ROLE_ALIASES = new Map([
+  ['labtech', 'labtech'],
+  ['lab tech', 'labtech'],
+  ['lab_tech', 'labtech'],
+  ['lab-tech', 'labtech'],
+  ['labtechnician', 'labtech'],
+  ['lab technician', 'labtech'],
+  ['co-op', 'co-op'],
+  ['coop', 'co-op'],
+  ['co op', 'co-op'],
+  ['co_op', 'co-op']
+]);
+
 async function getPool(){
   if(pool && pool.connected){
     return pool;
@@ -277,6 +295,34 @@ app.get('/api/audit-log', asyncHandler(async (req, res) => {
 function normalizeString(value){
   if(typeof value !== 'string') return '';
   return value.trim();
+}
+
+function normalizeUserRole(value){
+  if(value == null) return null;
+  const text = value.toString().trim();
+  if(!text) return null;
+  const lower = text.toLowerCase();
+  if(USER_ROLE_ALIASES.has(lower)){
+    return USER_ROLE_ALIASES.get(lower);
+  }
+  const collapsedSpaces = lower.replace(/[\s_]+/g, ' ');
+  if(USER_ROLE_ALIASES.has(collapsedSpaces)){
+    return USER_ROLE_ALIASES.get(collapsedSpaces);
+  }
+  const collapsed = lower.replace(/[\s_-]+/g, '');
+  if(USER_ROLE_ALIASES.has(collapsed)){
+    return USER_ROLE_ALIASES.get(collapsed);
+  }
+  return null;
+}
+
+function getUserRoleLabel(role){
+  const canonical = normalizeUserRole(role);
+  if(canonical && USER_ROLE_LABELS[canonical]){
+    return USER_ROLE_LABELS[canonical];
+  }
+  const trimmed = normalizeString(role);
+  return trimmed || null;
 }
 
 function toIntOrNull(value){
@@ -998,6 +1044,31 @@ app.delete('/api/customers/:id/aliases/:aliasId', asyncHandler(async (req, res) 
   res.json({ success: true });
 }));
 
+app.delete('/api/customers/:id', asyncHandler(async (req, res) => {
+  const borrowerId = Number.parseInt(req.params.id, 10);
+  if(!Number.isFinite(borrowerId)){
+    return res.status(400).json({ error: 'Invalid customer id.' });
+  }
+
+  const pool = await getPool();
+  await ensureBorrowerAliasTable(pool);
+
+  const result = await pool.request()
+    .input('BorrowerId', sql.Int, borrowerId)
+    .query(`
+      DELETE FROM dbo.TBorrowerAliases WHERE intBorrowerID = @BorrowerId;
+      DELETE FROM dbo.TBorrowers WHERE intBorrowerID = @BorrowerId;
+      SELECT @@ROWCOUNT AS deleted;
+    `);
+
+  const deleted = result.recordset?.[0]?.deleted ?? 0;
+  if(!deleted){
+    return res.status(404).json({ error: 'Customer not found.' });
+  }
+
+  res.json({ success: true });
+}));
+
 app.post('/api/customers', asyncHandler(async (req, res) => {
   const { first, last, schoolId, phone, room, instructor } = req.body || {};
   const firstName = normalizeString(first);
@@ -1440,9 +1511,9 @@ app.post('/api/users', asyncHandler(async (req, res) => {
   const { username, display, role } = req.body || {};
   const user = normalizeString(username).toLowerCase();
   const displayName = normalizeString(display);
-  const roleName = normalizeString(role).toLowerCase();
+  const roleName = normalizeUserRole(role);
   if(!user || !displayName || !roleName){
-    return res.status(400).json({ error: 'Username, display, and role are required.' });
+    return res.status(400).json({ error: 'Username, display, and a valid role are required.' });
   }
 
   const pool = await getPool();
@@ -1531,6 +1602,42 @@ app.delete('/api/users/:username', asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'User not found.' });
   }
 
+  res.json({ success: true });
+}));
+
+app.delete('/api/admin/audit-log', asyncHandler(async (req, res) => {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF OBJECT_ID('dbo.TAuditLog','U') IS NOT NULL
+      DELETE FROM dbo.TAuditLog;
+  `);
+  res.json({ success: true });
+}));
+
+app.post('/api/admin/clear-database', asyncHandler(async (req, res) => {
+  const pool = await getPool();
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+  try {
+    const request = new sql.Request(transaction);
+    await request.batch(`
+      IF OBJECT_ID('dbo.TItemLoanNotes','U') IS NOT NULL DELETE FROM dbo.TItemLoanNotes;
+      IF OBJECT_ID('dbo.TItemLoans','U') IS NOT NULL DELETE FROM dbo.TItemLoans;
+      IF OBJECT_ID('dbo.TServiceTicketNotes','U') IS NOT NULL DELETE FROM dbo.TServiceTicketNotes;
+      IF OBJECT_ID('dbo.TServiceTickets','U') IS NOT NULL DELETE FROM dbo.TServiceTickets;
+      IF OBJECT_ID('dbo.TBorrowerAliases','U') IS NOT NULL DELETE FROM dbo.TBorrowerAliases;
+      IF OBJECT_ID('dbo.TBorrowers','U') IS NOT NULL DELETE FROM dbo.TBorrowers;
+      IF OBJECT_ID('dbo.TItems','U') IS NOT NULL DELETE FROM dbo.TItems;
+      IF OBJECT_ID('dbo.TAppUsers','U') IS NOT NULL DELETE FROM dbo.TAppUsers;
+      IF OBJECT_ID('dbo.TAuditLog','U') IS NOT NULL DELETE FROM dbo.TAuditLog;
+    `);
+    await transaction.commit();
+  } catch(err){
+    await transaction.rollback().catch(() => {});
+    throw err;
+  }
+
+  cachedLabTechId = null;
   res.json({ success: true });
 }));
 
