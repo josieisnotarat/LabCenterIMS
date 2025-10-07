@@ -337,6 +337,9 @@
       tr.clickable {
         cursor: pointer;
       }
+      tr.clickable:hover {
+        background: rgba(17, 24, 39, 0.04);
+      }
 
       /* consistent row emphasis */
       tr.is-overdue {
@@ -413,6 +416,14 @@
       }
       .btn.primary:hover {
         filter: brightness(0.96);
+      }
+      .btn.danger {
+        background: var(--overdue-bg);
+        color: var(--overdue-fg);
+        border-color: rgba(185, 28, 28, 0.35);
+      }
+      .btn.danger:hover {
+        filter: brightness(0.98);
       }
       .spinner {
         width: 14px;
@@ -1554,6 +1565,80 @@
       </form>
     </dialog>
 
+    <!-- Admin: Manage Item -->
+    <dialog id="dlg-manage-item">
+      <form method="dialog" id="form-manage-item" novalidate>
+        <div class="modal-hd">
+          <strong>Manage Inventory Item</strong>
+          <button class="btn" value="close">Close</button>
+        </div>
+        <div class="modal-bd">
+          <input type="hidden" id="mi-id" />
+          <div class="form-grid">
+            <div class="full">
+              <label>Item Name</label>
+              <input id="mi-name" required />
+            </div>
+            <div>
+              <label>Item Number</label>
+              <input id="mi-number" placeholder="optional" />
+            </div>
+            <div>
+              <label>Department</label>
+              <input id="mi-dept" placeholder="e.g., Electrical Engineering Tech" />
+            </div>
+            <div>
+              <label>Ownership</label>
+              <select id="mi-owned">
+                <option value="school">School-owned</option>
+                <option value="external">External / donated</option>
+              </select>
+            </div>
+            <div class="full">
+              <label>Description</label>
+              <textarea id="mi-description" placeholder="optional"></textarea>
+            </div>
+            <div class="full">
+              <label>Due Policy</label>
+              <select id="mi-due-policy">
+                <option value="NEXT_DAY_6PM">Next day at 6:00 PM</option>
+                <option value="OFFSET">Custom offset</option>
+                <option value="SEMESTER">Semester / fixed date</option>
+              </select>
+            </div>
+            <div class="due-config" data-policy="OFFSET">
+              <label>Offset (days)</label>
+              <input id="mi-offset-days" type="number" min="0" />
+            </div>
+            <div class="due-config" data-policy="OFFSET">
+              <label>Offset (hours)</label>
+              <input id="mi-offset-hours" type="number" min="0" />
+            </div>
+            <div class="due-config" data-policy="OFFSET">
+              <label>Due Time (local)</label>
+              <input id="mi-offset-time" type="time" />
+            </div>
+            <div class="due-config full" data-policy="SEMESTER">
+              <label>Fixed Due (local)</label>
+              <input id="mi-fixed-due" type="datetime-local" />
+              <div class="hint">Set the semester end date/time for this item.</div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-ft" style="display: flex; gap: 12px; justify-content: space-between; flex-wrap: wrap">
+          <button class="btn danger" type="button" id="mi-delete">
+            <span>Delete Item</span><span class="spinner" aria-hidden="true"></span>
+          </button>
+          <div style="display: flex; gap: 8px">
+            <button class="btn" value="close">Cancel</button>
+            <button class="btn primary" id="mi-save">
+              <span>Save Changes</span><span class="spinner" aria-hidden="true"></span>
+            </button>
+          </div>
+        </div>
+      </form>
+    </dialog>
+
     <!-- Admin: Create User -->
     <dialog id="dlg-create-user">
       <form method="dialog" id="form-create-user" novalidate>
@@ -1611,6 +1696,44 @@
           <button class="btn" value="close">Cancel</button>
           <button class="btn primary" id="du-delete">
             <span>Delete</span><span class="spinner" aria-hidden="true"></span>
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Admin: Edit User -->
+    <dialog id="dlg-edit-user">
+      <form method="dialog" id="form-edit-user" novalidate>
+        <div class="modal-hd">
+          <strong>Edit User</strong>
+          <button class="btn" value="close">Close</button>
+        </div>
+        <div class="modal-bd">
+          <input type="hidden" id="eu-username-hidden" />
+          <div class="form-grid">
+            <div>
+              <label>Username</label>
+              <input id="eu-username" readonly />
+            </div>
+            <div>
+              <label>Display Name</label>
+              <input id="eu-display" required />
+            </div>
+            <div class="full">
+              <label>Role</label>
+              <select id="eu-role" required>
+                <option value="inventory">Inventory</option>
+                <option value="order">Order Management</option>
+                <option value="runner">Runner</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-ft">
+          <button class="btn" value="close">Cancel</button>
+          <button class="btn primary" id="eu-save">
+            <span>Save Changes</span><span class="spinner" aria-hidden="true"></span>
           </button>
         </div>
       </form>
@@ -1960,11 +2083,16 @@
 
         // ====== NOTE HISTORY SUPPORT ======
         const m_mapDetailNoteCache = new Map();
-        let m_arrItemOptions = [];
+        let m_arrInventoryItems = [];
+        let m_arrAdminUsers = [];
         let m_arrAuditLogEntries = [];
         let m_strAuditLogSearchTerm = "";
+        let m_strInventorySearchTerm = "";
+        let m_strAdminUserSearchTerm = "";
         let m_strActiveDetailNoteKey = null;
         let m_objActiveCustomerProfile = null;
+        let m_objActiveInventoryItem = null;
+        let m_objActiveUser = null;
         let m_intProfileSearchToken = 0;
         let m_strLastProfileSearchTerm = "";
 
@@ -2450,27 +2578,202 @@
           }
         }
 
-        async function fnLoadItemOptions() {
-          try {
-            const items = await fnFetchItems();
-            const normalized = Array.isArray(items)
-              ? items
-                  .filter((item) => item && item.name)
-                  .map((item) => ({
-                    id: item.id ?? null,
-                    name: item.name || "",
-                  }))
-              : [];
-            normalized.sort((a, b) => a.name.localeCompare(b.name, undefined, {
-              sensitivity: "base",
-            }));
-            m_arrItemOptions = normalized;
+        function fnRenderInventoryTable(entries) {
+          const tbodyId = "tbl-admin-inventory";
+          const tbody = document.getElementById(tbodyId);
+          if (!tbody) return;
+          tbody.textContent = "";
+          if (!USE_BACKEND) {
+            fnShowTableMessage(
+              tbodyId,
+              "Enable backend to manage inventory items.",
+            );
+            return;
+          }
+          if (!Array.isArray(entries) || entries.length === 0) {
+            const message = m_arrInventoryItems.length
+              ? "No inventory items match your search."
+              : "No inventory items found.";
+            fnShowTableMessage(tbodyId, message);
+            return;
+          }
+          entries.forEach((item) => {
+            const tr = document.createElement("tr");
+            tr.classList.add("clickable");
+            tr.dataset.itemId = item.id != null ? item.id : "";
+            fnAppendTableCell(tr, item.name || "—");
+            fnAppendTableCell(tr, item.number || "—");
+            fnAppendTableCell(tr, item.department || "—");
+            fnAppendTableCell(tr, fnFormatItemDuePolicy(item));
+            tbody.appendChild(tr);
+          });
+        }
+
+        function fnFilterInventoryEntries(entries, term) {
+          if (!Array.isArray(entries)) return [];
+          const normalized = (term || "").trim().toLowerCase();
+          if (!normalized) return entries.slice();
+          return entries.filter((item) => {
+            const parts = [
+              item.name,
+              item.number,
+              item.department,
+              item.duePolicy,
+              item.duePolicyDescription,
+              fnFormatItemDuePolicy(item),
+            ];
+            return parts.some((part) =>
+              (part || "").toString().toLowerCase().includes(normalized),
+            );
+          });
+        }
+
+        function fnUpdateInventorySearch(term) {
+          m_strInventorySearchTerm = (term || "").trim();
+          const filtered = fnFilterInventoryEntries(
+            m_arrInventoryItems,
+            m_strInventorySearchTerm,
+          );
+          fnRenderInventoryTable(filtered);
+        }
+
+        async function fnLoadInventoryData({ showStatus = true } = {}) {
+          if (!USE_BACKEND) {
+            m_arrInventoryItems = [];
             ["nc-item", "rb-item", "ns-item", "rs-item"].forEach((id) => {
               const select = document.getElementById(id);
-              if (select) fnPopulateItemSelect(select, normalized);
+              if (select) fnPopulateItemSelect(select, []);
             });
+            fnRenderInventoryTable([]);
+            return;
+          }
+          if (showStatus) {
+            fnShowTableMessage("tbl-admin-inventory", "Loading inventory…");
+          }
+          try {
+            const items = await fnFetchItems();
+            const sorted = Array.isArray(items)
+              ? items
+                  .slice()
+                  .sort((a, b) =>
+                    (a.name || "").localeCompare(b.name || "", undefined, {
+                      sensitivity: "base",
+                    }),
+                  )
+              : [];
+            m_arrInventoryItems = sorted;
+            const optionList = sorted
+              .filter((item) => item && item.name)
+              .map((item) => ({
+                id: item.id ?? null,
+                name: item.name || "",
+              }));
+            ["nc-item", "rb-item", "ns-item", "rs-item"].forEach((id) => {
+              const select = document.getElementById(id);
+              if (select) fnPopulateItemSelect(select, optionList);
+            });
+            fnUpdateInventorySearch(m_strInventorySearchTerm);
           } catch (err) {
             console.error("Failed to load inventory items", err);
+            fnShowTableMessage(
+              "tbl-admin-inventory",
+              "Unable to load inventory items.",
+              "error",
+            );
+          }
+        }
+
+        function fnRenderAdminUsersTable(entries) {
+          const tbodyId = "tbl-admin-users";
+          const tbody = document.getElementById(tbodyId);
+          if (!tbody) return;
+          tbody.textContent = "";
+          if (!USE_BACKEND) {
+            fnShowTableMessage(
+              tbodyId,
+              "Enable backend to load user profiles.",
+            );
+            return;
+          }
+          if (!Array.isArray(entries) || entries.length === 0) {
+            const message = m_arrAdminUsers.length
+              ? "No user profiles match your search."
+              : "No user profiles found.";
+            fnShowTableMessage(tbodyId, message);
+            return;
+          }
+          entries.forEach((user) => {
+            const tr = document.createElement("tr");
+            tr.classList.add("clickable");
+            tr.dataset.username = user.username || "";
+            fnAppendTableCell(tr, user.username || "—");
+            fnAppendTableCell(tr, user.displayName || "—");
+            fnAppendTableCell(tr, fnFormatUserRole(user.role));
+            fnAppendTableCell(
+              tr,
+              user.createdUtc ? fnFormatLocalDateTime(user.createdUtc) : "—",
+            );
+            tbody.appendChild(tr);
+          });
+        }
+
+        function fnFilterAdminUsers(entries, term) {
+          if (!Array.isArray(entries)) return [];
+          const normalized = (term || "").trim().toLowerCase();
+          if (!normalized) return entries.slice();
+          return entries.filter((user) => {
+            const fields = [
+              user.username,
+              user.displayName,
+              user.role,
+              fnFormatUserRole(user.role),
+            ];
+            return fields.some((field) =>
+              (field || "").toString().toLowerCase().includes(normalized),
+            );
+          });
+        }
+
+        function fnUpdateAdminUserSearch(term) {
+          m_strAdminUserSearchTerm = (term || "").trim();
+          const filtered = fnFilterAdminUsers(
+            m_arrAdminUsers,
+            m_strAdminUserSearchTerm,
+          );
+          fnRenderAdminUsersTable(filtered);
+        }
+
+        async function fnLoadAdminUsers({ showStatus = true } = {}) {
+          if (!USE_BACKEND) {
+            m_arrAdminUsers = [];
+            fnRenderAdminUsersTable([]);
+            return;
+          }
+          if (showStatus) {
+            fnShowTableMessage("tbl-admin-users", "Loading user profiles…");
+          }
+          try {
+            const users = await fnFetchUsers();
+            const sorted = Array.isArray(users)
+              ? users
+                  .slice()
+                  .sort((a, b) =>
+                    (a.username || "").localeCompare(
+                      b.username || "",
+                      undefined,
+                      { sensitivity: "base" },
+                    ),
+                  )
+              : [];
+            m_arrAdminUsers = sorted;
+            fnUpdateAdminUserSearch(m_strAdminUserSearchTerm);
+          } catch (err) {
+            console.error("Failed to load user profiles", err);
+            fnShowTableMessage(
+              "tbl-admin-users",
+              "Unable to load user profiles.",
+              "error",
+            );
           }
         }
 
@@ -2495,6 +2798,80 @@
           if (!value) return null;
           const formatted = fnFormatLocalDateTime(value);
           return formatted && formatted !== "—" ? formatted : null;
+        }
+
+        function fnFormatDateTimeLocalInput(value) {
+          const dt = fnSafeDate(value);
+          if (!dt) return "";
+          const pad = (num) => String(num).padStart(2, "0");
+          const year = dt.getFullYear();
+          const month = pad(dt.getMonth() + 1);
+          const day = pad(dt.getDate());
+          const hours = pad(dt.getHours());
+          const minutes = pad(dt.getMinutes());
+          return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
+        function fnFormatTimeForInput(value) {
+          if (!value) return "";
+          if (typeof value === "string") {
+            const trimmed = value.trim();
+            if (!trimmed) return "";
+            return trimmed.substring(0, 5);
+          }
+          const dt = fnSafeDate(`1970-01-01T${value}`);
+          if (!dt) return "";
+          const pad = (num) => String(num).padStart(2, "0");
+          return `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+        }
+
+        function fnFormatUserRole(role) {
+          if (!role) return "—";
+          return role
+            .toString()
+            .split(/[_\s]+/)
+            .filter(Boolean)
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(" ");
+        }
+
+        function fnFormatItemDuePolicy(item) {
+          if (!item) return "—";
+          if (item.duePolicyDescription) return item.duePolicyDescription;
+          const policy = (item.duePolicy || "").toUpperCase();
+          if (!policy) return "—";
+          if (policy === "NEXT_DAY_6PM") return "Next day at 6:00 PM";
+          if (policy === "OFFSET") {
+            const days = Number.isFinite(item.dueDaysOffset)
+              ? item.dueDaysOffset
+              : null;
+            const hours = Number.isFinite(item.dueHoursOffset)
+              ? item.dueHoursOffset
+              : null;
+            const time = fnFormatTimeForInput(item.dueTime) || "";
+            const parts = [];
+            if (days != null) {
+              parts.push(
+                `${days} day${days === 1 ? "" : "s"}`,
+              );
+            }
+            if (hours != null && hours !== 0) {
+              parts.push(
+                `${hours} hour${hours === 1 ? "" : "s"}`,
+              );
+            }
+            if (time) {
+              parts.push(`at ${time}`);
+            }
+            return parts.length
+              ? `Offset ${parts.join(" ")}`
+              : "Custom offset";
+          }
+          if (policy === "SEMESTER" || policy === "FIXED") {
+            const fixed = fnNormalizeDueText(item.fixedDueLocal);
+            return fixed ? `Due ${fixed}` : "Semester due date not set";
+          }
+          return policy.replace(/_/g, " ");
         }
 
         function fnFormatCheckoutConfirmation(payload) {
@@ -2844,14 +3221,18 @@
           }
         }
 
-        function fnUpdateItemDuePolicyVisibility() {
-          const select = document.getElementById("ci-due-policy");
-          const form = document.getElementById("form-create-item");
+        function fnUpdateItemDuePolicyVisibility(
+          selectId = "ci-due-policy",
+          formId = "form-create-item",
+        ) {
+          const select = document.getElementById(selectId);
+          const form = formId
+            ? document.getElementById(formId)
+            : select?.closest("form");
           if (!select || !form) return;
           const policy = select.value;
           fnSelectAllElements(".due-config", form).forEach((el) => {
-            const active = el.dataset.policy === policy;
-            if (active) {
+            if (el.dataset.policy === policy) {
               el.classList.add("active");
             } else {
               el.classList.remove("active");
@@ -2923,6 +3304,20 @@
 
         async function fnFetchItems() {
           const res = await fnApi(`/items`, { method: "GET" });
+          const payload = await res.json();
+          if (Array.isArray(payload)) return payload;
+          if (Array.isArray(payload?.entries)) return payload.entries;
+          if (Array.isArray(payload?.data)) return payload.data;
+          return [];
+        }
+
+        async function fnFetchUsers(params = {}) {
+          const searchParams = new URLSearchParams();
+          if (params.search) searchParams.set("search", params.search);
+          const qs = searchParams.toString();
+          const res = await fnApi(`/users${qs ? `?${qs}` : ""}`, {
+            method: "GET",
+          });
           const payload = await res.json();
           if (Array.isArray(payload)) return payload;
           if (Array.isArray(payload?.entries)) return payload.entries;
@@ -3245,6 +3640,89 @@
           fnRenderCustomerAliasList(profile.aliases || []);
         }
 
+        function fnPopulateManageItemForm(item) {
+          const idInput = document.getElementById("mi-id");
+          if (idInput) idInput.value = item?.id ?? "";
+          const nameInput = document.getElementById("mi-name");
+          if (nameInput) nameInput.value = item?.name || "";
+          const numberInput = document.getElementById("mi-number");
+          if (numberInput) numberInput.value = item?.number || "";
+          const deptInput = document.getElementById("mi-dept");
+          if (deptInput) deptInput.value = item?.department || "";
+          const ownedSelect = document.getElementById("mi-owned");
+          if (ownedSelect)
+            ownedSelect.value = item?.schoolOwned === false ? "external" : "school";
+          const descriptionInput = document.getElementById("mi-description");
+          if (descriptionInput) descriptionInput.value = item?.description || "";
+          const policySelect = document.getElementById("mi-due-policy");
+          if (policySelect)
+            policySelect.value = (item?.duePolicy || "NEXT_DAY_6PM").toUpperCase();
+          const offsetDays = document.getElementById("mi-offset-days");
+          if (offsetDays)
+            offsetDays.value = Number.isFinite(item?.dueDaysOffset)
+              ? item.dueDaysOffset
+              : 0;
+          const offsetHours = document.getElementById("mi-offset-hours");
+          if (offsetHours)
+            offsetHours.value = Number.isFinite(item?.dueHoursOffset)
+              ? item.dueHoursOffset
+              : 0;
+          const offsetTime = document.getElementById("mi-offset-time");
+          if (offsetTime)
+            offsetTime.value = fnFormatTimeForInput(item?.dueTime) || "18:00";
+          const fixedDue = document.getElementById("mi-fixed-due");
+          if (fixedDue) fixedDue.value = fnFormatDateTimeLocalInput(item?.fixedDueLocal);
+          fnUpdateItemDuePolicyVisibility("mi-due-policy", "form-manage-item");
+        }
+
+        async function fnOpenInventoryItemDialog(itemId) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage inventory items.");
+            return;
+          }
+          const dlg = document.getElementById("dlg-manage-item");
+          if (!dlg) return;
+          try {
+            const res = await fnApi(`/items/${encodeURIComponent(itemId)}`, {
+              method: "GET",
+            });
+            const detail = await res.json();
+            m_objActiveInventoryItem = detail;
+            fnPopulateManageItemForm(detail);
+            dlg.showModal();
+          } catch (err) {
+            console.error("Failed to load inventory item", err);
+            alert(err?.message || "Unable to load inventory item.");
+          }
+        }
+
+        function fnOpenUserEditDialog(username) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage user profiles.");
+            return;
+          }
+          const dlg = document.getElementById("dlg-edit-user");
+          if (!dlg) return;
+          const user = m_arrAdminUsers.find(
+            (entry) => entry.username === username,
+          );
+          if (!user) {
+            alert("User not found.");
+            return;
+          }
+          m_objActiveUser = user;
+          const hidden = document.getElementById("eu-username-hidden");
+          if (hidden) hidden.value = user.username || "";
+          const usernameInput = document.getElementById("eu-username");
+          if (usernameInput) usernameInput.value = user.username || "";
+          const displayInput = document.getElementById("eu-display");
+          if (displayInput) displayInput.value = user.displayName || "";
+          const roleSelect = document.getElementById("eu-role");
+          if (roleSelect)
+            roleSelect.value = (user.role || "inventory").toLowerCase();
+          dlg.showModal();
+        }
+
         async function fnOpenCustomerProfileModal(borrowerId) {
           if (!USE_BACKEND) {
             alert("Enable backend to manage customer profiles.");
@@ -3522,13 +4000,17 @@
             const data = await res.json().catch(() => ({}));
             form?.reset();
             fnCloseDialogById("dlg-create-item");
-            fnUpdateItemDuePolicyVisibility();
+            fnUpdateItemDuePolicyVisibility(
+              "ci-due-policy",
+              "form-create-item",
+            );
             alert(
               data?.message ||
                 (data?.itemId
                   ? `Item saved (ID ${data.itemId}).`
                   : "Item saved."),
             );
+            await fnLoadInventoryData({ showStatus: false });
           }),
         );
 
@@ -3577,6 +4059,7 @@
             });
             fnCloseDialogById("dlg-create-user");
             alert("User created.");
+            await fnLoadAdminUsers({ showStatus: false });
           }),
         );
 
@@ -3591,6 +4074,7 @@
             });
             fnCloseDialogById("dlg-delete-user");
             alert("User deleted.");
+            await fnLoadAdminUsers({ showStatus: false });
           }),
         );
 
@@ -3619,6 +4103,28 @@
           });
         }
 
+        const userSearchInput = document.getElementById("search-admin-users");
+        if (userSearchInput) {
+          const debouncedUserSearch = fnDebounce(() => {
+            fnUpdateAdminUserSearch(userSearchInput.value);
+          }, 200);
+          userSearchInput.addEventListener("input", () => {
+            debouncedUserSearch();
+          });
+        }
+
+        const inventorySearchInput = document.getElementById(
+          "search-admin-inventory",
+        );
+        if (inventorySearchInput) {
+          const debouncedInventorySearch = fnDebounce(() => {
+            fnUpdateInventorySearch(inventorySearchInput.value);
+          }, 200);
+          inventorySearchInput.addEventListener("input", () => {
+            debouncedInventorySearch();
+          });
+        }
+
         const profileTable = document.getElementById("tbl-customer-profiles");
         if (profileTable) {
           profileTable.addEventListener("click", (event) => {
@@ -3627,6 +4133,30 @@
             const id = btn.dataset.manageProfile;
             if (id) {
               fnOpenCustomerProfileModal(id);
+            }
+          });
+        }
+
+        const userTable = document.getElementById("tbl-admin-users");
+        if (userTable) {
+          userTable.addEventListener("click", (event) => {
+            const row = event.target.closest("tr[data-username]");
+            if (!row) return;
+            const username = row.dataset.username;
+            if (username) {
+              fnOpenUserEditDialog(username);
+            }
+          });
+        }
+
+        const inventoryTable = document.getElementById("tbl-admin-inventory");
+        if (inventoryTable) {
+          inventoryTable.addEventListener("click", (event) => {
+            const row = event.target.closest("tr[data-item-id]");
+            if (!row) return;
+            const id = row.dataset.itemId;
+            if (id) {
+              fnOpenInventoryItemDialog(id);
             }
           });
         }
@@ -3718,6 +4248,113 @@
           });
         }
 
+        const manageItemSave = document.getElementById("mi-save");
+        if (manageItemSave) {
+          manageItemSave.addEventListener(
+            "click",
+            fnWithAsyncBusy(manageItemSave, async () => {
+              const id = fnSelectElement("#mi-id").value.trim();
+              fnMust(id, "Item identifier missing.");
+              const name = fnSelectElement("#mi-name").value.trim();
+              fnMust(name, "Item name required.");
+              const number = fnSelectElement("#mi-number").value.trim();
+              const dept = fnSelectElement("#mi-dept").value.trim();
+              const owned = fnSelectElement("#mi-owned").value !== "external";
+              const description = fnSelectElement("#mi-description").value.trim();
+              const policy = fnSelectElement("#mi-due-policy").value;
+              fnMust(policy, "Due policy required.");
+
+              const payload = {
+                name,
+                number: number || null,
+                department: dept || null,
+                schoolOwned: owned,
+                description: description || null,
+                duePolicy: policy,
+              };
+
+              if (policy === "OFFSET") {
+                const daysVal = fnSelectElement("#mi-offset-days").value;
+                const hoursVal = fnSelectElement("#mi-offset-hours").value;
+                const timeVal = fnSelectElement("#mi-offset-time").value;
+                const days = Number.parseInt(daysVal, 10);
+                const hours =
+                  hoursVal === "" ? 0 : Number.parseInt(hoursVal, 10);
+                fnMust(
+                  Number.isInteger(days) && days >= 0,
+                  "Offset days must be zero or greater.",
+                );
+                fnMust(
+                  Number.isInteger(hours) && hours >= 0,
+                  "Offset hours must be zero or greater.",
+                );
+                fnMust(timeVal, "Due time required.");
+                payload.offsetDays = days;
+                payload.offsetHours = hours;
+                payload.dueTime = timeVal;
+              } else if (policy === "SEMESTER") {
+                const fixed = fnSelectElement("#mi-fixed-due").value;
+                fnMust(fixed, "Fixed due date/time required.");
+                payload.fixedDue = fixed;
+              }
+
+              await fnApi(`/items/${encodeURIComponent(id)}`, {
+                method: "PUT",
+                body: JSON.stringify(payload),
+              });
+              fnCloseDialogById("dlg-manage-item");
+              alert("Item updated.");
+              await fnLoadInventoryData({ showStatus: false });
+            }),
+          );
+        }
+
+        const manageItemDelete = document.getElementById("mi-delete");
+        if (manageItemDelete) {
+          manageItemDelete.addEventListener(
+            "click",
+            fnWithAsyncBusy(manageItemDelete, async () => {
+              const id = fnSelectElement("#mi-id").value.trim();
+              fnMust(id, "Item identifier missing.");
+              if (
+                !window.confirm(
+                  "Delete this item? This action cannot be undone.",
+                )
+              ) {
+                return;
+              }
+              await fnApi(`/items/${encodeURIComponent(id)}`, {
+                method: "DELETE",
+              });
+              fnCloseDialogById("dlg-manage-item");
+              alert("Item deleted.");
+              await fnLoadInventoryData({ showStatus: false });
+            }),
+          );
+        }
+
+        const editUserSave = document.getElementById("eu-save");
+        if (editUserSave) {
+          editUserSave.addEventListener(
+            "click",
+            fnWithAsyncBusy(editUserSave, async () => {
+              const username =
+                fnSelectElement("#eu-username-hidden").value.trim() ||
+                fnSelectElement("#eu-username").value.trim();
+              const display = fnSelectElement("#eu-display").value.trim();
+              const role = fnSelectElement("#eu-role").value;
+              fnMust(username && display && role, "All fields required.");
+              await fnApi(`/users/${encodeURIComponent(username)}`, {
+                method: "PUT",
+                body: JSON.stringify({ display, role }),
+              });
+              fnCloseDialogById("dlg-edit-user");
+              alert("User updated.");
+              await fnLoadAdminUsers({ showStatus: false });
+            }),
+          );
+        }
+
         fnSetupDuePreview("nc-item", "nc-due-preview");
         fnSetupDuePreview("rb-item", "rb-due-preview");
         fnSetupBorrowerLookup({
@@ -3735,11 +4372,17 @@
 
         const duePolicySelect = document.getElementById("ci-due-policy");
         if (duePolicySelect) {
-          duePolicySelect.addEventListener(
-            "change",
-            fnUpdateItemDuePolicyVisibility,
+          duePolicySelect.addEventListener("change", () =>
+            fnUpdateItemDuePolicyVisibility("ci-due-policy", "form-create-item"),
           );
-          fnUpdateItemDuePolicyVisibility();
+          fnUpdateItemDuePolicyVisibility("ci-due-policy", "form-create-item");
+        }
+
+        const manageDuePolicySelect = document.getElementById("mi-due-policy");
+        if (manageDuePolicySelect) {
+          manageDuePolicySelect.addEventListener("change", () =>
+            fnUpdateItemDuePolicyVisibility("mi-due-policy", "form-manage-item"),
+          );
         }
 
         fnSetStatsLoading();
@@ -3753,10 +4396,20 @@
             "tbl-customer-profiles",
             "Search to view customer profiles.",
           );
+          fnShowTableMessage("tbl-admin-users", "Loading user profiles…");
+          fnShowTableMessage("tbl-admin-inventory", "Loading inventory…");
         } else {
           fnShowTableMessage(
             "tbl-customer-profiles",
             "Enable backend to manage customer profiles.",
+          );
+          fnShowTableMessage(
+            "tbl-admin-users",
+            "Enable backend to load user profiles.",
+          );
+          fnShowTableMessage(
+            "tbl-admin-inventory",
+            "Enable backend to manage inventory items.",
           );
         }
 
@@ -3764,7 +4417,8 @@
         fnLoadBorrowingData();
         fnLoadServiceData();
         fnLoadAuditLog();
-        fnLoadItemOptions();
+        fnLoadInventoryData();
+        fnLoadAdminUsers();
 
         // keep row colors consistent if DOM changes later
         // Watch for table updates (e.g., new rows inserted) so the status tinting
