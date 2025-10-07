@@ -430,10 +430,13 @@ function computeDueFromPolicy(row){
     const days = Number.isInteger(row.intDueDaysOffset) ? row.intDueDaysOffset : (policy === 'NEXT_DAY_6PM' ? 1 : 0);
     const hours = Number.isInteger(row.intDueHoursOffset) ? row.intDueHoursOffset : 0;
     const timeParts = toTimeParts(row.tDueTime);
+    const effectiveTime = timeParts || (policy === 'NEXT_DAY_6PM'
+      ? { hour: 18, minute: 0, second: 0 }
+      : null);
     due = new Date(now.getTime());
     if(days) due.setDate(due.getDate() + days);
-    if(timeParts){
-      due.setHours(timeParts.hour, timeParts.minute, timeParts.second, 0);
+    if(effectiveTime){
+      due.setHours(effectiveTime.hour, effectiveTime.minute, effectiveTime.second, 0);
     }else if(hours){
       due.setHours(due.getHours() + hours);
     }
