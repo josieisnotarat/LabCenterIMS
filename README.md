@@ -30,3 +30,7 @@ The front-end now expects to communicate with a lightweight Node/Express API tha
 The Node server already contains the default SQL Server credentials (`sa` / `yourStrong(!)Password`) and points to `localhost:1433` with the `dbLabCenter` database. Update `server.js` directly if you need different connection details.
 
 The app serves both the API under `/api/*` and the static UI. Visit `http://localhost:3000/` after the server is running to see the dashboard populated with live data from SQL Server.
+
+## Authentication
+
+The UI now requires users to sign in before accessing any API endpoints. Use an existing lab tech username from the database with the default password `password123`. You can change credentials directly in SQL Server by updating the `dbo.TLabTechCredentials` table or by creating new users through the API and then updating their hashes manually.
