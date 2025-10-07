@@ -951,13 +951,36 @@
             <div class="card">
               <h2 id="admin-action-title">Action Log</h2>
               <div class="body">
-                <div class="search" role="search" style="max-width: 320px">
-                  <input
-                    id="search-action-log"
-                    type="text"
-                    placeholder="Search by user, action, or detail…"
-                    aria-label="Search action log"
-                  />
+                <div
+                  class="toolbar"
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    gap: 12px;
+                    flex-wrap: wrap;
+                    align-items: center;
+                  "
+                >
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                    <button class="btn" type="button" id="btn-clear-log">
+                      <span>Clear Log</span>
+                    </button>
+                    <button
+                      class="btn danger"
+                      type="button"
+                      id="btn-clear-database"
+                    >
+                      <span>Clear Database</span>
+                    </button>
+                  </div>
+                  <div class="search" role="search" style="max-width: 320px">
+                    <input
+                      id="search-action-log"
+                      type="text"
+                      placeholder="Search by user, action, or detail…"
+                      aria-label="Search action log"
+                    />
+                  </div>
                 </div>
               </div>
               <div class="body table">
@@ -1073,9 +1096,6 @@
                     <button class="btn" data-open="dlg-create-user">
                       <span>Create User</span>
                     </button>
-                    <button class="btn" data-open="dlg-delete-user">
-                      <span>Delete User</span>
-                    </button>
                   </div>
                   <div class="search" role="search" style="flex: 1 1 240px">
                     <input
@@ -1095,6 +1115,7 @@
                       <th scope="col">Display Name</th>
                       <th scope="col">Role</th>
                       <th scope="col">Created</th>
+                      <th scope="col">Actions</th>
                     </tr>
                   </thead>
                   <tbody id="tbl-admin-users">
@@ -1157,12 +1178,13 @@
                       <th scope="col">Item Number</th>
                       <th scope="col">Department</th>
                       <th scope="col">Due Policy</th>
+                      <th scope="col">Actions</th>
                     </tr>
                   </thead>
                   <tbody id="tbl-admin-inventory">
                     <tr>
                       <td
-                        colspan="4"
+                        colspan="5"
                         style="
                           text-align: center;
                           color: var(--muted);
@@ -1655,13 +1677,13 @@
               <label>Role</label>
               <select id="cu-role" required>
                 <option value="">Select…</option>
-                <option value="labtech">Lab Tech</option>
+                <option value="admin">Admin</option>
                 <option value="co-op">Co-Op</option>
               </select>
             </div>
           </div>
           <div class="hint">
-            Roles are limited to Lab Tech and Co-Op to match staffing duties.
+            Roles are limited to Admin and Co-Op to match staffing duties.
           </div>
         </div>
         <div class="modal-ft">
@@ -1696,44 +1718,6 @@
               <select id="eu-role" required>
                 <option value="admin">Admin</option>
                 <option value="co-op">Co-Op</option>
-              </select>
-            </div>
-          </div>
-        </div>
-        <div class="modal-ft">
-          <button class="btn" value="close">Cancel</button>
-          <button class="btn primary" id="eu-save">
-            <span>Save Changes</span><span class="spinner" aria-hidden="true"></span>
-          </button>
-        </div>
-      </form>
-    </dialog>
-
-    <!-- Admin: Edit User -->
-    <dialog id="dlg-edit-user">
-      <form method="dialog" id="form-edit-user" novalidate>
-        <div class="modal-hd">
-          <strong>Edit User</strong>
-          <button class="btn" value="close">Close</button>
-        </div>
-        <div class="modal-bd">
-          <input type="hidden" id="eu-username-hidden" />
-          <div class="form-grid">
-            <div>
-              <label>Username</label>
-              <input id="eu-username" readonly />
-            </div>
-            <div>
-              <label>Display Name</label>
-              <input id="eu-display" required />
-            </div>
-            <div class="full">
-              <label>Role</label>
-              <select id="eu-role" required>
-                <option value="inventory">Inventory</option>
-                <option value="order">Order Management</option>
-                <option value="runner">Runner</option>
-                <option value="admin">Admin</option>
               </select>
             </div>
           </div>
@@ -1887,16 +1871,18 @@
         });
 
         const USER_ROLE_LABELS = new Map([
-          ["labtech", "Lab Tech"],
+          ["admin", "Admin"],
           ["co-op", "Co-Op"],
         ]);
         const USER_ROLE_ALIASES = new Map([
-          ["labtech", "labtech"],
-          ["lab tech", "labtech"],
-          ["lab_tech", "labtech"],
-          ["lab-tech", "labtech"],
-          ["labtechnician", "labtech"],
-          ["lab technician", "labtech"],
+          ["admin", "admin"],
+          ["administrator", "admin"],
+          ["labtech", "admin"],
+          ["lab tech", "admin"],
+          ["lab_tech", "admin"],
+          ["lab-tech", "admin"],
+          ["labtechnician", "admin"],
+          ["lab technician", "admin"],
           ["co-op", "co-op"],
           ["coop", "co-op"],
           ["co op", "co-op"],
@@ -2108,6 +2094,9 @@
 
         // ====== NOTE HISTORY SUPPORT ======
         const m_mapDetailNoteCache = new Map();
+        let m_arrCustomerProfiles = [];
+        let m_boolCustomerProfilesLoaded = false;
+        let m_boolCustomerProfilesLoading = false;
         let m_arrInventoryItems = [];
         let m_arrAdminUsers = [];
         let m_arrAuditLogEntries = [];
@@ -2816,6 +2805,310 @@
           }
         }
 
+        function fnRenderInventoryTable(entries) {
+          const tbodyId = "tbl-admin-inventory";
+          const tbody = document.getElementById(tbodyId);
+          if (!tbody) return;
+          tbody.textContent = "";
+          if (!USE_BACKEND) {
+            fnShowTableMessage(
+              tbodyId,
+              "Enable backend to manage inventory items.",
+            );
+            return;
+          }
+          if (!Array.isArray(entries) || entries.length === 0) {
+            const message = m_arrInventoryItems.length
+              ? "No inventory items match your search."
+              : "No inventory items found.";
+            fnShowTableMessage(tbodyId, message);
+            return;
+          }
+          entries.forEach((item) => {
+            const tr = document.createElement("tr");
+            fnAppendTableCell(tr, item.name || "—");
+            fnAppendTableCell(tr, item.number || "—");
+            fnAppendTableCell(tr, item.department || "—");
+            fnAppendTableCell(tr, fnFormatItemDuePolicy(item));
+            const actionCell = document.createElement("td");
+            const wrap = document.createElement("div");
+            wrap.style.display = "flex";
+            wrap.style.gap = "6px";
+            wrap.style.flexWrap = "wrap";
+            const editBtn = document.createElement("button");
+            editBtn.type = "button";
+            editBtn.className = "btn";
+            editBtn.dataset.editItem = item.id != null ? item.id : "";
+            editBtn.textContent = "Edit";
+            const deleteBtn = document.createElement("button");
+            deleteBtn.type = "button";
+            deleteBtn.className = "btn danger";
+            deleteBtn.dataset.deleteItem = item.id != null ? item.id : "";
+            deleteBtn.textContent = "Delete";
+            wrap.append(editBtn, deleteBtn);
+            actionCell.appendChild(wrap);
+            tr.appendChild(actionCell);
+            tbody.appendChild(tr);
+          });
+        }
+
+        function fnFilterInventoryEntries(entries, term) {
+          if (!Array.isArray(entries)) return [];
+          const normalized = (term || "").trim().toLowerCase();
+          if (!normalized) return entries.slice();
+          return entries.filter((item) => {
+            const parts = [
+              item.name,
+              item.number,
+              item.department,
+              item.duePolicy,
+              item.duePolicyDescription,
+              fnFormatItemDuePolicy(item),
+            ];
+            return parts.some((part) =>
+              (part || "").toString().toLowerCase().includes(normalized),
+            );
+          });
+        }
+
+        function fnUpdateInventorySearch(term) {
+          m_strInventorySearchTerm = (term || "").trim();
+          const filtered = fnFilterInventoryEntries(
+            m_arrInventoryItems,
+            m_strInventorySearchTerm,
+          );
+          fnRenderInventoryTable(filtered);
+        }
+
+        async function fnLoadInventoryData({ showStatus = true } = {}) {
+          if (!USE_BACKEND) {
+            m_arrInventoryItems = [];
+            ["nc-item", "rb-item", "ns-item", "rs-item"].forEach((id) => {
+              const select = document.getElementById(id);
+              if (select) fnPopulateItemSelect(select, []);
+            });
+            fnRenderInventoryTable([]);
+            return;
+          }
+          if (showStatus) {
+            fnShowTableMessage("tbl-admin-inventory", "Loading inventory…");
+          }
+          try {
+            const items = await fnFetchItems();
+            const sorted = Array.isArray(items)
+              ? items
+                  .slice()
+                  .sort((a, b) =>
+                    (a.name || "").localeCompare(b.name || "", undefined, {
+                      sensitivity: "base",
+                    }),
+                  )
+              : [];
+            m_arrInventoryItems = sorted;
+            const optionList = sorted
+              .filter((item) => item && item.name)
+              .map((item) => ({
+                id: item.id ?? null,
+                name: item.name || "",
+              }));
+            ["nc-item", "rb-item", "ns-item", "rs-item"].forEach((id) => {
+              const select = document.getElementById(id);
+              if (select) fnPopulateItemSelect(select, optionList);
+            });
+            fnUpdateInventorySearch(m_strInventorySearchTerm);
+          } catch (err) {
+            console.error("Failed to load inventory items", err);
+            fnShowTableMessage(
+              "tbl-admin-inventory",
+              "Unable to load inventory items.",
+              "error",
+            );
+          }
+        }
+
+        async function fnDeleteInventoryItem(button, id) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage inventory items.");
+            return;
+          }
+          if (!id) return;
+          if (
+            !window.confirm(
+              "Delete this item? This action cannot be undone.",
+            )
+          ) {
+            return;
+          }
+          try {
+            if (button) fnSetBusyState(button, true);
+            await fnApi(`/items/${encodeURIComponent(id)}`, {
+              method: "DELETE",
+            });
+            if (
+              m_objActiveInventoryItem &&
+              String(m_objActiveInventoryItem.id || "") === String(id)
+            ) {
+              m_objActiveInventoryItem = null;
+              fnCloseDialogById("dlg-manage-item");
+            }
+            alert("Item deleted.");
+            await fnLoadInventoryData({ showStatus: false });
+          } catch (err) {
+            console.error("Failed to delete item", err);
+            alert(err?.message || "Unable to delete item.");
+          } finally {
+            if (button) fnSetBusyState(button, false);
+          }
+        }
+
+        function fnRenderAdminUsersTable(entries) {
+          const tbodyId = "tbl-admin-users";
+          const tbody = document.getElementById(tbodyId);
+          if (!tbody) return;
+          tbody.textContent = "";
+          if (!USE_BACKEND) {
+            fnShowTableMessage(
+              tbodyId,
+              "Enable backend to load user profiles.",
+            );
+            return;
+          }
+          if (!Array.isArray(entries) || entries.length === 0) {
+            const message = m_arrAdminUsers.length
+              ? "No user profiles match your search."
+              : "No user profiles found.";
+            fnShowTableMessage(tbodyId, message);
+            return;
+          }
+          entries.forEach((user) => {
+            const tr = document.createElement("tr");
+            fnAppendTableCell(tr, user.username || "—");
+            fnAppendTableCell(tr, user.displayName || "—");
+            fnAppendTableCell(
+              tr,
+              fnFormatUserRole(user.roleLabel || user.role),
+            );
+            fnAppendTableCell(
+              tr,
+              user.createdUtc ? fnFormatLocalDateTime(user.createdUtc) : "—",
+            );
+            const actionCell = document.createElement("td");
+            const wrap = document.createElement("div");
+            wrap.style.display = "flex";
+            wrap.style.gap = "6px";
+            wrap.style.flexWrap = "wrap";
+            const editBtn = document.createElement("button");
+            editBtn.type = "button";
+            editBtn.className = "btn";
+            editBtn.dataset.editUser = user.username || "";
+            editBtn.textContent = "Edit";
+            const deleteBtn = document.createElement("button");
+            deleteBtn.type = "button";
+            deleteBtn.className = "btn danger";
+            deleteBtn.dataset.deleteUser = user.username || "";
+            deleteBtn.textContent = "Delete";
+            wrap.append(editBtn, deleteBtn);
+            actionCell.appendChild(wrap);
+            tr.appendChild(actionCell);
+            tbody.appendChild(tr);
+          });
+        }
+
+        function fnFilterAdminUsers(entries, term) {
+          if (!Array.isArray(entries)) return [];
+          const normalized = (term || "").trim().toLowerCase();
+          if (!normalized) return entries.slice();
+          return entries.filter((user) => {
+            const fields = [
+              user.username,
+              user.displayName,
+              user.role,
+              fnFormatUserRole(user.role),
+            ];
+            return fields.some((field) =>
+              (field || "").toString().toLowerCase().includes(normalized),
+            );
+          });
+        }
+
+        function fnUpdateAdminUserSearch(term) {
+          m_strAdminUserSearchTerm = (term || "").trim();
+          const filtered = fnFilterAdminUsers(
+            m_arrAdminUsers,
+            m_strAdminUserSearchTerm,
+          );
+          fnRenderAdminUsersTable(filtered);
+        }
+
+        async function fnLoadAdminUsers({ showStatus = true } = {}) {
+          if (!USE_BACKEND) {
+            m_arrAdminUsers = [];
+            fnRenderAdminUsersTable([]);
+            return;
+          }
+          if (showStatus) {
+            fnShowTableMessage("tbl-admin-users", "Loading user profiles…");
+          }
+          try {
+            const users = await fnFetchUsers();
+            const sorted = Array.isArray(users)
+              ? users
+                  .slice()
+                  .sort((a, b) =>
+                    (a.username || "").localeCompare(
+                      b.username || "",
+                      undefined,
+                      { sensitivity: "base" },
+                    ),
+                  )
+              : [];
+            m_arrAdminUsers = sorted;
+            fnUpdateAdminUserSearch(m_strAdminUserSearchTerm);
+          } catch (err) {
+            console.error("Failed to load user profiles", err);
+            fnShowTableMessage(
+              "tbl-admin-users",
+              "Unable to load user profiles.",
+              "error",
+            );
+          }
+        }
+
+        async function fnDeleteUser(button, username) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage user profiles.");
+            return;
+          }
+          if (!username) return;
+          if (
+            !window.confirm(
+              "Delete this user account? Only allowed when no historical activity exists.",
+            )
+          )
+            return;
+          try {
+            if (button) fnSetBusyState(button, true);
+            await fnApi(`/users/${encodeURIComponent(username)}`, {
+              method: "DELETE",
+            });
+            if (
+              m_objActiveUser &&
+              (m_objActiveUser.username || "").toLowerCase() ===
+                username.toLowerCase()
+            ) {
+              m_objActiveUser = null;
+              fnCloseDialogById("dlg-edit-user");
+            }
+            alert("User deleted.");
+            await fnLoadAdminUsers({ showStatus: false });
+          } catch (err) {
+            console.error("Failed to delete user", err);
+            alert(err?.message || "Unable to delete user.");
+          } finally {
+            if (button) fnSetBusyState(button, false);
+          }
+        }
+
         // ====== VALIDATION HELPERS ======
         // Tiny validation helpers shared by multiple forms.
         function fnMust(cond, msg) {
@@ -2837,6 +3130,98 @@
           if (!value) return null;
           const formatted = fnFormatLocalDateTime(value);
           return formatted && formatted !== "—" ? formatted : null;
+        }
+
+        function fnFormatDateTimeLocalInput(value) {
+          const dt = fnSafeDate(value);
+          if (!dt) return "";
+          const pad = (num) => String(num).padStart(2, "0");
+          const year = dt.getFullYear();
+          const month = pad(dt.getMonth() + 1);
+          const day = pad(dt.getDate());
+          const hours = pad(dt.getHours());
+          const minutes = pad(dt.getMinutes());
+          return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
+        function fnFormatTimeForInput(value) {
+          if (!value) return "";
+          if (typeof value === "string") {
+            const trimmed = value.trim();
+            if (!trimmed) return "";
+            return trimmed.substring(0, 5);
+          }
+          const dt = fnSafeDate(`1970-01-01T${value}`);
+          if (!dt) return "";
+          const pad = (num) => String(num).padStart(2, "0");
+          return `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+        }
+
+        function fnNormalizeUserRole(value) {
+          if (value == null) return null;
+          const text = value.toString().trim().toLowerCase();
+          if (!text) return null;
+          if (USER_ROLE_ALIASES.has(text)) return USER_ROLE_ALIASES.get(text);
+          const collapsedSpaces = text.replace(/[\s_]+/g, " ");
+          if (USER_ROLE_ALIASES.has(collapsedSpaces))
+            return USER_ROLE_ALIASES.get(collapsedSpaces);
+          const collapsed = text.replace(/[\s_-]+/g, "");
+          if (USER_ROLE_ALIASES.has(collapsed))
+            return USER_ROLE_ALIASES.get(collapsed);
+          return null;
+        }
+
+        function fnFormatUserRole(role) {
+          const canonical = fnNormalizeUserRole(role);
+          if (canonical && USER_ROLE_LABELS.has(canonical)) {
+            return USER_ROLE_LABELS.get(canonical);
+          }
+          if (!role) return "—";
+          return role
+            .toString()
+            .split(/[_\s]+/)
+            .filter(Boolean)
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(" ");
+        }
+
+        function fnFormatItemDuePolicy(item) {
+          if (!item) return "—";
+          if (item.duePolicyDescription) return item.duePolicyDescription;
+          const policy = (item.duePolicy || "").toUpperCase();
+          if (!policy) return "—";
+          if (policy === "NEXT_DAY_6PM") return "Next day at 6:00 PM";
+          if (policy === "OFFSET") {
+            const days = Number.isFinite(item.dueDaysOffset)
+              ? item.dueDaysOffset
+              : null;
+            const hours = Number.isFinite(item.dueHoursOffset)
+              ? item.dueHoursOffset
+              : null;
+            const time = fnFormatTimeForInput(item.dueTime) || "";
+            const parts = [];
+            if (days != null) {
+              parts.push(
+                `${days} day${days === 1 ? "" : "s"}`,
+              );
+            }
+            if (hours != null && hours !== 0) {
+              parts.push(
+                `${hours} hour${hours === 1 ? "" : "s"}`,
+              );
+            }
+            if (time) {
+              parts.push(`at ${time}`);
+            }
+            return parts.length
+              ? `Offset ${parts.join(" ")}`
+              : "Custom offset";
+          }
+          if (policy === "SEMESTER" || policy === "FIXED") {
+            const fixed = fnNormalizeDueText(item.fixedDueLocal);
+            return fixed ? `Due ${fixed}` : "Semester due date not set";
+          }
+          return policy.replace(/_/g, " ");
         }
 
         function fnFormatDateTimeLocalInput(value) {
@@ -3757,8 +4142,12 @@
           const displayInput = document.getElementById("eu-display");
           if (displayInput) displayInput.value = user.displayName || "";
           const roleSelect = document.getElementById("eu-role");
-          if (roleSelect)
-            roleSelect.value = (user.role || "inventory").toLowerCase();
+          if (roleSelect) {
+            const canonicalRole = fnNormalizeUserRole(
+              user.role || user.roleLabel || "",
+            );
+            roleSelect.value = canonicalRole || "";
+          }
           dlg.showModal();
         }
 
@@ -3811,6 +4200,9 @@
           if (!tbody) return;
           m_strLastProfileSearchTerm = (term || "").trim();
           if (!USE_BACKEND) {
+            m_arrCustomerProfiles = [];
+            m_boolCustomerProfilesLoaded = false;
+            m_boolCustomerProfilesLoading = false;
             fnShowTableMessage(
               tbodyId,
               "Enable backend to manage customer profiles.",
@@ -3818,6 +4210,7 @@
             return;
           }
           const token = ++m_intProfileSearchToken;
+          m_boolCustomerProfilesLoading = true;
           if (showStatus) {
             fnShowTableMessage(tbodyId, "Loading customer profiles…");
           }
@@ -3828,15 +4221,129 @@
             }
             const entries = await fnFetchCustomerProfiles(payload);
             if (token !== m_intProfileSearchToken) return;
-            fnRenderCustomerProfiles(entries);
+            m_arrCustomerProfiles = Array.isArray(entries)
+              ? entries.slice()
+              : [];
+            m_boolCustomerProfilesLoaded = true;
+            fnRenderCustomerProfiles(m_arrCustomerProfiles);
           } catch (err) {
             if (token !== m_intProfileSearchToken) return;
             console.error("Failed to load customer profiles", err);
+            m_arrCustomerProfiles = [];
+            m_boolCustomerProfilesLoaded = false;
             fnShowTableMessage(
               tbodyId,
               "Unable to load customer profiles.",
               "error",
             );
+          } finally {
+            if (token === m_intProfileSearchToken) {
+              m_boolCustomerProfilesLoading = false;
+            }
+          }
+        }
+
+        function fnEnsureCustomerProfilesLoaded() {
+          if (!USE_BACKEND) return;
+          if (m_boolCustomerProfilesLoaded || m_boolCustomerProfilesLoading) {
+            return;
+          }
+          fnRunCustomerProfileSearch("", { showStatus: true });
+        }
+
+        async function fnDeleteCustomerProfile(button, id) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage customer profiles.");
+            return;
+          }
+          if (!id) return;
+          if (
+            !window.confirm(
+              "Delete this customer profile? This is only allowed when no loans or tickets exist.",
+            )
+          ) {
+            return;
+          }
+          try {
+            if (button) fnSetBusyState(button, true);
+            await fnApi(`/customers/${encodeURIComponent(id)}`, {
+              method: "DELETE",
+            });
+            if (
+              m_objActiveCustomerProfile &&
+              String(m_objActiveCustomerProfile.id || "") === String(id)
+            ) {
+              m_objActiveCustomerProfile = null;
+              fnCloseDialogById("dlg-manage-customer");
+            }
+            alert("Customer deleted.");
+            await fnRunCustomerProfileSearch(m_strLastProfileSearchTerm, {
+              showStatus: false,
+            });
+          } catch (err) {
+            console.error("Failed to delete customer", err);
+            alert(err?.message || "Unable to delete customer profile.");
+          } finally {
+            if (button) fnSetBusyState(button, false);
+          }
+        }
+
+        async function fnClearAuditLog(button) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage the action log.");
+            return;
+          }
+          if (!window.confirm("Clear all action log entries?")) return;
+          try {
+            if (button) fnSetBusyState(button, true);
+            await fnApi(`/admin/audit-log`, { method: "DELETE" });
+            alert("Action log cleared.");
+            await fnLoadAuditLog();
+          } catch (err) {
+            console.error("Failed to clear action log", err);
+            alert(err?.message || "Unable to clear action log.");
+          } finally {
+            if (button) fnSetBusyState(button, false);
+          }
+        }
+
+        async function fnClearDatabase(button) {
+          if (!USE_BACKEND) {
+            alert("Enable backend to manage the database.");
+            return;
+          }
+          if (
+            !window.confirm(
+              "Clear the entire database? This removes all customers, inventory, users, loans, tickets, and log entries.",
+            )
+          ) {
+            return;
+          }
+          try {
+            if (button) fnSetBusyState(button, true);
+            await fnApi(`/admin/clear-database`, { method: "POST" });
+            m_objActiveCustomerProfile = null;
+            m_objActiveInventoryItem = null;
+            m_objActiveUser = null;
+            m_arrCustomerProfiles = [];
+            m_boolCustomerProfilesLoaded = false;
+            m_boolCustomerProfilesLoading = false;
+            fnCloseDialogById("dlg-manage-customer");
+            fnCloseDialogById("dlg-manage-item");
+            fnCloseDialogById("dlg-edit-user");
+            alert("Database cleared.");
+            await fnLoadHomeData();
+            await fnLoadBorrowingData();
+            await fnLoadServiceData();
+            await fnLoadAuditLog();
+            await fnLoadInventoryData({ showStatus: true });
+            await fnLoadAdminUsers({ showStatus: true });
+            await fnRunCustomerProfileSearch("", { showStatus: true });
+          } catch (err) {
+            console.error("Failed to clear database", err);
+            alert(err?.message || "Unable to clear database.");
+          } finally {
+            if (button) fnSetBusyState(button, false);
           }
         }
 
@@ -4189,20 +4696,15 @@
           }),
         );
 
-        // Admin: Delete User
-        fnSelectElement("#du-delete").addEventListener(
-          "click",
-          fnWithAsyncBusy(fnSelectElement("#du-delete"), async () => {
-            const u = fnSelectElement("#du-username").value.trim();
-            fnMust(u, "Username required.");
-            await fnApi(`/users/${encodeURIComponent(u)}`, {
-              method: "DELETE",
-            });
-            fnCloseDialogById("dlg-delete-user");
-            alert("User deleted.");
-            await fnLoadAdminUsers({ showStatus: false });
-          }),
-        );
+        const auditSearchInput = document.getElementById("search-action-log");
+        if (auditSearchInput) {
+          const debouncedAuditSearch = fnDebounce(() => {
+            fnUpdateAuditLogSearch(auditSearchInput.value || "");
+          }, 200);
+          auditSearchInput.addEventListener("input", () => {
+            debouncedAuditSearch();
+          });
+        }
 
         const auditSearchInput = document.getElementById("search-action-log");
         if (auditSearchInput) {
@@ -4275,11 +4777,20 @@
         const userTable = document.getElementById("tbl-admin-users");
         if (userTable) {
           userTable.addEventListener("click", (event) => {
-            const row = event.target.closest("tr[data-username]");
-            if (!row) return;
-            const username = row.dataset.username;
-            if (username) {
-              fnOpenUserEditDialog(username);
+            const editBtn = event.target.closest("[data-edit-user]");
+            if (editBtn) {
+              const username = editBtn.dataset.editUser;
+              if (username) {
+                fnOpenUserEditDialog(username);
+              }
+              return;
+            }
+            const deleteBtn = event.target.closest("[data-delete-user]");
+            if (deleteBtn) {
+              const username = deleteBtn.dataset.deleteUser;
+              if (username) {
+                fnDeleteUser(deleteBtn, username);
+              }
             }
           });
         }
@@ -4287,11 +4798,13 @@
         const inventoryTable = document.getElementById("tbl-admin-inventory");
         if (inventoryTable) {
           inventoryTable.addEventListener("click", (event) => {
-            const row = event.target.closest("tr[data-item-id]");
-            if (!row) return;
-            const id = row.dataset.itemId;
-            if (id) {
-              fnOpenInventoryItemDialog(id);
+            const editBtn = event.target.closest("[data-edit-item]");
+            if (editBtn) {
+              const id = editBtn.dataset.editItem;
+              if (id) {
+                fnOpenInventoryItemDialog(id);
+              }
+              return;
             }
             const deleteBtn = event.target.closest("[data-delete-item]");
             if (deleteBtn) {
@@ -4577,6 +5090,13 @@
         fnLoadAuditLog();
         fnLoadInventoryData();
         fnLoadAdminUsers();
+        fnEnsureCustomerProfilesLoaded();
+
+        window.addEventListener("hashchange", () => {
+          if (window.location.hash === "#admin-customers") {
+            fnEnsureCustomerProfilesLoaded();
+          }
+        });
 
         // keep row colors consistent if DOM changes later
         // Watch for table updates (e.g., new rows inserted) so the status tinting
