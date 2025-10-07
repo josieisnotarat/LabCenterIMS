@@ -15,6 +15,28 @@ To initialize a fresh environment, run the script in SQL Server Management Studi
 
 The front-end now expects to communicate with a lightweight Node/Express API that proxies the stored procedures in `LabCenterDatabase.sql`.
 
+### Automated setup
+
+Run the provided setup script to install Node dependencies, provision SQL Server inside Docker, load the schema, create the application login, and write the `.env` file that the API consumes.
+
+On macOS/Linux (Bash):
+
+```bash
+./setup.sh
+```
+
+On Windows (PowerShell 5.1+):
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+Unblock-File -Path .\setup.ps1
+./setup.ps1
+```
+
+When Windows flags the script as "not digitally signed," run the `Unblock-File` command above first (PowerShell adds this mark when the repository is downloaded from the internet). The PowerShell helper will attempt to install Node.js via `winget` if it is missing and will verify that Docker Desktop is installed and running before proceeding. If `winget` or Docker Desktop are not available, the script will stop with guidance so you can install the prerequisite manually (running the terminal as Administrator may be required for package installation).
+
+Once the setup script completes, start the API with `npm start` and browse to `http://localhost:3000/`.
+
 1. Install the dependencies:
 
    ```bash
@@ -27,7 +49,7 @@ The front-end now expects to communicate with a lightweight Node/Express API tha
    npm start
    ```
 
-The Node server already contains the default SQL Server credentials (`sa` / `yourStrong(!)Password`) and points to `localhost:1433` with the `dbLabCenter` database. Update `server.js` directly if you need different connection details.
+The Node server reads its SQL Server connection settings from environment variables or a local `.env` file. The automated setup script writes defaults for the bundled Docker container (`labcenter_app` / `LabCenter!AppPass` against `localhost:1433`). Update `.env` or the environment as needed if you are connecting to a different SQL Server instance.
 
 The app serves both the API under `/api/*` and the static UI. Visit `http://localhost:3000/` after the server is running to see the dashboard populated with live data from SQL Server.
 
