@@ -2182,14 +2182,28 @@ app.post('/api/admin/clear-database', asyncHandler(async (req, res) => {
     const adminLookup = new sql.Request(transaction);
     const adminResult = await adminLookup.query(`
       IF OBJECT_ID('dbo.TLabTechs','U') IS NOT NULL
-        SELECT TOP (1) intLabTechID
+        SELECT TOP (1)
+          intLabTechID,
+          blnIsActive
         FROM dbo.TLabTechs
         WHERE strRole = 'admin'
-        ORDER BY intLabTechID;
+        ORDER BY CASE WHEN blnIsActive = 1 THEN 0 ELSE 1 END, intLabTechID;
       ELSE
-        SELECT CAST(NULL AS INT) AS intLabTechID;
+        SELECT CAST(NULL AS INT) AS intLabTechID, CAST(NULL AS BIT) AS blnIsActive;
     `);
-    const adminId = adminResult.recordset?.[0]?.intLabTechID ?? null;
+    const adminRecord = adminResult.recordset?.[0];
+    const adminId = adminRecord?.intLabTechID ?? null;
+    const adminIsActive = adminRecord?.blnIsActive ?? null;
+
+    if (adminId != null && !adminIsActive) {
+      const ensureAdminActive = new sql.Request(transaction);
+      ensureAdminActive.input('AdminId', sql.Int, adminId);
+      await ensureAdminActive.query(`
+        UPDATE dbo.TLabTechs
+        SET blnIsActive = 1
+        WHERE intLabTechID = @AdminId;
+      `);
+    }
 
     const request = new sql.Request(transaction);
     if(adminId != null){
