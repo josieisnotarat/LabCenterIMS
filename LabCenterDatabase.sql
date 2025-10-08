@@ -16,6 +16,10 @@ GO
 USE dbLabCenter;
 GO
 
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 /* =========================
    Drop if re-running (dev)
    ========================= */
