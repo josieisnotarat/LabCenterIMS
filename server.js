@@ -2179,19 +2179,39 @@ app.post('/api/admin/clear-database', asyncHandler(async (req, res) => {
   const transaction = new sql.Transaction(pool);
   await transaction.begin();
   try {
-    const request = new sql.Request(transaction);
-    await request.batch(`
-      IF OBJECT_ID('dbo.TItemLoanNotes','U') IS NOT NULL DELETE FROM dbo.TItemLoanNotes;
-      IF OBJECT_ID('dbo.TItemLoans','U') IS NOT NULL DELETE FROM dbo.TItemLoans;
-      IF OBJECT_ID('dbo.TServiceTicketNotes','U') IS NOT NULL DELETE FROM dbo.TServiceTicketNotes;
-      IF OBJECT_ID('dbo.TServiceTickets','U') IS NOT NULL DELETE FROM dbo.TServiceTickets;
-      IF OBJECT_ID('dbo.TBorrowerAliases','U') IS NOT NULL DELETE FROM dbo.TBorrowerAliases;
-      IF OBJECT_ID('dbo.TBorrowers','U') IS NOT NULL DELETE FROM dbo.TBorrowers;
-      IF OBJECT_ID('dbo.TItems','U') IS NOT NULL DELETE FROM dbo.TItems;
-      IF OBJECT_ID('dbo.TLabTechs','U') IS NOT NULL DELETE FROM dbo.TLabTechs;
-      IF OBJECT_ID('dbo.TAuditLog','U') IS NOT NULL DELETE FROM dbo.TAuditLog;
-      IF OBJECT_ID('dbo.TDepartments','U') IS NOT NULL DELETE FROM dbo.TDepartments;
+    const adminLookup = new sql.Request(transaction);
+    const adminResult = await adminLookup.query(`
+      IF OBJECT_ID('dbo.TLabTechs','U') IS NOT NULL
+        SELECT TOP (1) intLabTechID
+        FROM dbo.TLabTechs
+        WHERE strRole = 'admin'
+        ORDER BY intLabTechID;
+      ELSE
+        SELECT CAST(NULL AS INT) AS intLabTechID;
     `);
+    const adminId = adminResult.recordset?.[0]?.intLabTechID ?? null;
+
+    const request = new sql.Request(transaction);
+    if(adminId != null){
+      request.input('AdminId', sql.Int, adminId);
+    }
+
+    const statements = [
+      "IF OBJECT_ID('dbo.TItemLoanNotes','U') IS NOT NULL DELETE FROM dbo.TItemLoanNotes;",
+      "IF OBJECT_ID('dbo.TItemLoans','U') IS NOT NULL DELETE FROM dbo.TItemLoans;",
+      "IF OBJECT_ID('dbo.TServiceTicketNotes','U') IS NOT NULL DELETE FROM dbo.TServiceTicketNotes;",
+      "IF OBJECT_ID('dbo.TServiceTickets','U') IS NOT NULL DELETE FROM dbo.TServiceTickets;",
+      "IF OBJECT_ID('dbo.TBorrowerAliases','U') IS NOT NULL DELETE FROM dbo.TBorrowerAliases;",
+      "IF OBJECT_ID('dbo.TBorrowers','U') IS NOT NULL DELETE FROM dbo.TBorrowers;",
+      "IF OBJECT_ID('dbo.TItems','U') IS NOT NULL DELETE FROM dbo.TItems;",
+      adminId != null
+        ? "IF OBJECT_ID('dbo.TLabTechs','U') IS NOT NULL DELETE FROM dbo.TLabTechs WHERE intLabTechID <> @AdminId;"
+        : "IF OBJECT_ID('dbo.TLabTechs','U') IS NOT NULL DELETE FROM dbo.TLabTechs;",
+      "IF OBJECT_ID('dbo.TAuditLog','U') IS NOT NULL DELETE FROM dbo.TAuditLog;",
+      "IF OBJECT_ID('dbo.TDepartments','U') IS NOT NULL DELETE FROM dbo.TDepartments;"
+    ].join('\n');
+
+    await request.batch(statements);
     await transaction.commit();
   } catch(err){
     await transaction.rollback().catch(() => {});
