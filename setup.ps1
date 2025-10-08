@@ -8,7 +8,8 @@ param(
     [string]$SqlAdminUser,
     [string]$SqlAdminPassword,
     [string]$AppDbUser = 'labcenter_app',
-    [string]$AppDbPassword = 'LabCenter!AppPass'
+    [string]$AppDbPassword = 'LabCenter!AppPass',
+    [switch]$InstallSqlServerExpress
 )
 
 $ErrorActionPreference = 'Stop'
@@ -154,6 +155,131 @@ function Ensure-NodeJs {
 Ensure-NodeJs
 Ensure-Command -Command sqlcmd -DisplayName 'SQL Server Command Line Utilities (sqlcmd)'
 
+function Get-SqlInstanceNameFromServer {
+    param([string]$Server)
+
+    if (-not $Server) {
+        return 'MSSQLSERVER'
+    }
+
+    $serverWithoutProtocol = $Server -replace '^tcp:', '', 'IgnoreCase'
+    if ($serverWithoutProtocol -match '\\([^,]+)') {
+        return $Matches[1]
+    }
+
+    return 'MSSQLSERVER'
+}
+
+function Get-SqlServiceName {
+    param([string]$InstanceName)
+
+    if ([string]::IsNullOrWhiteSpace($InstanceName) -or $InstanceName -ieq 'MSSQLSERVER') {
+        return 'MSSQLSERVER'
+    }
+
+    return "MSSQL`$$InstanceName"
+}
+
+function Wait-ForServiceRunning {
+    param(
+        [Parameter(Mandatory = $true)][System.ServiceProcess.ServiceController]$Service,
+        [TimeSpan]$Timeout = [TimeSpan]::FromMinutes(2)
+    )
+
+    if ($Service.Status -eq [System.ServiceProcess.ServiceControllerStatus]::Running) {
+        return
+    }
+
+    try {
+        if ($Service.Status -eq [System.ServiceProcess.ServiceControllerStatus]::Stopped -or
+            $Service.Status -eq [System.ServiceProcess.ServiceControllerStatus]::StopPending) {
+            Start-Service -InputObject $Service -ErrorAction Stop
+            $Service.Refresh()
+        }
+
+        $Service.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Running, $Timeout)
+    } catch {
+        throw "Failed to start SQL Server service '$($Service.ServiceName)'. Ensure you have permission to start services and retry."
+    }
+
+    if ($Service.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Running) {
+        throw "SQL Server service '$($Service.ServiceName)' is not running after installation."
+    }
+}
+
+function Install-SqlServerExpressInstance {
+    param(
+        [Parameter(Mandatory = $true)][string]$InstanceName
+    )
+
+    if ($InstanceName -ne 'SQLEXPRESS' -and $InstanceName -ne 'MSSQLSERVER') {
+        throw "Automatic SQL Server installation only supports the default ('MSSQLSERVER') or SQLEXPRESS instances. Update the -SqlServer argument or install SQL Server manually."
+    }
+
+    $wingetPath = Get-CommandPath 'winget'
+    if (-not $wingetPath) {
+        throw 'SQL Server is not installed and winget is unavailable, so it cannot be installed automatically. Install SQL Server Express manually and re-run this script.'
+    }
+
+    $instanceArgument = if ($InstanceName -eq 'MSSQLSERVER') { '/INSTANCENAME=MSSQLSERVER' } else { "/INSTANCENAME=$InstanceName" }
+    $overrideArgs = "/QS /IACCEPTSQLSERVERLICENSETERMS /ACTION=Install /FEATURES=SQLEngine $instanceArgument /SQLSVCACCOUNT=`"NT AUTHORITY\\NETWORK SERVICE`" /TCPENABLED=1 /NPENABLED=1"
+
+    $wingetArgs = @(
+        'install',
+        '--id', 'Microsoft.SQLServer.2022.Express',
+        '-e',
+        '--accept-package-agreements',
+        '--accept-source-agreements',
+        '--silent',
+        '--override',
+        $overrideArgs
+    )
+
+    Write-Info 'Installing SQL Server 2022 Express via winget. This may take several minutes...'
+    & $wingetPath @wingetArgs
+    $exitCode = $LASTEXITCODE
+
+    if ($exitCode -ne 0) {
+        throw "winget failed to install SQL Server Express (exit code $exitCode). Review the output above or install SQL Server manually."
+    }
+
+    Write-Success 'SQL Server Express installation completed.'
+}
+
+function Ensure-SqlServerInstance {
+    param(
+        [Parameter(Mandatory = $true)][string]$Server,
+        [switch]$AllowInstall
+    )
+
+    $instanceName = Get-SqlInstanceNameFromServer -Server $Server
+    $serviceName = Get-SqlServiceName -InstanceName $instanceName
+
+    $service = $null
+    try {
+        $service = Get-Service -Name $serviceName -ErrorAction Stop
+    } catch {
+        $service = $null
+    }
+
+    if (-not $service) {
+        if (-not $AllowInstall) {
+            return $false
+        }
+
+        Install-SqlServerExpressInstance -InstanceName $instanceName
+
+        try {
+            $service = Get-Service -Name $serviceName -ErrorAction Stop
+        } catch {
+            throw "SQL Server Express installation finished but service '$serviceName' was not found. Verify the installation or install SQL Server manually."
+        }
+    }
+
+    Wait-ForServiceRunning -Service $service
+    return $true
+}
+
 function Test-SqlServerConnection {
     param(
         [Parameter(Mandatory = $true)][string]$ServerAddress,
@@ -187,6 +313,15 @@ function Write-SqlServerDiagnostics {
     } else {
         Write-WarningMessage 'No SQL Server Windows services were detected. Install SQL Server Developer or Express Edition and ensure the service is running.'
     }
+}
+
+if ($InstallSqlServerExpress -and -not $PSBoundParameters.ContainsKey('SqlServer')) {
+    $SqlServer = 'localhost\SQLEXPRESS'
+}
+
+$instanceReady = Ensure-SqlServerInstance -Server $SqlServer -AllowInstall:$InstallSqlServerExpress
+if (-not $instanceReady) {
+    Write-WarningMessage "SQL Server service for '$SqlServer' was not found. Install SQL Server manually or re-run with -InstallSqlServerExpress to install SQL Server Express automatically."
 }
 
 if ([string]::IsNullOrWhiteSpace($SqlAdminUser)) {
