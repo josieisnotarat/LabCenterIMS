@@ -8,7 +8,8 @@ param(
     [string]$SqlAdminUser,
     [string]$SqlAdminPassword,
     [string]$AppDbUser = 'labcenter_app',
-    [string]$AppDbPassword = 'LabCenter!AppPass'
+    [string]$AppDbPassword = 'LabCenter!AppPass',
+    [switch]$InstallSqlServerExpress
 )
 
 $ErrorActionPreference = 'Stop'
@@ -154,6 +155,243 @@ function Ensure-NodeJs {
 Ensure-NodeJs
 Ensure-Command -Command sqlcmd -DisplayName 'SQL Server Command Line Utilities (sqlcmd)'
 
+function Get-SqlInstanceNameFromServer {
+    param([string]$Server)
+
+    if (-not $Server) {
+        return 'MSSQLSERVER'
+    }
+
+    $serverWithoutProtocol = $Server -ireplace '^tcp:', ''
+    if ($serverWithoutProtocol -match '\\([^,]+)') {
+        return $Matches[1]
+    }
+
+    return 'MSSQLSERVER'
+}
+
+function Get-SqlServiceName {
+    param([string]$InstanceName)
+
+    if ([string]::IsNullOrWhiteSpace($InstanceName) -or $InstanceName -ieq 'MSSQLSERVER') {
+        return 'MSSQLSERVER'
+    }
+
+    return "MSSQL`$$InstanceName"
+}
+
+function Wait-ForServiceRunning {
+    param(
+        [Parameter(Mandatory = $true)][System.ServiceProcess.ServiceController]$Service,
+        [TimeSpan]$Timeout = [TimeSpan]::FromMinutes(2)
+    )
+
+    if ($Service.Status -eq [System.ServiceProcess.ServiceControllerStatus]::Running) {
+        return
+    }
+
+    try {
+        if ($Service.Status -eq [System.ServiceProcess.ServiceControllerStatus]::Stopped -or
+            $Service.Status -eq [System.ServiceProcess.ServiceControllerStatus]::StopPending) {
+            Start-Service -InputObject $Service -ErrorAction Stop
+            $Service.Refresh()
+        }
+
+        $Service.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Running, $Timeout)
+    } catch {
+        throw "Failed to start SQL Server service '$($Service.ServiceName)'. Ensure you have permission to start services and retry."
+    }
+
+    if ($Service.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Running) {
+        throw "SQL Server service '$($Service.ServiceName)' is not running after installation."
+    }
+}
+
+function Ensure-SqlBrowserService {
+    try {
+        $browserService = Get-Service -Name 'SQLBrowser' -ErrorAction Stop
+    } catch {
+        Write-WarningMessage 'SQL Browser service was not found. Named SQL Server instances that rely on dynamic ports may require the SQL Browser service or an explicit -SqlPort value.'
+        return
+    }
+
+    if ($browserService.Status -eq [System.ServiceProcess.ServiceControllerStatus]::Running) {
+        return
+    }
+
+    Write-Info 'Starting SQL Browser service to enable named instance discovery...'
+    try {
+        Wait-ForServiceRunning -Service $browserService -Timeout ([TimeSpan]::FromMinutes(1))
+        Write-Success 'SQL Browser service is running.'
+    } catch {
+        Write-WarningMessage 'Failed to start the SQL Browser service. Specify -SqlPort explicitly if connections using instance names continue to fail.'
+    }
+}
+
+function Install-SqlServerExpressInstance {
+    param(
+        [Parameter(Mandatory = $true)][string]$InstanceName
+    )
+
+    if ($InstanceName -ne 'SQLEXPRESS' -and $InstanceName -ne 'MSSQLSERVER') {
+        throw "Automatic SQL Server installation only supports the default ('MSSQLSERVER') or SQLEXPRESS instances. Update the -SqlServer argument or install SQL Server manually."
+    }
+
+    $wingetPath = Get-CommandPath 'winget'
+    if (-not $wingetPath) {
+        throw 'SQL Server is not installed and winget is unavailable, so it cannot be installed automatically. Install SQL Server Express manually and re-run this script.'
+    }
+
+    $instanceArgument = if ($InstanceName -eq 'MSSQLSERVER') { '/INSTANCENAME=MSSQLSERVER' } else { "/INSTANCENAME=$InstanceName" }
+    $overrideArgs = "/QS /IACCEPTSQLSERVERLICENSETERMS /ACTION=Install /FEATURES=SQLEngine $instanceArgument /SQLSVCACCOUNT=`"NT AUTHORITY\\NETWORK SERVICE`" /TCPENABLED=1 /NPENABLED=1"
+
+    $wingetArgs = @(
+        'install',
+        '--id', 'Microsoft.SQLServer.2022.Express',
+        '-e',
+        '--accept-package-agreements',
+        '--accept-source-agreements',
+        '--silent',
+        '--override',
+        $overrideArgs
+    )
+
+    Write-Info 'Installing SQL Server 2022 Express via winget. This may take several minutes...'
+    & $wingetPath @wingetArgs
+    $exitCode = $LASTEXITCODE
+
+    if ($exitCode -ne 0) {
+        throw "winget failed to install SQL Server Express (exit code $exitCode). Review the output above or install SQL Server manually."
+    }
+
+    Write-Success 'SQL Server Express installation completed.'
+}
+
+function Ensure-SqlServerInstance {
+    param(
+        [Parameter(Mandatory = $true)][string]$Server,
+        [switch]$AllowInstall
+    )
+
+    $instanceName = Get-SqlInstanceNameFromServer -Server $Server
+    $serviceName = Get-SqlServiceName -InstanceName $instanceName
+
+    $service = $null
+    try {
+        $service = Get-Service -Name $serviceName -ErrorAction Stop
+    } catch {
+        $service = $null
+    }
+
+    if (-not $service) {
+        if (-not $AllowInstall) {
+            return $false
+        }
+
+        Install-SqlServerExpressInstance -InstanceName $instanceName
+
+        try {
+            $service = Get-Service -Name $serviceName -ErrorAction Stop
+        } catch {
+            throw "SQL Server Express installation finished but service '$serviceName' was not found. Verify the installation or install SQL Server manually."
+        }
+    }
+
+    Wait-ForServiceRunning -Service $service
+    return $true
+}
+
+function Get-SqlServerAddress {
+    param(
+        [Parameter(Mandatory = $true)][string]$Server,
+        [Parameter()][int]$Port = 1433
+    )
+
+    if (-not $Port -or $Port -eq 1433) {
+        return $Server
+    }
+
+    return "$Server,$Port"
+}
+
+function Test-SqlServerConnection {
+    param(
+        [Parameter(Mandatory = $true)][string]$ServerAddress,
+        [Parameter(Mandatory = $true)][string[]]$AuthArgs
+    )
+
+    $testArgs = @('-S', $ServerAddress, '-b', '-l', '5') + $AuthArgs + @('-d', 'master', '-Q', 'SELECT 1')
+    & sqlcmd @testArgs 2>$null | Out-Null
+    return $LASTEXITCODE -eq 0
+}
+
+function Get-SqlServerTcpPort {
+    param(
+        [Parameter(Mandatory = $true)][string]$ServerAddress,
+        [Parameter(Mandatory = $true)][string[]]$AuthArgs
+    )
+
+    $query = @"
+SET NOCOUNT ON;
+SELECT TOP (1) local_tcp_port
+FROM sys.dm_tcp_listener_states
+WHERE state = 0 AND local_tcp_port IS NOT NULL
+ORDER BY local_tcp_port DESC;
+"@
+
+    $args = @('-S', $ServerAddress, '-b') + $AuthArgs + @('-d', 'master', '-Q', $query)
+    $output = & sqlcmd @args
+
+    if ($LASTEXITCODE -ne 0) {
+        return $null
+    }
+
+    foreach ($line in $output) {
+        if ($line -match '^\s*(\d{1,5})\s*$') {
+            return [int]$Matches[1]
+        }
+    }
+
+    return $null
+}
+
+function Write-SqlServerDiagnostics {
+    $serviceNames = @('MSSQLSERVER', 'MSSQL$SQLEXPRESS')
+    $detectedServices = @()
+
+    foreach ($serviceName in $serviceNames) {
+        try {
+            $service = Get-Service -Name $serviceName -ErrorAction Stop
+            if ($service) {
+                $detectedServices += "${service.DisplayName} ($serviceName) - Status: $($service.Status)"
+            }
+        } catch {
+            continue
+        }
+    }
+
+    if ($detectedServices.Count -gt 0) {
+        foreach ($serviceInfo in $detectedServices) {
+            Write-WarningMessage "Detected SQL Server service: $serviceInfo"
+        }
+    } else {
+        Write-WarningMessage 'No SQL Server Windows services were detected. Install SQL Server Developer or Express Edition and ensure the service is running.'
+    }
+}
+
+if ($InstallSqlServerExpress -and -not $PSBoundParameters.ContainsKey('SqlServer')) {
+    $SqlServer = 'localhost\SQLEXPRESS'
+}
+
+$instanceReady = Ensure-SqlServerInstance -Server $SqlServer -AllowInstall:$InstallSqlServerExpress
+if (-not $instanceReady) {
+    Write-WarningMessage "SQL Server service for '$SqlServer' was not found. Install SQL Server manually or re-run with -InstallSqlServerExpress to install SQL Server Express automatically."
+}
+
+if ($SqlServer -match '\\' -and -not $PSBoundParameters.ContainsKey('SqlPort')) {
+    Ensure-SqlBrowserService
+}
+
 if ([string]::IsNullOrWhiteSpace($SqlAdminUser)) {
     Write-Info 'Using Windows authentication for sqlcmd connections.'
     $authArgs = @('-E')
@@ -169,7 +407,7 @@ if ($SqlPort -le 0 -or $SqlPort -gt 65535) {
     throw 'SqlPort must be between 1 and 65535.'
 }
 
-$serverAddress = if ($SqlPort -eq 1433) { $SqlServer } else { "$SqlServer,$SqlPort" }
+$serverAddress = Get-SqlServerAddress -Server $SqlServer -Port $SqlPort
 
 $SqlFile = Join-Path $RootDir 'LabCenterDatabase.sql'
 if (-not (Test-Path $SqlFile)) {
@@ -179,6 +417,15 @@ if (-not (Test-Path $SqlFile)) {
 $escapedAppDbUserIdentifier = $AppDbUser -replace ']', ']]'
 $escapedAppDbUserLiteral = $AppDbUser -replace "'", "''"
 $escapedAppDbPasswordLiteral = $AppDbPassword -replace "'", "''"
+
+if (-not (Test-SqlServerConnection -ServerAddress $serverAddress -AuthArgs $authArgs)) {
+    Write-WarningMessage "Unable to establish a sqlcmd connection to '$serverAddress'."
+    Write-WarningMessage 'Ensure SQL Server is installed, the service is running, and that the server name and port parameters are correct.'
+    Write-WarningMessage "If you are using a named instance, re-run the script with -SqlServer 'localhost\\InstanceName' (for example localhost\\SQLEXPRESS) or specify -SqlPort when using a custom port."
+    Write-WarningMessage 'You can manually test the connection by running: sqlcmd -S <server> -Q "SELECT 1"'
+    Write-SqlServerDiagnostics
+    throw 'SQL Server connection test failed. Start SQL Server and re-run this setup script.'
+}
 
 Write-Info "Applying Lab Center database schema to '$serverAddress'..."
 $sqlcmdArgs = @('-S', $serverAddress, '-b') + $authArgs + @('-i', $SqlFile)
@@ -226,6 +473,26 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Success 'Database login configured.'
 
+$explicitPortProvided = $PSBoundParameters.ContainsKey('SqlPort')
+if (-not $explicitPortProvided) {
+    $detectedPort = Get-SqlServerTcpPort -ServerAddress $serverAddress -AuthArgs $authArgs
+    if ($detectedPort) {
+        if ($detectedPort -ne $SqlPort) {
+            Write-Info "Detected TCP port $detectedPort for SQL Server instance '$SqlServer'."
+        }
+        $SqlPort = $detectedPort
+        $serverAddress = Get-SqlServerAddress -Server $SqlServer -Port $SqlPort
+    } elseif ($SqlServer -match '\\') {
+        Write-WarningMessage 'SQL Server did not report a TCP listener port. Ensure the SQL Browser service is running or specify -SqlPort explicitly.'
+    }
+}
+
+$appAuthArgs = @('-U', $AppDbUser, '-P', $AppDbPassword)
+if (-not (Test-SqlServerConnection -ServerAddress $serverAddress -AuthArgs $appAuthArgs)) {
+    throw "Application SQL login '$AppDbUser' could not connect using the provided credentials. Verify SQL authentication is enabled and the username/password are correct."
+}
+Write-Success "Verified application SQL login '$AppDbUser'."
+
 $envFile = Join-Path $RootDir '.env'
 if (Test-Path $envFile) {
     $timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
@@ -234,15 +501,21 @@ if (Test-Path $envFile) {
     Copy-Item $envFile $backupFile -Force
 }
 
-$envContent = @"
-DB_USER=$AppDbUser
-DB_PASSWORD=$AppDbPassword
-DB_SERVER=$SqlServer
-DB_PORT=$SqlPort
-DB_NAME=$DatabaseName
-DB_ENCRYPT=false
-DB_TRUST_SERVER_CERTIFICATE=true
-"@
+$envLines = [System.Collections.Generic.List[string]]::new()
+$null = $envLines.Add("DB_USER=$AppDbUser")
+$null = $envLines.Add("DB_PASSWORD=$AppDbPassword")
+$null = $envLines.Add("DB_SERVER=$SqlServer")
+
+$shouldIncludePort = $explicitPortProvided -or ($SqlServer -notmatch '\\') -or ($SqlPort -and $SqlPort -ne 1433)
+if ($shouldIncludePort) {
+    $null = $envLines.Add("DB_PORT=$SqlPort")
+}
+
+$null = $envLines.Add("DB_NAME=$DatabaseName")
+$null = $envLines.Add('DB_ENCRYPT=false')
+$null = $envLines.Add('DB_TRUST_SERVER_CERTIFICATE=true')
+
+$envContent = [string]::Join([Environment]::NewLine, $envLines) + [Environment]::NewLine
 $envContent | Set-Content -Path $envFile -Encoding UTF8
 Write-Success "Wrote database connection settings to $envFile."
 
