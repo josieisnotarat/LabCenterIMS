@@ -1821,6 +1821,19 @@
                 <option value="co-op">Co-Op</option>
               </select>
             </div>
+            <div class="full">
+              <label for="cu-password">Password</label>
+              <input
+                id="cu-password"
+                type="password"
+                required
+                minlength="8"
+                maxlength="255"
+                autocomplete="new-password"
+                placeholder="Set an initial password for this user"
+              />
+              <p class="hint">Passwords must be at least 8 characters.</p>
+            </div>
           </div>
           <div class="hint">
             Roles are limited to Admin and Co-Op to match staffing duties.
@@ -1859,6 +1872,20 @@
                 <option value="admin">Admin</option>
                 <option value="co-op">Co-Op</option>
               </select>
+            </div>
+            <div class="full">
+              <label for="eu-password">New Password</label>
+              <input
+                id="eu-password"
+                type="password"
+                maxlength="255"
+                autocomplete="new-password"
+                placeholder="Leave blank to keep current password"
+              />
+              <p class="hint">
+                Leave blank to keep the current password. New passwords must be at
+                least 8 characters.
+              </p>
             </div>
           </div>
         </div>
@@ -2395,6 +2422,13 @@
                   elFocusTarget.focus();
                   elFocusTarget.select?.();
                 }
+              });
+            } else if (strDialogId === "dlg-create-user") {
+              const elForm = document.getElementById("form-create-user");
+              elForm?.reset();
+              requestAnimationFrame(() => {
+                const focusTarget = document.getElementById("cu-username");
+                focusTarget?.focus();
               });
             } else if (strDialogId === "dlg-create-item") {
               const elForm = document.getElementById("form-create-item");
@@ -4524,6 +4558,10 @@
             );
             roleSelect.value = canonicalRole || "";
           }
+          const passwordInput = document.getElementById("eu-password");
+          if (passwordInput) {
+            passwordInput.value = "";
+          }
           dlg.showModal();
         }
 
@@ -5061,11 +5099,15 @@
             const u = fnSelectElement("#cu-username").value.trim();
             const d = fnSelectElement("#cu-display").value.trim();
             const r = fnSelectElement("#cu-role").value;
-            fnMust(u && d && r, "All fields required.");
+            const p = fnSelectElement("#cu-password").value.trim();
+            fnMust(u && d && r && p, "All fields required.");
+            fnMust(p.length >= 8, "Password must be at least 8 characters.");
             await fnApi("/users", {
               method: "POST",
-              body: JSON.stringify({ username: u, display: d, role: r }),
+              body: JSON.stringify({ username: u, display: d, role: r, password: p }),
             });
+            const form = document.getElementById("form-create-user");
+            form?.reset();
             fnCloseDialogById("dlg-create-user");
             alert("User created.");
             await fnLoadAdminUsers({ showStatus: false });
@@ -5380,12 +5422,24 @@
                 fnSelectElement("#eu-username").value.trim();
               const display = fnSelectElement("#eu-display").value.trim();
               const role = fnSelectElement("#eu-role").value;
+              const passwordField = fnSelectElement("#eu-password");
+              const password = passwordField
+                ? passwordField.value.trim()
+                : "";
               fnMust(username && display && role, "All fields required.");
+              const payload = { display, role };
+              if (password) {
+                fnMust(password.length >= 8, "Password must be at least 8 characters.");
+                payload.password = password;
+              }
               await fnApi(`/users/${encodeURIComponent(username)}`, {
                 method: "PUT",
-                body: JSON.stringify({ display, role }),
+                body: JSON.stringify(payload),
               });
               fnCloseDialogById("dlg-edit-user");
+              if (passwordField) {
+                passwordField.value = "";
+              }
               alert("User updated.");
               await fnLoadAdminUsers({ showStatus: false });
             }),

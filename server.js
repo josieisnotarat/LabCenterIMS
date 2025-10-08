@@ -1913,12 +1913,23 @@ app.get('/api/users', asyncHandler(async (req, res) => {
 }));
 
 app.post('/api/users', asyncHandler(async (req, res) => {
-  const { username, display, role } = req.body || {};
+  const { username, display, role, password } = req.body || {};
   const user = normalizeString(username).toLowerCase();
   const displayName = normalizeString(display);
   const roleName = normalizeUserRole(role);
   if(!user || !displayName || !roleName){
     return res.status(400).json({ error: 'Username, display, and a valid role are required.' });
+  }
+
+  const normalizedPassword = typeof password === 'string' ? normalizeString(password) : '';
+  if(!normalizedPassword){
+    return res.status(400).json({ error: 'Password is required.' });
+  }
+  if(normalizedPassword.length < 8){
+    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  }
+  if(normalizedPassword.length > 255){
+    return res.status(400).json({ error: 'Password must be 255 characters or fewer.' });
   }
 
   const cappedDisplayName = displayName.substring(0, 150);
@@ -1930,27 +1941,48 @@ app.post('/api/users', asyncHandler(async (req, res) => {
 
   const pool = await getPool();
   await ensureUserTable(pool);
+  await ensureUserCredentialTable(pool);
+
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
 
   try {
-    await pool.request()
-      .input('Username', sql.VarChar(120), user)
-      .input('Display', sql.VarChar(150), cappedDisplayName)
-      .input('First', sql.VarChar(50), firstLimited)
-      .input('Last', sql.VarChar(50), lastLimited)
-      .input('Role', sql.VarChar(50), roleName)
-      .input('Password', sql.VarChar(255), 'password123')
-      .query(`
-        INSERT INTO dbo.TLabTechs(strUsername,strDisplayName,strFirstName,strLastName,strRole,strPassword)
-        VALUES (@Username,@Display,@First,@Last,@Role,@Password);
-      `);
+    const insertRequest = new sql.Request(transaction);
+    insertRequest.input('Username', sql.VarChar(120), user);
+    insertRequest.input('Display', sql.VarChar(150), cappedDisplayName);
+    insertRequest.input('First', sql.VarChar(50), firstLimited);
+    insertRequest.input('Last', sql.VarChar(50), lastLimited);
+    insertRequest.input('Role', sql.VarChar(50), roleName);
+    insertRequest.input('Password', sql.VarChar(255), normalizedPassword);
+    const result = await insertRequest.query(`
+      INSERT INTO dbo.TLabTechs(strUsername,strDisplayName,strFirstName,strLastName,strRole,strPassword)
+      VALUES (@Username,@Display,@First,@Last,@Role,@Password);
+      SELECT SCOPE_IDENTITY() AS newId;
+    `);
+
+    const newId = result.recordset?.[0]?.newId ?? null;
+    if(!newId){
+      throw new Error('Failed to determine created user id.');
+    }
+
+    const credentialRequest = new sql.Request(transaction);
+    credentialRequest.input('UserId', sql.Int, newId);
+    credentialRequest.input('Password', sql.VarChar(255), normalizedPassword);
+    await credentialRequest.query(`
+      INSERT INTO dbo.TLabTechCredentials(intLabTechID, strPasswordHash)
+      VALUES (@UserId, HASHBYTES('SHA2_256', @Password));
+    `);
+
+    await transaction.commit();
   } catch(err){
+    try {
+      await transaction.rollback();
+    } catch { /* ignore */ }
     if(err && (err.number === 2627 || err.number === 2601)){
       return res.status(409).json({ error: 'Username already exists.' });
     }
     throw err;
   }
-
-  await ensureUserCredentials(pool);
 
   res.status(201).json({ username: user });
 }));
@@ -1961,11 +1993,20 @@ app.put('/api/users/:username', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Username required.' });
   }
 
-  const { display, role } = req.body || {};
+  const { display, role, password } = req.body || {};
   const displayName = normalizeString(display);
   const roleName = normalizeUserRole(role);
   if(!displayName || !roleName){
     return res.status(400).json({ error: 'Display and a valid role are required.' });
+  }
+
+  const normalizedPassword = typeof password === 'string' ? normalizeString(password) : '';
+  if(normalizedPassword && normalizedPassword.length < 8){
+    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  }
+
+  if(normalizedPassword && normalizedPassword.length > 255){
+    return res.status(400).json({ error: 'Password must be 255 characters or fewer.' });
   }
 
   const cappedDisplayName = displayName.substring(0, 150);
@@ -1978,25 +2019,73 @@ app.put('/api/users/:username', asyncHandler(async (req, res) => {
   const pool = await getPool();
   await ensureUserTable(pool);
 
-  const result = await pool.request()
-    .input('Username', sql.VarChar(120), username)
-    .input('Display', sql.VarChar(150), cappedDisplayName)
-    .input('First', sql.VarChar(50), firstLimited)
-    .input('Last', sql.VarChar(50), lastLimited)
-    .input('Role', sql.VarChar(50), roleName)
-    .query(`
+  if(normalizedPassword){
+    await ensureUserCredentialTable(pool);
+  }
+
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    const updateRequest = new sql.Request(transaction);
+    updateRequest.input('Username', sql.VarChar(120), username);
+    updateRequest.input('Display', sql.VarChar(150), cappedDisplayName);
+    updateRequest.input('First', sql.VarChar(50), firstLimited);
+    updateRequest.input('Last', sql.VarChar(50), lastLimited);
+    updateRequest.input('Role', sql.VarChar(50), roleName);
+    if(normalizedPassword){
+      updateRequest.input('Password', sql.VarChar(255), normalizedPassword);
+    }
+
+    const passwordClause = normalizedPassword ? ",\n          strPassword = @Password" : '';
+
+    const updateSql = `
       UPDATE dbo.TLabTechs
       SET strDisplayName = @Display,
           strFirstName = @First,
           strLastName = @Last,
-          strRole = @Role
+          strRole = @Role${passwordClause}
       WHERE strUsername = @Username;
       SELECT @@ROWCOUNT AS updated;
-    `);
+    `;
 
-  const updated = result.recordset?.[0]?.updated ?? 0;
-  if(!updated){
-    return res.status(404).json({ error: 'User not found.' });
+    const result = await updateRequest.query(updateSql);
+    const updated = result.recordset?.[0]?.updated ?? 0;
+    if(!updated){
+      await transaction.rollback();
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    if(normalizedPassword){
+      const credentialRequest = new sql.Request(transaction);
+      credentialRequest.input('Username', sql.VarChar(120), username);
+      credentialRequest.input('Password', sql.VarChar(255), normalizedPassword);
+      await credentialRequest.query(`
+        DECLARE @UserId INT;
+        SELECT @UserId = intLabTechID
+        FROM dbo.TLabTechs
+        WHERE strUsername = @Username;
+
+        IF @UserId IS NOT NULL
+        BEGIN
+          MERGE dbo.TLabTechCredentials AS target
+          USING (SELECT @UserId AS intLabTechID) AS src
+          ON target.intLabTechID = src.intLabTechID
+          WHEN MATCHED THEN
+            UPDATE SET strPasswordHash = HASHBYTES('SHA2_256', @Password), dtmUpdated = SYSUTCDATETIME()
+          WHEN NOT MATCHED THEN
+            INSERT (intLabTechID, strPasswordHash)
+            VALUES (src.intLabTechID, HASHBYTES('SHA2_256', @Password));
+        END;
+      `);
+    }
+
+    await transaction.commit();
+  } catch(err){
+    try {
+      await transaction.rollback();
+    } catch { /* ignore */ }
+    throw err;
   }
 
   const detail = await pool.request()
