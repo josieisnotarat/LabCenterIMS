@@ -358,24 +358,105 @@ app.get('/api/dashboard-stats', asyncHandler(async (req, res) => {
 
 app.get('/api/loans', asyncHandler(async (req, res) => {
   const pool = await getPool();
-  const top = Number.parseInt(req.query.top || '50', 10);
+  const statusFilter = normalizeString(req.query.status || req.query.statusFilter);
+  const searchTerm = normalizeString(req.query.search);
+
   const request = pool.request();
-  request.input('Top', sql.Int, Number.isFinite(top) ? top : 50);
-  request.input('StatusFilter', sql.VarChar(30), req.query.status || null);
-  request.input('Search', sql.NVarChar(120), req.query.search || null);
-  const result = await request.execute('dbo.usp_GetRecentLoans');
+  request.input('StatusFilter', sql.VarChar(30), statusFilter || null);
+  request.input('Search', sql.NVarChar(120), searchTerm ? `%${searchTerm}%` : null);
+
+  const result = await request.query(`
+    WITH LoanCTE AS (
+      SELECT
+        il.intItemLoanID,
+        il.intItemID,
+        il.intBorrowerID,
+        il.dtmCheckoutUTC,
+        il.dtmDueUTC,
+        il.dtmCheckinUTC,
+        il.strCheckoutNotes,
+        il.snapBorrowerFirstName,
+        il.snapBorrowerLastName,
+        il.snapSchoolIDNumber,
+        il.snapRoomNumber,
+        il.snapItemName,
+        il.snapDepartmentName,
+        CASE
+          WHEN il.dtmCheckinUTC IS NOT NULL THEN 'Returned'
+          WHEN il.dtmDueUTC IS NOT NULL AND il.dtmDueUTC < SYSUTCDATETIME() THEN 'Overdue'
+          ELSE 'On Time'
+        END AS LoanStatus
+      FROM dbo.TItemLoans AS il
+    )
+    SELECT *
+    FROM LoanCTE
+    WHERE (
+      @StatusFilter IS NULL OR @StatusFilter = '' OR
+      LoanStatus = @StatusFilter OR @StatusFilter IN ('all', 'All')
+    )
+      AND (
+        @Search IS NULL OR @Search = '' OR
+        LoanCTE.snapBorrowerFirstName LIKE @Search OR
+        LoanCTE.snapBorrowerLastName LIKE @Search OR
+        LoanCTE.snapSchoolIDNumber LIKE @Search OR
+        LoanCTE.snapItemName LIKE @Search
+      )
+    ORDER BY LoanCTE.dtmCheckoutUTC DESC, LoanCTE.intItemLoanID DESC;
+  `);
+
   const entries = result.recordset?.map(mapLoanRow) || [];
   res.json({ entries });
 }));
 
 app.get('/api/service-tickets', asyncHandler(async (req, res) => {
   const pool = await getPool();
-  const top = Number.parseInt(req.query.top || '50', 10);
+  const statusFilter = normalizeString(req.query.status || req.query.statusFilter);
+  const searchTerm = normalizeString(req.query.search);
+
   const request = pool.request();
-  request.input('Top', sql.Int, Number.isFinite(top) ? top : 50);
-  request.input('StatusFilter', sql.VarChar(30), req.query.status || null);
-  request.input('Search', sql.NVarChar(120), req.query.search || null);
-  const result = await request.execute('dbo.usp_GetServiceTickets');
+  request.input('StatusFilter', sql.VarChar(30), statusFilter || null);
+  request.input('Search', sql.NVarChar(120), searchTerm ? `%${searchTerm}%` : null);
+
+  const result = await request.query(`
+    WITH TicketCTE AS (
+      SELECT
+        st.intServiceTicketID,
+        st.strPublicTicketID,
+        st.intItemID,
+        st.intBorrowerID,
+        st.strItemLabel,
+        st.strIssue,
+        st.dtmLoggedUTC,
+        st.intAssignedLabTechID,
+        st.strStatus,
+        bt.strFirstName AS borrowerFirstName,
+        bt.strLastName AS borrowerLastName,
+        it.strItemName,
+        lt.strFirstName AS assignedFirstName,
+        lt.strLastName AS assignedLastName
+      FROM dbo.TServiceTickets AS st
+      LEFT JOIN dbo.TBorrowers AS bt ON bt.intBorrowerID = st.intBorrowerID
+      LEFT JOIN dbo.TItems AS it ON it.intItemID = st.intItemID
+      LEFT JOIN dbo.TLabTechs AS lt ON lt.intLabTechID = st.intAssignedLabTechID
+    )
+    SELECT *
+    FROM TicketCTE
+    WHERE (
+      @StatusFilter IS NULL OR @StatusFilter = '' OR
+      strStatus = @StatusFilter OR @StatusFilter IN ('all', 'All')
+    )
+      AND (
+        @Search IS NULL OR @Search = '' OR
+        strPublicTicketID LIKE @Search OR
+        COALESCE(strItemName, strItemLabel, N'') LIKE @Search OR
+        COALESCE(borrowerFirstName, N'') LIKE @Search OR
+        COALESCE(borrowerLastName, N'') LIKE @Search OR
+        COALESCE(assignedFirstName, N'') LIKE @Search OR
+        COALESCE(assignedLastName, N'') LIKE @Search
+      )
+    ORDER BY TicketCTE.dtmLoggedUTC DESC, TicketCTE.intServiceTicketID DESC;
+  `);
+
   const entries = result.recordset?.map(mapTicketRow) || [];
   res.json({ entries });
 }));
@@ -500,10 +581,20 @@ app.get('/api/service-tickets/:id/notes', asyncHandler(async (req, res) => {
 
 app.get('/api/audit-log', asyncHandler(async (req, res) => {
   const pool = await getPool();
-  const top = Number.parseInt(req.query.top || '50', 10);
-  const request = pool.request();
-  request.input('Top', sql.Int, Number.isFinite(top) ? top : 50);
-  const result = await request.execute('dbo.usp_GetAuditLog');
+  const result = await pool.request().query(`
+    SELECT a.intTraceID,
+           a.dtmEventUTC,
+           a.intLabTechID,
+           lt.strFirstName,
+           lt.strLastName,
+           a.strAction,
+           a.strEntity,
+           a.intEntityPK,
+           a.strDetails
+    FROM dbo.TAuditLog AS a
+    LEFT JOIN dbo.TLabTechs AS lt ON lt.intLabTechID = a.intLabTechID
+    ORDER BY a.dtmEventUTC DESC, a.intTraceID DESC;
+  `);
   const entries = result.recordset?.map(row => ({
     intTraceID: row.intTraceID,
     dtmEventUTC: toIso(row.dtmEventUTC),
@@ -1258,19 +1349,15 @@ app.get('/api/customers', asyncHandler(async (req, res) => {
   const pool = await getPool();
   await ensureBorrowerAliasTable(pool);
 
-  const top = Number.parseInt(req.query.top || '25', 10);
-  const limit = Number.isFinite(top) && top > 0 ? Math.min(top, 200) : 25;
   const search = normalizeString(req.query.search || req.query.q || req.query.query);
 
   const request = pool.request();
-  request.input('Top', sql.Int, limit);
 
   let queryText;
   if(search){
     request.input('Search', sql.NVarChar(130), `%${search}%`);
     queryText = `
-      SELECT TOP (@Top)
-             b.intBorrowerID,
+      SELECT b.intBorrowerID,
              b.strFirstName,
              b.strLastName,
              b.strSchoolIDNumber,
@@ -1296,8 +1383,7 @@ app.get('/api/customers', asyncHandler(async (req, res) => {
     `;
   }else{
     queryText = `
-      SELECT TOP (@Top)
-             b.intBorrowerID,
+      SELECT b.intBorrowerID,
              b.strFirstName,
              b.strLastName,
              b.strSchoolIDNumber,
