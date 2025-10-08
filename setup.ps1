@@ -258,8 +258,8 @@ if (-not (Test-Path (Join-Path $RootDir 'node_modules'))) {
         throw 'npm could not be located even though Node.js should be installed. Install Node.js manually and re-run this script.'
     }
 
-    & $npmExecutable 'install'
-    if ($LASTEXITCODE -ne 0) {
+    $npmProcess = Start-Process -FilePath $npmExecutable -ArgumentList 'install' -WorkingDirectory $RootDir -NoNewWindow -PassThru -Wait
+    if ($null -eq $npmProcess -or $npmProcess.ExitCode -ne 0) {
         throw 'npm install failed. Review the output above for details.'
     }
     Write-Success 'Node dependencies installed.'
