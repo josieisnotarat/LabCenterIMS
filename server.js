@@ -1791,7 +1791,7 @@ app.delete('/api/items/:id', asyncHandler(async (req, res) => {
 }));
 
 const LOAN_STATUS_SET = new Set(['On Time', 'Overdue', 'Returned']);
-const TICKET_STATUS_SET = new Set(['Diagnosing', 'Awaiting Parts', 'Ready for Pickup', 'Quarantined', 'Returned']);
+const TICKET_STATUS_SET = new Set(['Diagnosing', 'Awaiting Parts', 'Ready for Pickup', 'Returned']);
 
 app.post('/api/status', asyncHandler(async (req, res) => {
   const { id, type, status, note } = req.body || {};

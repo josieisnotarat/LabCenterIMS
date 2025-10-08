@@ -1684,15 +1684,7 @@
             </div>
             <div class="full">
               <label>Status</label>
-              <select id="det-status">
-                <option>On Time</option>
-                <option>Overdue</option>
-                <option>Returned</option>
-                <option>Diagnosing</option>
-                <option>Awaiting Parts</option>
-                <option>Ready for Pickup</option>
-                <option>Quarantined</option>
-              </select>
+              <select id="det-status"></select>
             </div>
             <div class="full">
               <label>Add Note</label>
@@ -2294,7 +2286,6 @@
           "Awaiting Parts": "repair",
           Diagnosing: "diagnosing",
           "Ready for Pickup": "ready",
-          Quarantined: "quarantine",
         };
 
         /**
@@ -2307,6 +2298,10 @@
           "Awaiting Parts": "is-awaiting",
           Diagnosing: "is-diagnosing",
           "Ready for Pickup": "is-ready",
+        };
+        const DETAIL_STATUS_OPTIONS = {
+          loan: ["On Time", "Overdue", "Returned"],
+          ticket: ["Diagnosing", "Awaiting Parts", "Ready for Pickup", "Returned"],
         };
         const ROW_STATUS_CLASSNAMES = Object.values(STATUS_ROW_CLASS_MAP);
 
@@ -2725,6 +2720,30 @@
         }
 
         // ====== TABLE ROW → DETAILS ======
+        function fnConfigureDetailStatusSelect(selectEl, kind, currentStatus) {
+          const options = DETAIL_STATUS_OPTIONS[kind] || [];
+          selectEl.innerHTML = "";
+          options.forEach((text) => {
+            const option = document.createElement("option");
+            option.value = text;
+            option.textContent = text;
+            selectEl.appendChild(option);
+          });
+          if (currentStatus && !options.includes(currentStatus)) {
+            const fallback = document.createElement("option");
+            fallback.value = currentStatus;
+            fallback.textContent = currentStatus;
+            selectEl.appendChild(fallback);
+          }
+          if (currentStatus) {
+            selectEl.value = currentStatus;
+          } else if (options.length) {
+            selectEl.value = options[0];
+          } else {
+            selectEl.value = "";
+          }
+        }
+
         const openDetail = (kind, id, primary, status) => {
           const dlg = document.getElementById("dlg-detail");
           fnSelectElement("#det-title").textContent =
@@ -2734,9 +2753,7 @@
           fnSelectElement("#det-id").value = id;
           fnSelectElement("#det-primary").value = primary || "";
           const sel = fnSelectElement("#det-status");
-          Array.from(sel.options).forEach((o) => {
-            if (o.text === status) sel.value = o.text;
-          });
+          fnConfigureDetailStatusSelect(sel, kind, status);
           fnSelectElement("#det-note").value = "";
           fnLoadDetailNotes(kind, id);
           dlg.showModal();
@@ -2758,7 +2775,11 @@
                 ? `${cells[1]} — ${cells[0]}`
                 : `${cells[1]} — ${cells[0]}`;
             const pill = tr.querySelector(".pill");
-            const status = pill ? pill.textContent.trim() : "On Time";
+            const status = pill
+              ? pill.textContent.trim()
+              : kind === "loan"
+              ? "On Time"
+              : "";
             openDetail(kind, id, primary, status);
           });
         }
