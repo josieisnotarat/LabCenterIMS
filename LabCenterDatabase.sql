@@ -52,6 +52,7 @@ CREATE TABLE dbo.TLabTechs
     strLastName         VARCHAR(50)  NOT NULL,
     strEmail            VARCHAR(120) NULL,
     strPhoneNumber      VARCHAR(25)  NULL,
+    strPassword         VARCHAR(255) NOT NULL,
     strRole             VARCHAR(50)  NOT NULL,
     blnIsActive         BIT          NOT NULL CONSTRAINT DF_TLabTechs_IsActive DEFAULT (1),
     dtmCreated          DATETIME2(0) NOT NULL CONSTRAINT DF_TLabTechs_Created  DEFAULT (SYSUTCDATETIME()),
@@ -200,11 +201,11 @@ CREATE INDEX IX_TAuditLog_EventUTC ON dbo.TAuditLog(dtmEventUTC DESC);
 
 -- Basic seed (optional)
 INSERT dbo.TDepartments(strDepartmentName) VALUES ('Electrical Engineering Tech'),('IT / Software'),('Media');
-INSERT dbo.TLabTechs(strUsername,strDisplayName,strFirstName,strLastName,strEmail,strRole)
+INSERT dbo.TLabTechs(strUsername,strDisplayName,strFirstName,strLastName,strEmail,strPassword,strRole)
 VALUES
-    ('jwooldridge','Josie Wooldridge','Josie','Wooldridge','j.wooldridge@example.edu','admin'),
-    ('asmith','Alex Smith','Alex','Smith','a.smith@example.edu','admin'),
-    ('kjones','Kris Jones','Kris','Jones','k.jones@example.edu','co-op');
+    ('jwooldridge','Josie Wooldridge','Josie','Wooldridge','j.wooldridge@example.edu','password123','admin'),
+    ('asmith','Alex Smith','Alex','Smith','a.smith@example.edu','password123','admin'),
+    ('kjones','Kris Jones','Kris','Jones','k.jones@example.edu','password123','co-op');
 
 
 
