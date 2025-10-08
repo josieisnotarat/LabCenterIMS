@@ -15,43 +15,29 @@ To initialize a fresh environment, run the script in SQL Server Management Studi
 
 The front-end now expects to communicate with a lightweight Node/Express API that proxies the stored procedures in `LabCenterDatabase.sql`.
 
-### Automated setup
+### Automated setup (Windows)
 
-Run the provided setup script to install Node dependencies, provision SQL Server inside Docker, load the schema, create the application login, and write the `.env` file that the API consumes.
+The project ships with a Windows PowerShell helper that bootstraps everything for you as long as Node.js, npm, and SQL Server (with the `sqlcmd` CLI) are available on your machine.
 
-On macOS/Linux (Bash):
+1. Open Windows PowerShell **as Administrator**. Running elevated ensures the script can create the database.
+2. Allow the script to run if your execution policy blocks unsigned scripts:
 
-```bash
-./setup.sh
-```
-
-On Windows (PowerShell 5.1+):
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-Unblock-File -Path .\setup.ps1
-./setup.ps1
-```
-
-When Windows flags the script as "not digitally signed," run the `Unblock-File` command above first (PowerShell adds this mark when the repository is downloaded from the internet). The PowerShell helper will attempt to install Node.js via `winget` if it is missing and will verify that Docker Desktop is installed and running before proceeding. If `winget` or Docker Desktop are not available, the script will stop with guidance so you can install the prerequisite manually (running the terminal as Administrator may be required for package installation).
-
-Once the setup script completes, start the API with `npm start` and browse to `http://localhost:3000/`.
-
-1. Install the dependencies:
-
-   ```bash
-   npm install
+   ```powershell
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+   Unblock-File -Path .\setup.ps1
    ```
 
-2. Start the API server:
+3. Execute the setup script:
 
-   ```bash
-   npm start
+   ```powershell
+   ./setup.ps1
    ```
 
-The Node server reads its SQL Server connection settings from environment variables or a local `.env` file. The automated setup script writes defaults for the bundled Docker container (`labcenter_app` / `LabCenter!AppPass` against `localhost:1433`). Update `.env` or the environment as needed if you are connecting to a different SQL Server instance.
+   * By default the script connects to `localhost` on port `1433` using Windows Authentication. Supply `-SqlAdminUser` and `-SqlAdminPassword` if you need to authenticate with a SQL login (for example `sa`).
+   * Override `-SqlServer`, `-SqlPort`, or `-DatabaseName` if your SQL Server instance uses a non-default host, port, or database name.
+   * The helper creates (or reuses) an application login named `labcenter_app` with the password `LabCenter!AppPass`, writes these settings to `.env`, installs Node dependencies, starts `npm start` in a new PowerShell window, and opens `http://localhost:3000/` in your default browser.
 
-The app serves both the API under `/api/*` and the static UI. Visit `http://localhost:3000/` after the server is running to see the dashboard populated with live data from SQL Server.
+Once the setup window reports success, interact with the app in the browser. If you close the API window later, you can restart it manually with `npm start` from the project directory.
 
 ## Authentication
 
