@@ -33,6 +33,39 @@ $ScriptPath = $MyInvocation.MyCommand.Path
 $RootDir = Split-Path -Parent $ScriptPath
 Set-Location $RootDir
 
+function Test-NodeJsAvailable {
+    return [bool](Get-Command npm -ErrorAction SilentlyContinue)
+}
+
+function Add-NodeInstallPathsToPath {
+    $candidateDirs = @(
+        if ($env:ProgramFiles) { Join-Path $env:ProgramFiles 'nodejs' }
+        if (${env:ProgramFiles(x86)}) { Join-Path ${env:ProgramFiles(x86)} 'nodejs' }
+        if ($env:LocalAppData) { Join-Path $env:LocalAppData 'Programs\nodejs' }
+    ) | Where-Object { $_ -and (Test-Path (Join-Path $_ 'npm.cmd')) }
+
+    if (-not $candidateDirs) {
+        return $false
+    }
+
+    $currentPathEntries = ($env:PATH -split ';') | Where-Object { $_ }
+    $added = $false
+
+    foreach ($dir in $candidateDirs) {
+        $normalizedDir = $dir.TrimEnd('\')
+        $alreadyPresent = $currentPathEntries | Where-Object { $_.TrimEnd('\\') -ieq $normalizedDir }
+        if ($alreadyPresent) {
+            continue
+        }
+
+        Write-Info "Temporarily adding Node.js directory '$dir' to PATH for this session."
+        $env:PATH = "$dir;" + $env:PATH
+        $added = $true
+    }
+
+    return $added
+}
+
 function Ensure-Command {
     param(
         [Parameter(Mandatory = $true)][string]$Command,
@@ -47,7 +80,15 @@ function Ensure-Command {
 }
 
 function Ensure-NodeJs {
-    if (Get-Command npm -ErrorAction SilentlyContinue) {
+    if (Test-NodeJsAvailable) {
+        return
+    }
+
+    $addedPath = Add-NodeInstallPathsToPath
+    if (Test-NodeJsAvailable) {
+        if ($addedPath) {
+            Write-Info 'Detected an existing Node.js installation and added it to PATH for this session.'
+        }
         return
     }
 
@@ -69,26 +110,25 @@ function Ensure-NodeJs {
     Write-Info 'Installing Node.js LTS with winget. This may take a few minutes...'
     $wingetPath = if ($winget.Source) { $winget.Source } else { $winget.Path }
     & $wingetPath @wingetArgs
-    if ($LASTEXITCODE -ne 0) {
-        throw "winget failed to install Node.js (exit code $LASTEXITCODE). Review the output above or install Node.js manually, then re-run this script."
-    }
+    $wingetExitCode = $LASTEXITCODE
 
-    $possibleNodeDirs = @(
-        (Join-Path $env:ProgramFiles 'nodejs'),
-        (Join-Path ${env:ProgramFiles(x86)} 'nodejs')
-    ) | Where-Object { $_ -and (Test-Path $_) }
-
-    foreach ($dir in $possibleNodeDirs) {
-        if ($env:PATH -notlike "*$dir*") {
-            $env:PATH = "$dir;" + $env:PATH
+    $addedAfterInstall = Add-NodeInstallPathsToPath
+    if (Test-NodeJsAvailable) {
+        if ($wingetExitCode -ne 0) {
+            Write-WarningMessage "winget reported exit code $wingetExitCode, but Node.js is now available. Continuing with setup."
+        } elseif ($addedAfterInstall) {
+            Write-Info 'Node.js installation completed and the install directory was added to PATH for this session.'
+        } else {
+            Write-Success 'Node.js installation completed.'
         }
+        return
     }
 
-    if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
-        throw 'Node.js installation completed but npm is still unavailable in this session. Close this PowerShell window, open a new one, and re-run the script (or install Node.js manually).'
+    if ($wingetExitCode -ne 0) {
+        throw "winget failed to install Node.js (exit code $wingetExitCode). Review the output above or install Node.js manually, then re-run this script."
     }
 
-    Write-Success 'Node.js installation completed.'
+    throw 'Node.js installation completed but npm is still unavailable in this session. Close this PowerShell window, open a new one, and re-run the script (or install Node.js manually).'
 }
 
 Ensure-NodeJs
