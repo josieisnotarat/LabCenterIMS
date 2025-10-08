@@ -1315,7 +1315,6 @@
                   <thead>
                     <tr>
                       <th scope="col">Item Name</th>
-                      <th scope="col">Item Number</th>
                       <th scope="col">Department</th>
                       <th scope="col">Due Policy</th>
                       <th scope="col">Actions</th>
@@ -1324,7 +1323,7 @@
                   <tbody id="tbl-admin-inventory">
                     <tr>
                       <td
-                        colspan="5"
+                        colspan="4"
                         style="
                           text-align: center;
                           color: var(--muted);
@@ -1807,10 +1806,6 @@
             <div class="full">
               <label>Item Name</label>
               <input id="mi-name" required />
-            </div>
-            <div>
-              <label>Item Number</label>
-              <input id="mi-number" placeholder="optional" />
             </div>
             <div>
               <label>Department</label>
@@ -3099,7 +3094,6 @@
             tr.classList.add("clickable");
             tr.dataset.itemId = item.id != null ? item.id : "";
             fnAppendTableCell(tr, item.name || "—");
-            fnAppendTableCell(tr, item.number || "—");
             fnAppendTableCell(tr, item.department || "—");
             fnAppendTableCell(tr, fnFormatItemDuePolicy(item));
             tbody.appendChild(tr);
@@ -3113,7 +3107,6 @@
           return entries.filter((item) => {
             const parts = [
               item.name,
-              item.number,
               item.department,
               item.duePolicy,
               item.duePolicyDescription,
@@ -3296,7 +3289,6 @@
           entries.forEach((item) => {
             const tr = document.createElement("tr");
             fnAppendTableCell(tr, item.name || "—");
-            fnAppendTableCell(tr, item.number || "—");
             fnAppendTableCell(tr, item.department || "—");
             fnAppendTableCell(tr, fnFormatItemDuePolicy(item));
             const actionCell = document.createElement("td");
@@ -3328,7 +3320,6 @@
           return entries.filter((item) => {
             const parts = [
               item.name,
-              item.number,
               item.department,
               item.duePolicy,
               item.duePolicyDescription,
@@ -4385,7 +4376,6 @@
           const borrower = obj.borrower || obj.customer || obj.customerName;
           if (item) {
             const parts = [item];
-            if (obj.itemNumber) parts[0] += ` (${obj.itemNumber})`;
             if (borrower) {
               let borrowerTxt = borrower;
               if (obj.schoolId || obj.schoolID || obj.schoolIdNumber) {
@@ -4614,8 +4604,6 @@
           if (idInput) idInput.value = item?.id ?? "";
           const nameInput = document.getElementById("mi-name");
           if (nameInput) nameInput.value = item?.name || "";
-          const numberInput = document.getElementById("mi-number");
-          if (numberInput) numberInput.value = item?.number || "";
           const deptInput = document.getElementById("mi-dept");
           if (deptInput) deptInput.value = item?.department || "";
           const ownedSelect = document.getElementById("mi-owned");
@@ -5378,7 +5366,6 @@
               fnMust(id, "Item identifier missing.");
               const name = fnSelectElement("#mi-name").value.trim();
               fnMust(name, "Item name required.");
-              const number = fnSelectElement("#mi-number").value.trim();
               const dept = fnSelectElement("#mi-dept").value.trim();
               const owned = fnSelectElement("#mi-owned").value !== "external";
               const description = fnSelectElement("#mi-description").value.trim();
@@ -5387,7 +5374,6 @@
 
               const payload = {
                 name,
-                number: number || null,
                 department: dept || null,
                 schoolOwned: owned,
                 description: description || null,

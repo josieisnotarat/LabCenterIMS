@@ -133,7 +133,6 @@ function mapLoanRow(row){
     itemId: row.intItemID ?? null,
     borrowerId: row.intBorrowerID ?? null,
     itemName: row.snapItemName || null,
-    itemNumber: row.snapItemNumber || null,
     borrowerName: formatName(row.snapBorrowerFirstName, row.snapBorrowerLastName),
     borrowerSchoolId: row.snapSchoolIDNumber || null,
     room: row.snapRoomNumber || null,
@@ -579,7 +578,7 @@ async function getItemDueSettings(pool, itemId){
   const result = await pool.request()
     .input('ItemID', sql.Int, itemId)
     .query(`
-      SELECT intItemID, strItemName, strItemNumber, strDuePolicy,
+      SELECT intItemID, strItemName, strDuePolicy,
              intDueDaysOffset, intDueHoursOffset, tDueTime, dtmFixedDueLocal
       FROM dbo.TItems
       WHERE intItemID = @ItemID;
@@ -644,8 +643,7 @@ function computeDueFromPolicy(row){
     dueUtc,
     policy,
     description: description || policy,
-    itemName: row.strItemName || null,
-    itemNumber: row.strItemNumber || null
+    itemName: row.strItemName || null
   };
 }
 
@@ -661,7 +659,6 @@ function mapItemRow(row){
   return {
     id: row.intItemID ?? null,
     name: row.strItemName || null,
-    number: row.strItemNumber || null,
     department: row.strDepartmentName || null,
     schoolOwned: row.blnIsSchoolOwned ? true : false,
     description: row.strDescription || null,
@@ -685,7 +682,6 @@ async function loadItemRow(pool, itemId){
     .query(`
       SELECT i.intItemID,
              i.strItemName,
-             i.strItemNumber,
              i.blnIsSchoolOwned,
              i.intDepartmentID,
              i.strDescription,
@@ -1090,8 +1086,8 @@ async function findItemId(pool, raw){
     .query(`
       SELECT TOP (1) intItemID
       FROM dbo.TItems
-      WHERE strItemNumber = @Match OR strItemName = @Match
-      ORDER BY CASE WHEN strItemNumber = @Match THEN 0 ELSE 1 END, intItemID DESC;
+      WHERE strItemName = @Match
+      ORDER BY intItemID DESC;
     `);
   if(exact.recordset?.length){
     return exact.recordset[0].intItemID;
@@ -1102,7 +1098,7 @@ async function findItemId(pool, raw){
     .query(`
       SELECT TOP (1) intItemID
       FROM dbo.TItems
-      WHERE strItemName LIKE @Search OR ISNULL(strItemNumber,'') LIKE @Search
+      WHERE strItemName LIKE @Search
       ORDER BY intItemID DESC;
     `);
   if(like.recordset?.length){
@@ -1525,7 +1521,6 @@ app.get('/api/items', asyncHandler(async (req, res) => {
   const result = await request.query(`
     SELECT i.intItemID,
            i.strItemName,
-           i.strItemNumber,
            i.blnIsSchoolOwned,
            i.strDescription,
            i.strDuePolicy,
@@ -1537,7 +1532,7 @@ app.get('/api/items', asyncHandler(async (req, res) => {
            d.strDepartmentName
     FROM dbo.TItems AS i
     LEFT JOIN dbo.TDepartments AS d ON d.intDepartmentID = i.intDepartmentID
-    ${search ? `WHERE i.strItemName LIKE @Search OR ISNULL(i.strItemNumber,'') LIKE @Search OR ISNULL(d.strDepartmentName,'') LIKE @Search` : ''}
+    ${search ? `WHERE i.strItemName LIKE @Search OR ISNULL(d.strDepartmentName,'') LIKE @Search` : ''}
     ORDER BY i.strItemName ASC, i.intItemID ASC;
   `);
   const rows = result.recordset || [];
@@ -1566,7 +1561,6 @@ app.get('/api/items/due-preview', asyncHandler(async (req, res) => {
   res.json({
     itemId,
     itemName: dueInfo.itemName || null,
-    itemNumber: dueInfo.itemNumber || null,
     dueUtc: dueInfo.dueUtc,
     policy: dueInfo.policy,
     policyDescription: dueInfo.description
@@ -1643,7 +1637,7 @@ app.post('/api/tickets', asyncHandler(async (req, res) => {
 }));
 
 app.post('/api/items', asyncHandler(async (req, res) => {
-  const { name, number, department, schoolOwned, description, duePolicy, offsetDays, offsetHours, dueTime, fixedDue } = req.body || {};
+  const { name, department, schoolOwned, description, duePolicy, offsetDays, offsetHours, dueTime, fixedDue } = req.body || {};
   const itemName = normalizeString(name);
   if(!itemName){
     return res.status(400).json({ error: 'Item name is required.' });
@@ -1661,7 +1655,6 @@ app.post('/api/items', asyncHandler(async (req, res) => {
   try {
     const request = pool.request();
     request.input('strItemName', sql.VarChar(120), itemName);
-    request.input('strItemNumber', sql.VarChar(60), normalizeString(number) || null);
     request.input('blnIsSchoolOwned', sql.Bit, schoolOwned === false ? 0 : 1);
     request.input('intDepartmentID', sql.Int, departmentId ?? null);
     request.input('strDescription', sql.VarChar(400), normalizeString(description) || null);
@@ -1704,7 +1697,6 @@ app.put('/api/items/:id', asyncHandler(async (req, res) => {
 
   const {
     name,
-    number,
     department,
     schoolOwned,
     description,
@@ -1738,7 +1730,6 @@ app.put('/api/items/:id', asyncHandler(async (req, res) => {
     const request = pool.request();
     request.input('ItemID', sql.Int, itemId);
     request.input('strItemName', sql.VarChar(120), itemName);
-    request.input('strItemNumber', sql.VarChar(60), normalizeString(number) || null);
     request.input('blnIsSchoolOwned', sql.Bit, schoolOwned === false ? 0 : 1);
     request.input('intDepartmentID', sql.Int, departmentId ?? null);
     request.input('strDescription', sql.VarChar(400), normalizeString(description) || null);
@@ -1750,7 +1741,6 @@ app.put('/api/items/:id', asyncHandler(async (req, res) => {
     await request.query(`
       UPDATE dbo.TItems
       SET strItemName = @strItemName,
-          strItemNumber = @strItemNumber,
           blnIsSchoolOwned = @blnIsSchoolOwned,
           intDepartmentID = @intDepartmentID,
           strDescription = @strDescription,
@@ -1824,7 +1814,6 @@ app.put('/api/items/:id', asyncHandler(async (req, res) => {
 
   const {
     name,
-    number,
     department,
     schoolOwned,
     description,
@@ -1858,7 +1847,6 @@ app.put('/api/items/:id', asyncHandler(async (req, res) => {
     const request = pool.request();
     request.input('ItemID', sql.Int, itemId);
     request.input('strItemName', sql.VarChar(120), itemName);
-    request.input('strItemNumber', sql.VarChar(60), normalizeString(number) || null);
     request.input('blnIsSchoolOwned', sql.Bit, schoolOwned === false ? 0 : 1);
     request.input('intDepartmentID', sql.Int, departmentId ?? null);
     request.input('strDescription', sql.VarChar(400), normalizeString(description) || null);
@@ -1870,7 +1858,6 @@ app.put('/api/items/:id', asyncHandler(async (req, res) => {
     await request.query(`
       UPDATE dbo.TItems
       SET strItemName = @strItemName,
-          strItemNumber = @strItemNumber,
           blnIsSchoolOwned = @blnIsSchoolOwned,
           intDepartmentID = @intDepartmentID,
           strDescription = @strDescription,
