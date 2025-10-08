@@ -79,6 +79,20 @@ function Ensure-Command {
     throw "Required command '$Command' was not found. Please install $DisplayName and then re-run this script."
 }
 
+function Get-CommandPropertyValue {
+    param(
+        [Parameter(Mandatory = $true)][System.Management.Automation.CommandInfo]$CommandInfo,
+        [Parameter(Mandatory = $true)][string]$PropertyName
+    )
+
+    $property = $CommandInfo.PSObject.Properties[$PropertyName]
+    if ($property) {
+        return $property.Value
+    }
+
+    return $null
+}
+
 function Ensure-NodeJs {
     if (Test-NodeJsAvailable) {
         return
@@ -229,11 +243,16 @@ Write-Success "Wrote database connection settings to $envFile."
 if (-not (Test-Path (Join-Path $RootDir 'node_modules'))) {
     Write-Info 'Installing Node.js dependencies (npm install)...'
 
-    $npmCommand = Get-Command npm -ErrorAction Stop
-    $npmPath = if ($npmCommand.PSObject.Properties['Source']) {
-        $npmCommand.Source
-    } else {
-        $npmCommand.Path
+    $npmCommand = Get-Command npm -ErrorAction Stop | Select-Object -First 1
+    $npmPath = Get-CommandPropertyValue -CommandInfo $npmCommand -PropertyName 'Source'
+    if (-not $npmPath) {
+        $npmPath = Get-CommandPropertyValue -CommandInfo $npmCommand -PropertyName 'Path'
+    }
+    if (-not $npmPath) {
+        $npmPath = Get-CommandPropertyValue -CommandInfo $npmCommand -PropertyName 'Definition'
+    }
+    if (-not $npmPath) {
+        $npmPath = $npmCommand.Name
     }
 
     & $npmPath 'install'
