@@ -162,7 +162,7 @@ function Get-SqlInstanceNameFromServer {
         return 'MSSQLSERVER'
     }
 
-    $serverWithoutProtocol = $Server -replace '^tcp:', '', 'IgnoreCase'
+    $serverWithoutProtocol = $Server -ireplace '^tcp:', ''
     if ($serverWithoutProtocol -match '\\([^,]+)') {
         return $Matches[1]
     }
@@ -413,15 +413,21 @@ if (Test-Path $envFile) {
     Copy-Item $envFile $backupFile -Force
 }
 
-$envContent = @"
-DB_USER=$AppDbUser
-DB_PASSWORD=$AppDbPassword
-DB_SERVER=$SqlServer
-DB_PORT=$SqlPort
-DB_NAME=$DatabaseName
-DB_ENCRYPT=false
-DB_TRUST_SERVER_CERTIFICATE=true
-"@
+$envLines = [System.Collections.Generic.List[string]]::new()
+$null = $envLines.Add("DB_USER=$AppDbUser")
+$null = $envLines.Add("DB_PASSWORD=$AppDbPassword")
+$null = $envLines.Add("DB_SERVER=$SqlServer")
+
+$shouldIncludePort = $PSBoundParameters.ContainsKey('SqlPort') -or ($SqlServer -notmatch '\\')
+if ($shouldIncludePort) {
+    $null = $envLines.Add("DB_PORT=$SqlPort")
+}
+
+$null = $envLines.Add("DB_NAME=$DatabaseName")
+$null = $envLines.Add('DB_ENCRYPT=false')
+$null = $envLines.Add('DB_TRUST_SERVER_CERTIFICATE=true')
+
+$envContent = [string]::Join([Environment]::NewLine, $envLines) + [Environment]::NewLine
 $envContent | Set-Content -Path $envFile -Encoding UTF8
 Write-Success "Wrote database connection settings to $envFile."
 
