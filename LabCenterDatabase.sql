@@ -166,7 +166,7 @@ CREATE TABLE dbo.TServiceTickets
     intAssignedLabTechID INT NULL REFERENCES dbo.TLabTechs(intLabTechID),
 
     strStatus           VARCHAR(30) NOT NULL CONSTRAINT DF_TServiceTickets_Status DEFAULT ('Diagnosing')
-       CHECK (strStatus IN ('Diagnosing','Awaiting Parts','Ready for Pickup','Quarantined','Completed','Cancelled'))
+      CHECK (strStatus IN ('Diagnosing','Awaiting Parts','Ready for Pickup','Completed','Cancelled'))
 );
 CREATE INDEX IX_TServiceTickets_Status ON dbo.TServiceTickets(strStatus, dtmLoggedUTC DESC);
 CREATE INDEX IX_TServiceTickets_Assigned ON dbo.TServiceTickets(intAssignedLabTechID, strStatus);
@@ -791,7 +791,7 @@ BEGIN
   SELECT
       outNow   = COALESCE(SUM(CASE WHEN dtmCheckinUTC IS NULL THEN 1 ELSE 0 END),0),
       dueToday = COALESCE(SUM(CASE WHEN dtmCheckinUTC IS NULL AND dtmDueUTC >= @startOfDay AND dtmDueUTC < @endOfDay THEN 1 ELSE 0 END),0),
-      repairs  = (SELECT COUNT(*) FROM dbo.TServiceTickets WHERE strStatus IN ('Diagnosing','Awaiting Parts','Ready for Pickup','Quarantined')),
+      repairs  = (SELECT COUNT(*) FROM dbo.TServiceTickets WHERE strStatus IN ('Diagnosing','Awaiting Parts','Ready for Pickup')),
       overdue  = COALESCE(SUM(CASE WHEN dtmCheckinUTC IS NULL AND dtmDueUTC IS NOT NULL AND dtmDueUTC < SYSUTCDATETIME() THEN 1 ELSE 0 END),0)
   FROM dbo.TItemLoans;
 END
