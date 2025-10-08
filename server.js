@@ -41,22 +41,59 @@ if(process.cwd() !== __dirname){
 const app = express();
 app.use(express.json());
 
+const rawServerValue = (process.env.DB_SERVER || 'localhost').trim();
+let normalizedServer = rawServerValue;
+let instanceName;
+let portFromServer;
+
+if (/^tcp:/i.test(normalizedServer)) {
+  normalizedServer = normalizedServer.replace(/^tcp:/i, '');
+}
+
+const backslashIndex = normalizedServer.indexOf('\\');
+if (backslashIndex >= 0) {
+  instanceName = normalizedServer.slice(backslashIndex + 1).trim() || undefined;
+  normalizedServer = normalizedServer.slice(0, backslashIndex);
+}
+
+const commaIndex = normalizedServer.indexOf(',');
+if (commaIndex >= 0) {
+  portFromServer = normalizedServer.slice(commaIndex + 1).trim();
+  normalizedServer = normalizedServer.slice(0, commaIndex);
+}
+
+normalizedServer = normalizedServer || 'localhost';
+
+const envPort = Number.parseInt((process.env.DB_PORT || '').trim(), 10);
+const parsedEnvPort = Number.isInteger(envPort) && envPort > 0 ? envPort : undefined;
+const parsedServerPort = Number.parseInt((portFromServer || '').trim(), 10);
+const finalPort = Number.isInteger(parsedServerPort) && parsedServerPort > 0 ? parsedServerPort : parsedEnvPort;
+
+const dbOptions = {
+  encrypt: /^true$/i.test(process.env.DB_ENCRYPT || 'false'),
+  trustServerCertificate: !/^false$/i.test(process.env.DB_TRUST_SERVER_CERTIFICATE || 'true')
+};
+
+if (instanceName) {
+  dbOptions.instanceName = instanceName;
+}
+
 const dbConfig = {
   user: process.env.DB_USER || 'labcenter_app',
   password: process.env.DB_PASSWORD || 'LabCenter!AppPass',
-  server: process.env.DB_SERVER || 'localhost',
+  server: normalizedServer,
   database: process.env.DB_NAME || 'dbLabCenter',
-  port: Number.parseInt(process.env.DB_PORT || '1433', 10),
-  options: {
-    encrypt: /^true$/i.test(process.env.DB_ENCRYPT || 'false'),
-    trustServerCertificate: !/^false$/i.test(process.env.DB_TRUST_SERVER_CERTIFICATE || 'true')
-  },
+  options: dbOptions,
   pool: {
     max: Number.parseInt(process.env.DB_POOL_MAX || '10', 10),
     min: Number.parseInt(process.env.DB_POOL_MIN || '0', 10),
     idleTimeoutMillis: Number.parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10)
   }
 };
+
+if (finalPort) {
+  dbConfig.port = finalPort;
+}
 
 let pool;
 let cachedDefaultUserId = null;
