@@ -5117,6 +5117,15 @@
               body: JSON.stringify({ id, type, status, note }),
             });
 
+            const refreshTasks = [fnLoadHomeData()];
+            const kindForRefresh = fnMapTypeToKind(type);
+            if (kindForRefresh === "loan") {
+              refreshTasks.push(fnLoadBorrowingData());
+            } else if (kindForRefresh === "ticket") {
+              refreshTasks.push(fnLoadServiceData());
+            }
+            await Promise.allSettled(refreshTasks);
+
             // Update row status visually if present in current lists
             const row = document.querySelector(`[data-id="${CSS.escape(id)}"]`);
             if (row) {
