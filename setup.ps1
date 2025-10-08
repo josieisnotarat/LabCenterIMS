@@ -207,6 +207,27 @@ function Wait-ForServiceRunning {
     }
 }
 
+function Ensure-SqlBrowserService {
+    try {
+        $browserService = Get-Service -Name 'SQLBrowser' -ErrorAction Stop
+    } catch {
+        Write-WarningMessage 'SQL Browser service was not found. Named SQL Server instances that rely on dynamic ports may require the SQL Browser service or an explicit -SqlPort value.'
+        return
+    }
+
+    if ($browserService.Status -eq [System.ServiceProcess.ServiceControllerStatus]::Running) {
+        return
+    }
+
+    Write-Info 'Starting SQL Browser service to enable named instance discovery...'
+    try {
+        Wait-ForServiceRunning -Service $browserService -Timeout ([TimeSpan]::FromMinutes(1))
+        Write-Success 'SQL Browser service is running.'
+    } catch {
+        Write-WarningMessage 'Failed to start the SQL Browser service. Specify -SqlPort explicitly if connections using instance names continue to fail.'
+    }
+}
+
 function Install-SqlServerExpressInstance {
     param(
         [Parameter(Mandatory = $true)][string]$InstanceName
@@ -280,6 +301,19 @@ function Ensure-SqlServerInstance {
     return $true
 }
 
+function Get-SqlServerAddress {
+    param(
+        [Parameter(Mandatory = $true)][string]$Server,
+        [Parameter()][int]$Port = 1433
+    )
+
+    if (-not $Port -or $Port -eq 1433) {
+        return $Server
+    }
+
+    return "$Server,$Port"
+}
+
 function Test-SqlServerConnection {
     param(
         [Parameter(Mandatory = $true)][string]$ServerAddress,
@@ -289,6 +323,36 @@ function Test-SqlServerConnection {
     $testArgs = @('-S', $ServerAddress, '-b', '-l', '5') + $AuthArgs + @('-d', 'master', '-Q', 'SELECT 1')
     & sqlcmd @testArgs 2>$null | Out-Null
     return $LASTEXITCODE -eq 0
+}
+
+function Get-SqlServerTcpPort {
+    param(
+        [Parameter(Mandatory = $true)][string]$ServerAddress,
+        [Parameter(Mandatory = $true)][string[]]$AuthArgs
+    )
+
+    $query = @"
+SET NOCOUNT ON;
+SELECT TOP (1) local_tcp_port
+FROM sys.dm_tcp_listener_states
+WHERE state = 0 AND local_tcp_port IS NOT NULL
+ORDER BY local_tcp_port DESC;
+"@
+
+    $args = @('-S', $ServerAddress, '-b') + $AuthArgs + @('-d', 'master', '-Q', $query)
+    $output = & sqlcmd @args
+
+    if ($LASTEXITCODE -ne 0) {
+        return $null
+    }
+
+    foreach ($line in $output) {
+        if ($line -match '^\s*(\d{1,5})\s*$') {
+            return [int]$Matches[1]
+        }
+    }
+
+    return $null
 }
 
 function Write-SqlServerDiagnostics {
@@ -324,6 +388,10 @@ if (-not $instanceReady) {
     Write-WarningMessage "SQL Server service for '$SqlServer' was not found. Install SQL Server manually or re-run with -InstallSqlServerExpress to install SQL Server Express automatically."
 }
 
+if ($SqlServer -match '\\' -and -not $PSBoundParameters.ContainsKey('SqlPort')) {
+    Ensure-SqlBrowserService
+}
+
 if ([string]::IsNullOrWhiteSpace($SqlAdminUser)) {
     Write-Info 'Using Windows authentication for sqlcmd connections.'
     $authArgs = @('-E')
@@ -339,7 +407,7 @@ if ($SqlPort -le 0 -or $SqlPort -gt 65535) {
     throw 'SqlPort must be between 1 and 65535.'
 }
 
-$serverAddress = if ($SqlPort -eq 1433) { $SqlServer } else { "$SqlServer,$SqlPort" }
+$serverAddress = Get-SqlServerAddress -Server $SqlServer -Port $SqlPort
 
 $SqlFile = Join-Path $RootDir 'LabCenterDatabase.sql'
 if (-not (Test-Path $SqlFile)) {
@@ -405,6 +473,26 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Success 'Database login configured.'
 
+$explicitPortProvided = $PSBoundParameters.ContainsKey('SqlPort')
+if (-not $explicitPortProvided) {
+    $detectedPort = Get-SqlServerTcpPort -ServerAddress $serverAddress -AuthArgs $authArgs
+    if ($detectedPort) {
+        if ($detectedPort -ne $SqlPort) {
+            Write-Info "Detected TCP port $detectedPort for SQL Server instance '$SqlServer'."
+        }
+        $SqlPort = $detectedPort
+        $serverAddress = Get-SqlServerAddress -Server $SqlServer -Port $SqlPort
+    } elseif ($SqlServer -match '\\') {
+        Write-WarningMessage 'SQL Server did not report a TCP listener port. Ensure the SQL Browser service is running or specify -SqlPort explicitly.'
+    }
+}
+
+$appAuthArgs = @('-U', $AppDbUser, '-P', $AppDbPassword)
+if (-not (Test-SqlServerConnection -ServerAddress $serverAddress -AuthArgs $appAuthArgs)) {
+    throw "Application SQL login '$AppDbUser' could not connect using the provided credentials. Verify SQL authentication is enabled and the username/password are correct."
+}
+Write-Success "Verified application SQL login '$AppDbUser'."
+
 $envFile = Join-Path $RootDir '.env'
 if (Test-Path $envFile) {
     $timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
@@ -418,7 +506,7 @@ $null = $envLines.Add("DB_USER=$AppDbUser")
 $null = $envLines.Add("DB_PASSWORD=$AppDbPassword")
 $null = $envLines.Add("DB_SERVER=$SqlServer")
 
-$shouldIncludePort = $PSBoundParameters.ContainsKey('SqlPort') -or ($SqlServer -notmatch '\\')
+$shouldIncludePort = $explicitPortProvided -or ($SqlServer -notmatch '\\') -or ($SqlPort -and $SqlPort -ne 1433)
 if ($shouldIncludePort) {
     $null = $envLines.Add("DB_PORT=$SqlPort")
 }
