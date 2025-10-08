@@ -1336,7 +1336,6 @@
                   <thead>
                     <tr>
                       <th scope="col">Item Name</th>
-                      <th scope="col">Item Number</th>
                       <th scope="col">Department</th>
                       <th scope="col">Due Policy</th>
                       <th scope="col">Actions</th>
@@ -1345,7 +1344,7 @@
                   <tbody id="tbl-admin-inventory">
                     <tr>
                       <td
-                        colspan="5"
+                        colspan="4"
                         style="
                           text-align: center;
                           color: var(--muted);
@@ -1830,10 +1829,6 @@
             <div class="full">
               <label>Item Name</label>
               <input id="mi-name" required />
-            </div>
-            <div>
-              <label>Item Number</label>
-              <input id="mi-number" placeholder="optional" />
             </div>
             <div>
               <label>Department</label>
@@ -2343,6 +2338,10 @@
           Diagnosing: "is-diagnosing",
           "Ready for Pickup": "is-ready",
         };
+        const DETAIL_STATUS_OPTIONS = {
+          loan: ["On Time", "Overdue", "Returned"],
+          ticket: ["Diagnosing", "Awaiting Parts", "Ready for Pickup", "Returned"],
+        };
         const ROW_STATUS_CLASSNAMES = Object.values(STATUS_ROW_CLASS_MAP);
 
         const AUDIT_ACTION_TITLES = {
@@ -2760,6 +2759,30 @@
         }
 
         // ====== TABLE ROW → DETAILS ======
+        function fnConfigureDetailStatusSelect(selectEl, kind, currentStatus) {
+          const options = DETAIL_STATUS_OPTIONS[kind] || [];
+          selectEl.innerHTML = "";
+          options.forEach((text) => {
+            const option = document.createElement("option");
+            option.value = text;
+            option.textContent = text;
+            selectEl.appendChild(option);
+          });
+          if (currentStatus && !options.includes(currentStatus)) {
+            const fallback = document.createElement("option");
+            fallback.value = currentStatus;
+            fallback.textContent = currentStatus;
+            selectEl.appendChild(fallback);
+          }
+          if (currentStatus) {
+            selectEl.value = currentStatus;
+          } else if (options.length) {
+            selectEl.value = options[0];
+          } else {
+            selectEl.value = "";
+          }
+        }
+
         const openDetail = (kind, id, primary, status) => {
           const dlg = document.getElementById("dlg-detail");
           fnSelectElement("#det-title").textContent =
@@ -2808,7 +2831,11 @@
                 ? `${cells[1]} — ${cells[0]}`
                 : `${cells[1]} — ${cells[0]}`;
             const pill = tr.querySelector(".pill");
-            const status = pill ? pill.textContent.trim() : "On Time";
+            const status = pill
+              ? pill.textContent.trim()
+              : kind === "loan"
+              ? "On Time"
+              : "";
             openDetail(kind, id, primary, status);
           });
         }
@@ -3149,7 +3176,6 @@
             tr.classList.add("clickable");
             tr.dataset.itemId = item.id != null ? item.id : "";
             fnAppendTableCell(tr, item.name || "—");
-            fnAppendTableCell(tr, item.number || "—");
             fnAppendTableCell(tr, item.department || "—");
             fnAppendTableCell(tr, fnFormatItemDuePolicy(item));
             tbody.appendChild(tr);
@@ -3163,7 +3189,6 @@
           return entries.filter((item) => {
             const parts = [
               item.name,
-              item.number,
               item.department,
               item.duePolicy,
               item.duePolicyDescription,
@@ -3346,7 +3371,6 @@
           entries.forEach((item) => {
             const tr = document.createElement("tr");
             fnAppendTableCell(tr, item.name || "—");
-            fnAppendTableCell(tr, item.number || "—");
             fnAppendTableCell(tr, item.department || "—");
             fnAppendTableCell(tr, fnFormatItemDuePolicy(item));
             const actionCell = document.createElement("td");
@@ -3378,7 +3402,6 @@
           return entries.filter((item) => {
             const parts = [
               item.name,
-              item.number,
               item.department,
               item.duePolicy,
               item.duePolicyDescription,
@@ -4435,7 +4458,6 @@
           const borrower = obj.borrower || obj.customer || obj.customerName;
           if (item) {
             const parts = [item];
-            if (obj.itemNumber) parts[0] += ` (${obj.itemNumber})`;
             if (borrower) {
               let borrowerTxt = borrower;
               if (obj.schoolId || obj.schoolID || obj.schoolIdNumber) {
@@ -4664,8 +4686,6 @@
           if (idInput) idInput.value = item?.id ?? "";
           const nameInput = document.getElementById("mi-name");
           if (nameInput) nameInput.value = item?.name || "";
-          const numberInput = document.getElementById("mi-number");
-          if (numberInput) numberInput.value = item?.number || "";
           const deptInput = document.getElementById("mi-dept");
           if (deptInput) deptInput.value = item?.department || "";
           const ownedSelect = document.getElementById("mi-owned");
@@ -5167,6 +5187,15 @@
               body: JSON.stringify({ id, type, status, note }),
             });
 
+            const refreshTasks = [fnLoadHomeData()];
+            const kindForRefresh = fnMapTypeToKind(type);
+            if (kindForRefresh === "loan") {
+              refreshTasks.push(fnLoadBorrowingData());
+            } else if (kindForRefresh === "ticket") {
+              refreshTasks.push(fnLoadServiceData());
+            }
+            await Promise.allSettled(refreshTasks);
+
             // Update row status visually if present in current lists
             const row = document.querySelector(`[data-id="${CSS.escape(id)}"]`);
             if (row) {
@@ -5428,7 +5457,6 @@
               fnMust(id, "Item identifier missing.");
               const name = fnSelectElement("#mi-name").value.trim();
               fnMust(name, "Item name required.");
-              const number = fnSelectElement("#mi-number").value.trim();
               const dept = fnSelectElement("#mi-dept").value.trim();
               const owned = fnSelectElement("#mi-owned").value !== "external";
               const description = fnSelectElement("#mi-description").value.trim();
@@ -5437,7 +5465,6 @@
 
               const payload = {
                 name,
-                number: number || null,
                 department: dept || null,
                 schoolOwned: owned,
                 description: description || null,

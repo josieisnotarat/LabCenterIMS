@@ -90,7 +90,6 @@ CREATE TABLE dbo.TItems
 (
     intItemID               INT IDENTITY(1,1) PRIMARY KEY,
     strItemName             VARCHAR(120) NOT NULL,
-    strItemNumber           VARCHAR(60)  NULL,
     blnIsSchoolOwned        BIT          NOT NULL,
     intDepartmentID         INT          NULL REFERENCES dbo.TDepartments(intDepartmentID),
     strDescription          VARCHAR(400) NULL,
@@ -100,8 +99,7 @@ CREATE TABLE dbo.TItems
     tDueTime                TIME(0)      NULL,
     dtmFixedDueLocal        DATETIME2(0) NULL,
     blnIsActive             BIT          NOT NULL CONSTRAINT DF_TItems_IsActive DEFAULT (1),
-    dtmCreated              DATETIME2(0) NOT NULL CONSTRAINT DF_TItems_Created  DEFAULT (SYSUTCDATETIME()),
-    CONSTRAINT UQ_TItems_ItemNumber UNIQUE (strItemNumber)
+    dtmCreated              DATETIME2(0) NOT NULL CONSTRAINT DF_TItems_Created  DEFAULT (SYSUTCDATETIME())
 );
 ALTER TABLE dbo.TItems ADD CONSTRAINT CK_TItems_DuePolicy CHECK (strDuePolicy IN ('NEXT_DAY_6PM','OFFSET','FIXED','SEMESTER'));
 CREATE INDEX IX_TItems_Name ON dbo.TItems(strItemName);
@@ -131,7 +129,6 @@ CREATE TABLE dbo.TItemLoans
     snapInstructor          VARCHAR(100) NULL,
 
     snapItemName            VARCHAR(120) NOT NULL,
-    snapItemNumber          VARCHAR(60)  NULL,
     snapIsSchoolOwned       BIT          NOT NULL,
     snapDepartmentName      VARCHAR(100) NULL,
 
@@ -169,7 +166,7 @@ CREATE TABLE dbo.TServiceTickets
     intAssignedLabTechID INT NULL REFERENCES dbo.TLabTechs(intLabTechID),
 
     strStatus           VARCHAR(30) NOT NULL CONSTRAINT DF_TServiceTickets_Status DEFAULT ('Diagnosing')
-       CHECK (strStatus IN ('Diagnosing','Awaiting Parts','Ready for Pickup','Quarantined','Completed','Cancelled'))
+      CHECK (strStatus IN ('Diagnosing','Awaiting Parts','Ready for Pickup','Completed','Cancelled'))
 );
 CREATE INDEX IX_TServiceTickets_Status ON dbo.TServiceTickets(strStatus, dtmLoggedUTC DESC);
 CREATE INDEX IX_TServiceTickets_Assigned ON dbo.TServiceTickets(intAssignedLabTechID, strStatus);
@@ -232,7 +229,6 @@ AS
 SELECT
     it.intItemID,
     it.strItemName,
-    it.strItemNumber,
     it.blnIsSchoolOwned,
     d.strDepartmentName,
     il.intItemLoanID,
@@ -285,7 +281,7 @@ BEGIN
   SET NOCOUNT ON;
   INSERT dbo.TAuditLog (intLabTechID, strAction, strEntity, intEntityPK, strDetails)
   SELECT NULL, 'ITEM_CREATE', 'TItems', i.intItemID,
-         CONCAT('{"itemName":"', i.strItemName, '","itemNumber":"', ISNULL(i.strItemNumber,''), '","schoolOwned":', IIF(i.blnIsSchoolOwned=1,'true','false'), '}')
+         CONCAT('{"itemName":"', i.strItemName, '","schoolOwned":', IIF(i.blnIsSchoolOwned=1,'true','false'), '}')
   FROM inserted i;
 END
 GO
@@ -301,7 +297,7 @@ BEGIN
   -- Checkouts
   INSERT dbo.TAuditLog (intLabTechID, strAction, strEntity, intEntityPK, strDetails)
   SELECT il.intCheckoutLabTechID, 'CHECKOUT', 'TItemLoans', il.intItemLoanID,
-         CONCAT('{"item":"', il.snapItemName, '","itemNumber":"', ISNULL(il.snapItemNumber,''), '","borrower":"', il.snapBorrowerFirstName, ' ', il.snapBorrowerLastName,
+         CONCAT('{"item":"', il.snapItemName, '","borrower":"', il.snapBorrowerFirstName, ' ', il.snapBorrowerLastName,
                 '","checkoutUTC":"', CONVERT(varchar(19), il.dtmCheckoutUTC, 126), '","dueUTC":"', ISNULL(CONVERT(varchar(19), il.dtmDueUTC, 126), ''), '"}')
   FROM inserted il
   LEFT JOIN deleted d ON d.intItemLoanID = il.intItemLoanID
@@ -310,7 +306,7 @@ BEGIN
   -- Checkins
   INSERT dbo.TAuditLog (intLabTechID, strAction, strEntity, intEntityPK, strDetails)
   SELECT il.intCheckinLabTechID, 'CHECKIN', 'TItemLoans', il.intItemLoanID,
-         CONCAT('{"item":"', il.snapItemName, '","itemNumber":"', ISNULL(il.snapItemNumber,''), '","borrower":"', il.snapBorrowerFirstName, ' ', il.snapBorrowerLastName,
+         CONCAT('{"item":"', il.snapItemName, '","borrower":"', il.snapBorrowerFirstName, ' ', il.snapBorrowerLastName,
                 '","checkinUTC":"', CONVERT(varchar(19), il.dtmCheckinUTC, 126), '"}')
   FROM inserted il
   JOIN deleted  d ON d.intItemLoanID = il.intItemLoanID
@@ -448,7 +444,6 @@ IF OBJECT_ID('dbo.usp_CreateItem','P') IS NOT NULL DROP PROCEDURE dbo.usp_Create
 GO
 CREATE PROCEDURE dbo.usp_CreateItem
   @strItemName        VARCHAR(120),
-  @strItemNumber      VARCHAR(60) = NULL,
   @blnIsSchoolOwned   BIT,
   @intDepartmentID    INT = NULL,
   @strDescription     VARCHAR(400) = NULL,
@@ -475,7 +470,6 @@ BEGIN
   INSERT dbo.TItems
   (
     strItemName,
-    strItemNumber,
     blnIsSchoolOwned,
     intDepartmentID,
     strDescription,
@@ -488,7 +482,6 @@ BEGIN
   VALUES
   (
     @strItemName,
-    @strItemNumber,
     @blnIsSchoolOwned,
     @intDepartmentID,
     @strDescription,
@@ -548,12 +541,10 @@ BEGIN
   SET NOCOUNT ON;
 
   DECLARE @snapItemName VARCHAR(120),
-          @snapItemNumber VARCHAR(60),
           @snapIsSchoolOwned BIT,
           @snapDepartmentName VARCHAR(100);
 
   SELECT @snapItemName = strItemName,
-         @snapItemNumber = strItemNumber,
          @snapIsSchoolOwned = blnIsSchoolOwned,
          @snapDepartmentName = d.strDepartmentName
   FROM dbo.TItems i
@@ -585,13 +576,13 @@ BEGIN
   (
     intItemID,intBorrowerID,intCheckoutLabTechID,dtmDueUTC,strCheckoutNotes,
     snapBorrowerFirstName,snapBorrowerLastName,snapSchoolIDNumber,snapPhoneNumber,snapRoomNumber,snapInstructor,
-    snapItemName,snapItemNumber,snapIsSchoolOwned,snapDepartmentName
+    snapItemName,snapIsSchoolOwned,snapDepartmentName
   )
   VALUES
   (
     @intItemID,@intBorrowerID,@intCheckoutLabTechID,@dtmDueUTC,@strCheckoutNotes,
     @snapBorrowerFirstName,@snapBorrowerLastName,@snapSchoolIDNumber,@snapPhoneNumber,@snapRoomNumber,@snapInstructor,
-    @snapItemName,@snapItemNumber,@snapIsSchoolOwned,@snapDepartmentName
+    @snapItemName,@snapIsSchoolOwned,@snapDepartmentName
   );
 
   SELECT SCOPE_IDENTITY() AS intItemLoanID;
@@ -648,7 +639,6 @@ GO
 CREATE PROCEDURE dbo.usp_SaveItem
   @intItemID       INT = NULL,
   @strItemName     VARCHAR(120),
-  @strItemNumber   VARCHAR(60) = NULL,
   @blnIsSchoolOwned BIT,
   @intDepartmentID INT = NULL,
   @strDescription  VARCHAR(400) = NULL,
@@ -659,8 +649,8 @@ BEGIN
 
   IF @intItemID IS NULL
   BEGIN
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,blnIsActive)
-    VALUES (@strItemName,@strItemNumber,@blnIsSchoolOwned,@intDepartmentID,@strDescription,@blnIsActive);
+    INSERT dbo.TItems(strItemName,blnIsSchoolOwned,intDepartmentID,strDescription,blnIsActive)
+    VALUES (@strItemName,@blnIsSchoolOwned,@intDepartmentID,@strDescription,@blnIsActive);
 
     SELECT SCOPE_IDENTITY() AS intItemID;
   END
@@ -668,7 +658,6 @@ BEGIN
   BEGIN
     UPDATE dbo.TItems
     SET strItemName = @strItemName,
-        strItemNumber = @strItemNumber,
         blnIsSchoolOwned = @blnIsSchoolOwned,
         intDepartmentID = @intDepartmentID,
         strDescription = @strDescription,
@@ -802,7 +791,7 @@ BEGIN
   SELECT
       outNow   = COALESCE(SUM(CASE WHEN dtmCheckinUTC IS NULL THEN 1 ELSE 0 END),0),
       dueToday = COALESCE(SUM(CASE WHEN dtmCheckinUTC IS NULL AND dtmDueUTC >= @startOfDay AND dtmDueUTC < @endOfDay THEN 1 ELSE 0 END),0),
-      repairs  = (SELECT COUNT(*) FROM dbo.TServiceTickets WHERE strStatus IN ('Diagnosing','Awaiting Parts','Ready for Pickup','Quarantined')),
+      repairs  = (SELECT COUNT(*) FROM dbo.TServiceTickets WHERE strStatus IN ('Diagnosing','Awaiting Parts','Ready for Pickup')),
       overdue  = COALESCE(SUM(CASE WHEN dtmCheckinUTC IS NULL AND dtmDueUTC IS NOT NULL AND dtmDueUTC < SYSUTCDATETIME() THEN 1 ELSE 0 END),0)
   FROM dbo.TItemLoans;
 END
@@ -833,7 +822,6 @@ BEGIN
         il.snapSchoolIDNumber,
         il.snapRoomNumber,
         il.snapItemName,
-        il.snapItemNumber,
         il.snapDepartmentName,
         CASE
           WHEN il.dtmCheckinUTC IS NOT NULL THEN 'Returned'
@@ -851,8 +839,7 @@ BEGIN
       LoanCTE.snapBorrowerFirstName LIKE N'%' + @Search + N'%' OR
       LoanCTE.snapBorrowerLastName LIKE N'%' + @Search + N'%' OR
       LoanCTE.snapSchoolIDNumber LIKE N'%' + @Search + N'%' OR
-      LoanCTE.snapItemName LIKE N'%' + @Search + N'%' OR
-      LoanCTE.snapItemNumber LIKE N'%' + @Search + N'%'
+      LoanCTE.snapItemName LIKE N'%' + @Search + N'%'
     )
   ORDER BY LoanCTE.dtmCheckoutUTC DESC;
 END
@@ -948,14 +935,12 @@ BEGIN
   SELECT TOP (@Top)
       i.intItemID,
       i.strItemName,
-      i.strItemNumber,
       i.blnIsSchoolOwned,
       d.strDepartmentName,
       i.blnIsActive
   FROM dbo.TItems i
   LEFT JOIN dbo.TDepartments d ON d.intDepartmentID = i.intDepartmentID
   WHERE i.strItemName LIKE N'%' + @Search + N'%'
-     OR ISNULL(i.strItemNumber,N'') LIKE N'%' + @Search + N'%'
   ORDER BY i.strItemName;
 END
 GO
