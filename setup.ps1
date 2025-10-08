@@ -154,6 +154,41 @@ function Ensure-NodeJs {
 Ensure-NodeJs
 Ensure-Command -Command sqlcmd -DisplayName 'SQL Server Command Line Utilities (sqlcmd)'
 
+function Test-SqlServerConnection {
+    param(
+        [Parameter(Mandatory = $true)][string]$ServerAddress,
+        [Parameter(Mandatory = $true)][string[]]$AuthArgs
+    )
+
+    $testArgs = @('-S', $ServerAddress, '-b', '-l', '5') + $AuthArgs + @('-d', 'master', '-Q', 'SELECT 1')
+    & sqlcmd @testArgs 2>$null | Out-Null
+    return $LASTEXITCODE -eq 0
+}
+
+function Write-SqlServerDiagnostics {
+    $serviceNames = @('MSSQLSERVER', 'MSSQL$SQLEXPRESS')
+    $detectedServices = @()
+
+    foreach ($serviceName in $serviceNames) {
+        try {
+            $service = Get-Service -Name $serviceName -ErrorAction Stop
+            if ($service) {
+                $detectedServices += "${service.DisplayName} ($serviceName) - Status: $($service.Status)"
+            }
+        } catch {
+            continue
+        }
+    }
+
+    if ($detectedServices.Count -gt 0) {
+        foreach ($serviceInfo in $detectedServices) {
+            Write-WarningMessage "Detected SQL Server service: $serviceInfo"
+        }
+    } else {
+        Write-WarningMessage 'No SQL Server Windows services were detected. Install SQL Server Developer or Express Edition and ensure the service is running.'
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($SqlAdminUser)) {
     Write-Info 'Using Windows authentication for sqlcmd connections.'
     $authArgs = @('-E')
@@ -179,6 +214,15 @@ if (-not (Test-Path $SqlFile)) {
 $escapedAppDbUserIdentifier = $AppDbUser -replace ']', ']]'
 $escapedAppDbUserLiteral = $AppDbUser -replace "'", "''"
 $escapedAppDbPasswordLiteral = $AppDbPassword -replace "'", "''"
+
+if (-not (Test-SqlServerConnection -ServerAddress $serverAddress -AuthArgs $authArgs)) {
+    Write-WarningMessage "Unable to establish a sqlcmd connection to '$serverAddress'."
+    Write-WarningMessage 'Ensure SQL Server is installed, the service is running, and that the server name and port parameters are correct.'
+    Write-WarningMessage "If you are using a named instance, re-run the script with -SqlServer 'localhost\\InstanceName' (for example localhost\\SQLEXPRESS) or specify -SqlPort when using a custom port."
+    Write-WarningMessage 'You can manually test the connection by running: sqlcmd -S <server> -Q "SELECT 1"'
+    Write-SqlServerDiagnostics
+    throw 'SQL Server connection test failed. Start SQL Server and re-run this setup script.'
+}
 
 Write-Info "Applying Lab Center database schema to '$serverAddress'..."
 $sqlcmdArgs = @('-S', $serverAddress, '-b') + $authArgs + @('-i', $SqlFile)
