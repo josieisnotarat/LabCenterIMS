@@ -4788,7 +4788,7 @@
           if (!id) return;
           if (
             !window.confirm(
-              "Delete this customer profile? This is only allowed when no loans or tickets exist.",
+              "Delete this customer profile? This removes all associated records and is only allowed when no loans or tickets exist.",
             )
           ) {
             return;
@@ -4857,99 +4857,6 @@
             m_arrCustomerProfiles = [];
             m_boolCustomerProfilesLoaded = false;
             m_boolCustomerProfilesLoading = false;
-            fnCloseDialogById("dlg-manage-customer");
-            fnCloseDialogById("dlg-manage-item");
-            fnCloseDialogById("dlg-edit-user");
-            alert("Database cleared.");
-            await fnLoadHomeData();
-            await fnLoadBorrowingData();
-            await fnLoadServiceData();
-            await fnLoadAuditLog();
-            await fnLoadInventoryData({ showStatus: true });
-            await fnLoadAdminUsers({ showStatus: true });
-            await fnRunCustomerProfileSearch("", { showStatus: true });
-          } catch (err) {
-            console.error("Failed to clear database", err);
-            alert(err?.message || "Unable to clear database.");
-          } finally {
-            if (button) fnSetBusyState(button, false);
-          }
-        }
-
-        async function fnDeleteCustomerProfile(button, id) {
-          if (!USE_BACKEND) {
-            alert("Enable backend to manage customer profiles.");
-            return;
-          }
-          if (!id) return;
-          if (
-            !window.confirm(
-              "Delete this customer profile? This removes all associated records.",
-            )
-          ) {
-            return;
-          }
-          try {
-            if (button) fnSetBusyState(button, true);
-            await fnApi(`/customers/${encodeURIComponent(id)}`, {
-              method: "DELETE",
-            });
-            if (
-              m_objActiveCustomerProfile &&
-              String(m_objActiveCustomerProfile.id || "") === String(id)
-            ) {
-              m_objActiveCustomerProfile = null;
-              fnCloseDialogById("dlg-manage-customer");
-            }
-            alert("Customer deleted.");
-            await fnRunCustomerProfileSearch(m_strLastProfileSearchTerm, {
-              showStatus: false,
-            });
-          } catch (err) {
-            console.error("Failed to delete customer", err);
-            alert(err?.message || "Unable to delete customer profile.");
-          } finally {
-            if (button) fnSetBusyState(button, false);
-          }
-        }
-
-        async function fnClearAuditLog(button) {
-          if (!USE_BACKEND) {
-            alert("Enable backend to manage the action log.");
-            return;
-          }
-          if (!window.confirm("Clear all action log entries?")) return;
-          try {
-            if (button) fnSetBusyState(button, true);
-            await fnApi(`/admin/audit-log`, { method: "DELETE" });
-            alert("Action log cleared.");
-            await fnLoadAuditLog();
-          } catch (err) {
-            console.error("Failed to clear action log", err);
-            alert(err?.message || "Unable to clear action log.");
-          } finally {
-            if (button) fnSetBusyState(button, false);
-          }
-        }
-
-        async function fnClearDatabase(button) {
-          if (!USE_BACKEND) {
-            alert("Enable backend to manage the database.");
-            return;
-          }
-          if (
-            !window.confirm(
-              "Clear the entire database? This removes all customers, inventory, users, loans, tickets, and log entries.",
-            )
-          ) {
-            return;
-          }
-          try {
-            if (button) fnSetBusyState(button, true);
-            await fnApi(`/admin/clear-database`, { method: "POST" });
-            m_objActiveCustomerProfile = null;
-            m_objActiveInventoryItem = null;
-            m_objActiveUser = null;
             fnCloseDialogById("dlg-manage-customer");
             fnCloseDialogById("dlg-manage-item");
             fnCloseDialogById("dlg-edit-user");
