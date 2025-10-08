@@ -17,7 +17,7 @@
 ## 🧰 Prerequisites
 Before you mash any buttons, make sure the following are installed:
 
-1. **SQL Server** (Express is fine) and the `sqlcmd` command-line tool. (grab it here: https://go.microsoft.com/fwlink/p/?linkid=2216019&clcid=0x409&culture=en-us&country=us)
+1. **SQL Server** (Express is fine) and the `sqlcmd` command-line tool. (grab it here: https://go.microsoft.com/fwlink/p/?linkid=2216019&clcid=0x409&culture=en-us&country=us) If you do not already have SQL Server installed, the setup script can install SQL Server 2022 Express for you with the `-InstallSqlServerExpress` switch.
 2. **Node.js (LTS)** and **npm**. If you're on Windows without Node yet, don't panic—the setup script can fetch it for you.
 3. **Windows PowerShell (Admin rights)** for the automated setup path below.
 
@@ -35,6 +35,10 @@ Follow these steps:
 3. **Launch the autopilot script:**
    ```powershell
    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1
+   ```
+   No SQL Server yet? Run the script as an administrator with `-InstallSqlServerExpress` to install and start SQL Server Express automatically:
+   ```powershell
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 -InstallSqlServerExpress
    ```
 4. **Watch the console.** The script will:
    - Connect to SQL Server (defaults: `localhost`, port `1433`, Windows Auth).
