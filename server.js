@@ -60,6 +60,8 @@ const dbConfig = {
 
 let pool;
 let cachedDefaultUserId = null;
+let cachedLoanLabTechTable = null;
+const tableColumnCache = new Map();
 
 const SESSION_TIMEOUT_MS = 15 * 60 * 1000;
 const sessions = new Map();
@@ -813,18 +815,148 @@ async function loadAliasesForBorrowers(pool, borrowerIds){
   return map;
 }
 
+function stripSchema(tableName){
+  return tableName.replace(/^[^.]+\./, '');
+}
+
+async function getTableColumns(pool, tableName){
+  const key = stripSchema(tableName);
+  if(tableColumnCache.has(key)){
+    return tableColumnCache.get(key);
+  }
+  const result = await pool.request()
+    .input('TableName', sql.NVarChar(128), key)
+    .query(`
+      SELECT COLUMN_NAME
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = @TableName;
+    `);
+  const columns = new Set((result.recordset || []).map(row => row.COLUMN_NAME));
+  tableColumnCache.set(key, columns);
+  return columns;
+}
+
+function buildActiveFilter(columns, alias = ''){
+  const prefix = alias ? `${alias}.` : '';
+  if(columns.has('blnIsActive')) return `${prefix}blnIsActive = 1`;
+  if(columns.has('blnActive')) return `${prefix}blnActive = 1`;
+  if(columns.has('IsActive')) return `${prefix}IsActive = 1`;
+  if(columns.has('Active')) return `${prefix}Active = 1`;
+  return '';
+}
+
+async function getLoanLabTechTable(pool){
+  if(cachedLoanLabTechTable){
+    return cachedLoanLabTechTable;
+  }
+  const result = await pool.request().query(`
+    SELECT
+      CASE WHEN OBJECT_ID('dbo.TItemLoans','U') IS NOT NULL THEN 1 ELSE 0 END AS HasModernLoans,
+      CASE WHEN OBJECT_ID('dbo.TLabTechs','U') IS NOT NULL THEN 1 ELSE 0 END AS HasModernTechs,
+      CASE WHEN OBJECT_ID('dbo.tblLoan','U') IS NOT NULL THEN 1 ELSE 0 END AS HasLegacyLoans,
+      CASE WHEN OBJECT_ID('dbo.tblLabTechs','U') IS NOT NULL THEN 1 ELSE 0 END AS HasLegacyTechs;
+  `);
+  const row = result.recordset?.[0] || {};
+  if(row.HasModernLoans && row.HasModernTechs){
+    cachedLoanLabTechTable = 'dbo.TLabTechs';
+  } else if(row.HasLegacyLoans && row.HasLegacyTechs){
+    cachedLoanLabTechTable = 'dbo.tblLabTechs';
+  } else if(row.HasModernTechs){
+    cachedLoanLabTechTable = 'dbo.TLabTechs';
+  } else if(row.HasLegacyTechs){
+    cachedLoanLabTechTable = 'dbo.tblLabTechs';
+  } else {
+    cachedLoanLabTechTable = 'dbo.TLabTechs';
+  }
+  return cachedLoanLabTechTable;
+}
+
+async function ensureLabTechIdInLoanTable(pool, candidateId, username){
+  const table = await getLoanLabTechTable(pool);
+  const columns = await getTableColumns(pool, table);
+  if(!columns.size){
+    return candidateId ?? null;
+  }
+  const idColumn = columns.has('intLabTechID') ? 'intLabTechID'
+    : (columns.has('LabTechID') ? 'LabTechID' : null);
+  if(!idColumn){
+    return candidateId ?? null;
+  }
+
+  if(candidateId != null){
+    const exists = await pool.request()
+      .input('LabTechID', sql.Int, candidateId)
+      .query(`
+        SELECT 1 AS found
+        FROM ${table}
+        WHERE ${idColumn} = @LabTechID;
+      `);
+    if(exists.recordset?.length){
+      return candidateId;
+    }
+  }
+
+  const normalizedUsername = typeof username === 'string' ? username.trim().toLowerCase() : null;
+  const usernameColumn = columns.has('strUsername') ? 'strUsername'
+    : (columns.has('Username') ? 'Username' : null);
+  if(normalizedUsername && usernameColumn){
+    let usernameQuery = `
+      SELECT TOP (1) ${idColumn} AS LabTechID
+      FROM ${table}
+      WHERE LOWER(${usernameColumn}) = @Username
+    `;
+    const activeFilter = buildActiveFilter(columns);
+    if(activeFilter){
+      usernameQuery += ` AND ${activeFilter}`;
+    }
+    usernameQuery += ` ORDER BY ${idColumn};`;
+    const usernameResult = await pool.request()
+      .input('Username', sql.VarChar(150), normalizedUsername)
+      .query(usernameQuery);
+    const resolvedByUsername = usernameResult.recordset?.[0]?.LabTechID;
+    if(resolvedByUsername != null){
+      return resolvedByUsername;
+    }
+  }
+
+  let fallbackQuery = `
+    SELECT TOP (1) ${idColumn} AS LabTechID
+    FROM ${table}
+  `;
+  const activeFilter = buildActiveFilter(columns);
+  if(activeFilter){
+    fallbackQuery += ` WHERE ${activeFilter}`;
+  }
+  fallbackQuery += ` ORDER BY ${idColumn};`;
+  const fallbackResult = await pool.request().query(fallbackQuery);
+  const fallbackId = fallbackResult.recordset?.[0]?.LabTechID ?? null;
+  if(candidateId != null && fallbackId != null && fallbackId !== candidateId){
+    console.warn(`Lab tech id ${candidateId} not found in ${table}; using ${fallbackId} instead.`);
+  }
+  return fallbackId;
+}
+
+async function resolveLabTechIdForLoans(pool, user){
+  const candidateRaw = user?.id;
+  const candidateId = Number.isFinite(candidateRaw) ? candidateRaw : Number.parseInt(candidateRaw, 10);
+  const username = typeof user?.username === 'string' ? user.username : null;
+  const resolved = await ensureLabTechIdInLoanTable(pool, Number.isFinite(candidateId) ? candidateId : null, username);
+  if(resolved != null){
+    return resolved;
+  }
+  const fallback = await ensureLabTechIdInLoanTable(pool, null, null);
+  if(fallback == null){
+    throw new Error('No active user available for checkout.');
+  }
+  return fallback;
+}
+
 async function getDefaultUserId(pool){
   if(cachedDefaultUserId != null){
     return cachedDefaultUserId;
   }
-  const result = await pool.request().query(`
-    SELECT TOP (1) intLabTechID
-    FROM dbo.TLabTechs
-    WHERE blnIsActive = 1
-    ORDER BY intLabTechID;
-  `);
-  const id = result.recordset?.[0]?.intLabTechID;
-  if(!id){
+  const id = await ensureLabTechIdInLoanTable(pool, null, null);
+  if(id == null){
     throw new Error('No active user available for checkout.');
   }
   cachedDefaultUserId = id;
@@ -1461,7 +1593,7 @@ app.post('/api/loans/checkout', asyncHandler(async (req, res) => {
   const dueInfo = await resolveItemDue(pool, itemId);
   const dueDate = dueInfo?.dueUtc ? new Date(dueInfo.dueUtc) : null;
 
-  const userId = req.user?.id ?? await getDefaultUserId(pool);
+  const userId = await resolveLabTechIdForLoans(pool, req.user);
 
   const request = pool.request();
   request.input('intItemID', sql.Int, itemId);
@@ -1495,7 +1627,7 @@ app.post('/api/tickets', asyncHandler(async (req, res) => {
   const ticketLabel = itemId ? null : normalizeString(item);
 
   const publicId = await generatePublicTicketId(pool);
-  const userId = req.user?.id ?? await getDefaultUserId(pool);
+  const userId = await resolveLabTechIdForLoans(pool, req.user);
 
   const request = pool.request();
   request.input('strPublicTicketID', sql.VarChar(20), publicId);
@@ -1801,7 +1933,7 @@ app.post('/api/status', asyncHandler(async (req, res) => {
   }
 
   const pool = await getPool();
-  const userId = req.user?.id ?? await getDefaultUserId(pool);
+  const userId = await resolveLabTechIdForLoans(pool, req.user);
   const trimmedNote = normalizeString(note) || null;
 
   if(type === 'Loan'){
