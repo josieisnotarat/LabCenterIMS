@@ -27,16 +27,16 @@ The project ships with a Windows PowerShell helper that bootstraps everything fo
    Unblock-File -Path .\setup.ps1
    ```
 
-3. Execute the setup script:
+3. Execute the setup script (you can append `-Verbose` to see detailed progress):
 
    ```powershell
-   ./setup.ps1
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1
    ```
 
    * By default the script connects to `localhost` on port `1433` using Windows Authentication. Supply `-SqlAdminUser` and `-SqlAdminPassword` if you need to authenticate with a SQL login (for example `sa`).
    * Override `-SqlServer`, `-SqlPort`, or `-DatabaseName` if your SQL Server instance uses a non-default host, port, or database name.
    * If Node.js isn't installed yet, the script will install the LTS release automatically with `winget`. If `winget` isn't available, install Node.js manually from [nodejs.org](https://nodejs.org/en/download/).
-   * The helper creates (or reuses) an application login named `labcenter_app` with the password `LabCenter!AppPass`, writes these settings to `.env`, installs Node dependencies, starts `npm start` in a new PowerShell window, and opens `http://localhost:3000/` in your default browser.
+   * The helper creates (or reuses) an application login named `labcenter_app` with the password `LabCenter!AppPass`, writes these settings to `.env`, installs Node dependencies (invoking `npm install` via `cmd.exe` to avoid StrictMode issues), starts `npm start` in a new PowerShell window, and opens `http://localhost:3000/` in your default browser.
 
 Once the setup window reports success, interact with the app in the browser. If you close the API window later, you can restart it manually with `npm start` from the project directory.
 

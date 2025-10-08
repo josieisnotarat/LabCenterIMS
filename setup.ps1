@@ -79,18 +79,25 @@ function Ensure-Command {
     throw "Required command '$Command' was not found. Please install $DisplayName and then re-run this script."
 }
 
-function Get-CommandPropertyValue {
+function Get-CommandPath {
     param(
-        [Parameter(Mandatory = $true)][System.Management.Automation.CommandInfo]$CommandInfo,
-        [Parameter(Mandatory = $true)][string]$PropertyName
+        [Parameter(Mandatory = $true)][string]$CommandName
     )
 
-    $property = $CommandInfo.PSObject.Properties[$PropertyName]
-    if ($property) {
-        return $property.Value
+    $command = Get-Command $CommandName -ErrorAction SilentlyContinue
+    if (-not $command) {
+        return $null
     }
 
-    return $null
+    $propertiesInPriorityOrder = @('Source', 'Path', 'Definition')
+    foreach ($propertyName in $propertiesInPriorityOrder) {
+        $property = $command.PSObject.Properties[$propertyName]
+        if ($property -and $property.Value -and (Test-Path $property.Value)) {
+            return $property.Value
+        }
+    }
+
+    return $command.Name
 }
 
 function Ensure-NodeJs {
@@ -108,8 +115,8 @@ function Ensure-NodeJs {
 
     Write-WarningMessage 'Node.js (npm) not detected. Attempting to install the LTS release via winget...'
 
-    $winget = Get-Command winget -ErrorAction SilentlyContinue
-    if (-not $winget) {
+    $wingetPath = Get-CommandPath 'winget'
+    if (-not $wingetPath) {
         throw 'Node.js is required but could not be installed automatically because winget is unavailable. Install Node.js LTS from https://nodejs.org/en/download/ and re-run this script.'
     }
 
@@ -122,7 +129,6 @@ function Ensure-NodeJs {
     )
 
     Write-Info 'Installing Node.js LTS with winget. This may take a few minutes...'
-    $wingetPath = if ($winget.Source) { $winget.Source } else { $winget.Path }
     & $wingetPath @wingetArgs
     $wingetExitCode = $LASTEXITCODE
 
@@ -243,22 +249,22 @@ Write-Success "Wrote database connection settings to $envFile."
 if (-not (Test-Path (Join-Path $RootDir 'node_modules'))) {
     Write-Info 'Installing Node.js dependencies (npm install)...'
 
-    $npmCommand = Get-Command npm -ErrorAction Stop | Select-Object -First 1
-    $npmPath = Get-CommandPropertyValue -CommandInfo $npmCommand -PropertyName 'Source'
-    if (-not $npmPath) {
-        $npmPath = Get-CommandPropertyValue -CommandInfo $npmCommand -PropertyName 'Path'
-    }
-    if (-not $npmPath) {
-        $npmPath = Get-CommandPropertyValue -CommandInfo $npmCommand -PropertyName 'Definition'
-    }
-    if (-not $npmPath) {
-        $npmPath = $npmCommand.Name
+    $npmExecutable = Get-CommandPath 'npm.cmd'
+    if (-not $npmExecutable) {
+        $npmExecutable = Get-CommandPath 'npm'
     }
 
-    & $npmPath 'install'
+    if (-not $npmExecutable) {
+        throw 'npm could not be located even though Node.js should be installed. Install Node.js manually and re-run this script.'
+    }
+
+    $npmCommandLine = "`"$npmExecutable`" install"
+    $cmdArgs = @('/d', '/c', $npmCommandLine)
+    & cmd.exe @cmdArgs
     if ($LASTEXITCODE -ne 0) {
         throw 'npm install failed. Review the output above for details.'
     }
+
     Write-Success 'Node dependencies installed.'
 } else {
     Write-Info 'node_modules directory already present. Skipping npm install.'
