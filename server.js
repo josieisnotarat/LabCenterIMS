@@ -62,7 +62,6 @@ let pool;
 let cachedDefaultUserId = null;
 
 const SESSION_TIMEOUT_MS = 15 * 60 * 1000;
-const DEFAULT_USER_PASSWORD = 'password123';
 const sessions = new Map();
 
 const USER_ROLE_LABELS = {
@@ -277,31 +276,18 @@ app.post('/api/login', asyncHandler(async (req, res) => {
   }
 
   const pool = await getPool();
-  await ensureUserCredentials(pool);
+  let user;
+  try {
+    user = await findUserByCredentials(pool, username, password);
+  } catch(err){
+    console.error('Unable to verify login credentials:', err);
+    return res.status(500).json({ error: 'Unable to verify login credentials.' });
+  }
 
-  const result = await pool.request()
-    .input('Username', sql.VarChar(120), username)
-    .input('Password', sql.VarChar(255), password)
-    .query(`
-      SELECT TOP (1)
-             lt.intLabTechID,
-             lt.strUsername,
-             lt.strDisplayName,
-             lt.strRole,
-             lt.dtmCreated
-      FROM dbo.TLabTechs AS lt
-      INNER JOIN dbo.TLabTechCredentials AS cred ON cred.intLabTechID = lt.intLabTechID
-      WHERE lt.blnIsActive = 1
-        AND lt.strUsername = @Username
-        AND cred.strPasswordHash = HASHBYTES('SHA2_256', @Password);
-    `);
-
-  const row = result.recordset?.[0] || null;
-  if(!row){
+  if(!user){
     return res.status(401).json({ error: 'Invalid username or password.' });
   }
 
-  const user = mapUserRow(row);
   const session = createSession(user);
   res.json({ token: session.token, user: session.user });
 }));
@@ -1014,11 +1000,18 @@ async function ensureUserTable(pool){
         strLastName    VARCHAR(50)  NOT NULL,
         strEmail       VARCHAR(120) NULL,
         strPhoneNumber VARCHAR(25)  NULL,
+        strPassword    VARCHAR(255) NOT NULL CONSTRAINT DF_TLabTechs_Password DEFAULT ('password123'),
         strRole        VARCHAR(50)  NOT NULL,
         blnIsActive    BIT          NOT NULL CONSTRAINT DF_TLabTechs_IsActive DEFAULT (1),
         dtmCreated     DATETIME2(0) NOT NULL CONSTRAINT DF_TLabTechs_Created DEFAULT (SYSUTCDATETIME()),
         CONSTRAINT CK_TLabTechs_Role CHECK (strRole IN ('admin','co-op'))
       );
+    END;
+
+    IF COL_LENGTH('dbo.TLabTechs','strPassword') IS NULL
+    BEGIN
+      ALTER TABLE dbo.TLabTechs
+        ADD strPassword VARCHAR(255) NOT NULL CONSTRAINT DF_TLabTechs_Password DEFAULT ('password123') WITH VALUES;
     END;
   `);
 }
@@ -1062,6 +1055,25 @@ function mapUserRow(row){
     roleLabel: getUserRoleLabel(row.strRole),
     createdUtc: toIso(row.dtmCreated)
   };
+}
+
+async function findUserByCredentials(pool, username, password){
+  const result = await pool.request()
+    .input('Username', sql.VarChar(120), username)
+    .input('Password', sql.VarChar(255), password)
+    .query(`
+      SELECT TOP (1)
+             intLabTechID,
+             strUsername,
+             strDisplayName,
+             strRole,
+             dtmCreated
+      FROM dbo.TLabTechs
+      WHERE blnIsActive = 1
+        AND LOWER(strUsername) = @Username
+        AND strPassword = @Password;
+    `);
+  return mapUserRow(result.recordset?.[0] || null);
 }
 
 async function generatePublicTicketId(pool){
@@ -1926,9 +1938,10 @@ app.post('/api/users', asyncHandler(async (req, res) => {
       .input('First', sql.VarChar(50), firstLimited)
       .input('Last', sql.VarChar(50), lastLimited)
       .input('Role', sql.VarChar(50), roleName)
+      .input('Password', sql.VarChar(255), 'password123')
       .query(`
-        INSERT INTO dbo.TLabTechs(strUsername,strDisplayName,strFirstName,strLastName,strRole)
-        VALUES (@Username,@Display,@First,@Last,@Role);
+        INSERT INTO dbo.TLabTechs(strUsername,strDisplayName,strFirstName,strLastName,strRole,strPassword)
+        VALUES (@Username,@Display,@First,@Last,@Role,@Password);
       `);
   } catch(err){
     if(err && (err.number === 2627 || err.number === 2601)){
