@@ -1,25 +1,60 @@
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 const express = require('express');
 const sql = require('mssql');
+
+function loadEnvFile(filePath) {
+  try {
+    const contents = fs.readFileSync(filePath, 'utf8');
+    contents.split(/\r?\n/).forEach(line => {
+      const trimmed = line.trim();
+      if(!trimmed || trimmed.startsWith('#')){
+        return;
+      }
+      const idx = trimmed.indexOf('=');
+      if(idx === -1){
+        return;
+      }
+      const key = trimmed.slice(0, idx).trim();
+      if(!key || Object.prototype.hasOwnProperty.call(process.env, key)){
+        return;
+      }
+      let value = trimmed.slice(idx + 1).trim();
+      if((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))){
+        value = value.slice(1, -1);
+      }
+      process.env[key] = value;
+    });
+  } catch (err) {
+    if(err.code !== 'ENOENT'){
+      console.warn(`Unable to read env file ${filePath}:`, err.message);
+    }
+  }
+}
+
+loadEnvFile(path.join(__dirname, '.env'));
+if(process.cwd() !== __dirname){
+  loadEnvFile(path.join(process.cwd(), '.env'));
+}
 
 const app = express();
 app.use(express.json());
 
 const dbConfig = {
-  user: 'sa1',
-  password: '',
-  server: 'localhost',
-  database: 'dbLabCenter',
-  port: 1433,
+  user: process.env.DB_USER || 'labcenter_app',
+  password: process.env.DB_PASSWORD || 'LabCenter!AppPass',
+  server: process.env.DB_SERVER || 'localhost',
+  database: process.env.DB_NAME || 'dbLabCenter',
+  port: Number.parseInt(process.env.DB_PORT || '1433', 10),
   options: {
-    encrypt: false,
-    trustServerCertificate: true
+    encrypt: /^true$/i.test(process.env.DB_ENCRYPT || 'false'),
+    trustServerCertificate: !/^false$/i.test(process.env.DB_TRUST_SERVER_CERTIFICATE || 'true')
   },
   pool: {
-    max: 10,
-    min: 0,
-    idleTimeoutMillis: 30000
+    max: Number.parseInt(process.env.DB_POOL_MAX || '10', 10),
+    min: Number.parseInt(process.env.DB_POOL_MIN || '0', 10),
+    idleTimeoutMillis: Number.parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10)
   }
 };
 

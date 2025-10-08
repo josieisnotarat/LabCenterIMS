@@ -15,21 +15,30 @@ To initialize a fresh environment, run the script in SQL Server Management Studi
 
 The front-end now expects to communicate with a lightweight Node/Express API that proxies the stored procedures in `LabCenterDatabase.sql`.
 
-1. Install the dependencies:
+### Automated setup (Windows)
 
-   ```bash
-   npm install
+The project ships with a Windows PowerShell helper that bootstraps everything for you as long as Node.js, npm, and SQL Server (with the `sqlcmd` CLI) are available on your machine.
+
+1. Open Windows PowerShell **as Administrator**. Running elevated ensures the script can create the database.
+2. Allow the script to run if your execution policy blocks unsigned scripts:
+
+   ```powershell
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+   Unblock-File -Path .\setup.ps1
    ```
 
-2. Start the API server:
+3. Execute the setup script:
 
-   ```bash
-   npm start
+   ```powershell
+   ./setup.ps1
    ```
 
-The Node server already contains the default SQL Server credentials (`sa` / `yourStrong(!)Password`) and points to `localhost:1433` with the `dbLabCenter` database. Update `server.js` directly if you need different connection details.
+   * By default the script connects to `localhost` on port `1433` using Windows Authentication. Supply `-SqlAdminUser` and `-SqlAdminPassword` if you need to authenticate with a SQL login (for example `sa`).
+   * Override `-SqlServer`, `-SqlPort`, or `-DatabaseName` if your SQL Server instance uses a non-default host, port, or database name.
+   * If Node.js isn't installed yet, the script will install the LTS release automatically with `winget`. If `winget` isn't available, install Node.js manually from [nodejs.org](https://nodejs.org/en/download/).
+   * The helper creates (or reuses) an application login named `labcenter_app` with the password `LabCenter!AppPass`, writes these settings to `.env`, installs Node dependencies, starts `npm start` in a new PowerShell window, and opens `http://localhost:3000/` in your default browser.
 
-The app serves both the API under `/api/*` and the static UI. Visit `http://localhost:3000/` after the server is running to see the dashboard populated with live data from SQL Server.
+Once the setup window reports success, interact with the app in the browser. If you close the API window later, you can restart it manually with `npm start` from the project directory.
 
 ## Authentication
 
