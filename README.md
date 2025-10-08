@@ -17,14 +17,14 @@
 ## 🧰 Prerequisites
 Before you mash any buttons, make sure the following are installed:
 
-1. **SQL Server** (Express is fine) and the `sqlcmd` command-line tool.
+1. **SQL Server** (Express is fine) and the `sqlcmd` command-line tool. (grab it here: https://go.microsoft.com/fwlink/p/?linkid=2216019&clcid=0x409&culture=en-us&country=us)
 2. **Node.js (LTS)** and **npm**. If you're on Windows without Node yet, don't panic—the setup script can fetch it for you.
 3. **Windows PowerShell (Admin rights)** for the automated setup path below.
 
 > 💡 On non-Windows platforms you can still run the API and database manually; the helper script is just the fast lane for Windows users.
 
-## 🚀 Setup for busy lab techs (Windows)
-Follow these baby-steps like you're guiding an oscilloscope newbie:
+## 🚀 Setup (Windows)
+Follow these steps:
 
 1. **Open PowerShell as Administrator.** Right-click > "Run as administrator." This gives the script permission to create databases.
 2. **Let PowerShell run the script.** If you see warnings about scripts being blocked, run:
@@ -72,7 +72,7 @@ Prefer to wire things up yourself? Here's the checklist:
 5. Open `LabCenterIMS.html` in a browser and update the fetch URLs if your API isn't on `localhost:3000`.
 
 ## 🔐 Authentication quickstart
-- Use any lab tech account from the seeded data with the default password `password123`.
+- Upon first setup, the only user account that exists will have the username admin, and a default password of `password123`.
 - New lab techs created via the API also start with `password123`. Update passwords directly in SQL Server when needed.
 
 ## 🛠️ Troubleshooting tips
