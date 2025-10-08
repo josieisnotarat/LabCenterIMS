@@ -1930,6 +1930,20 @@
                 <option value="co-op">Co-Op</option>
               </select>
             </div>
+            <div class="full">
+              <label for="eu-password">New Password</label>
+              <input
+                id="eu-password"
+                type="password"
+                maxlength="255"
+                autocomplete="new-password"
+                placeholder="Leave blank to keep current password"
+              />
+              <p class="hint">
+                Leave blank to keep the current password. New passwords must be at
+                least 8 characters.
+              </p>
+            </div>
           </div>
         </div>
         <div class="modal-ft">
@@ -4659,6 +4673,10 @@
             );
             roleSelect.value = canonicalRole || "";
           }
+          const passwordInput = document.getElementById("eu-password");
+          if (passwordInput) {
+            passwordInput.value = "";
+          }
           dlg.showModal();
         }
 
@@ -5515,12 +5533,24 @@
                 fnSelectElement("#eu-username").value.trim();
               const display = fnSelectElement("#eu-display").value.trim();
               const role = fnSelectElement("#eu-role").value;
+              const passwordField = fnSelectElement("#eu-password");
+              const password = passwordField
+                ? passwordField.value.trim()
+                : "";
               fnMust(username && display && role, "All fields required.");
+              const payload = { display, role };
+              if (password) {
+                fnMust(password.length >= 8, "Password must be at least 8 characters.");
+                payload.password = password;
+              }
               await fnApi(`/users/${encodeURIComponent(username)}`, {
                 method: "PUT",
-                body: JSON.stringify({ display, role }),
+                body: JSON.stringify(payload),
               });
               fnCloseDialogById("dlg-edit-user");
+              if (passwordField) {
+                passwordField.value = "";
+              }
               alert("User updated.");
               await fnLoadAdminUsers({ showStatus: false });
             }),
