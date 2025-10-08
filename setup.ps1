@@ -228,7 +228,15 @@ Write-Success "Wrote database connection settings to $envFile."
 
 if (-not (Test-Path (Join-Path $RootDir 'node_modules'))) {
     Write-Info 'Installing Node.js dependencies (npm install)...'
-    npm install
+
+    $npmCommand = Get-Command npm -ErrorAction Stop
+    $npmPath = if ($npmCommand.PSObject.Properties['Source']) {
+        $npmCommand.Source
+    } else {
+        $npmCommand.Path
+    }
+
+    & $npmPath 'install'
     if ($LASTEXITCODE -ne 0) {
         throw 'npm install failed. Review the output above for details.'
     }
