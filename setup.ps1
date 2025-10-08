@@ -176,7 +176,8 @@ END;
 "@
 
 Write-Info "Ensuring SQL login '$AppDbUser' exists..."
-& sqlcmd @('-S', $serverAddress, '-b') + $authArgs + @('-d', 'master', '-Q', $createLoginSql)
+$loginArgs = @('-S', $serverAddress, '-b') + $authArgs + @('-d', 'master', '-Q', $createLoginSql)
+& sqlcmd @loginArgs
 if ($LASTEXITCODE -ne 0) {
     throw 'Failed to ensure the SQL login exists.'
 }
@@ -198,7 +199,8 @@ END;
 "@
 
 Write-Info "Granting database access for '$AppDbUser' on '$DatabaseName'..."
-& sqlcmd @('-S', $serverAddress, '-b') + $authArgs + @('-d', $DatabaseName, '-Q', $ensureUserSql)
+$grantArgs = @('-S', $serverAddress, '-b') + $authArgs + @('-d', $DatabaseName, '-Q', $ensureUserSql)
+& sqlcmd @grantArgs
 if ($LASTEXITCODE -ne 0) {
     throw 'Failed to configure database permissions.'
 }
