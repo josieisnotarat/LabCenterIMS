@@ -28,10 +28,12 @@ On macOS/Linux (Bash):
 On Windows (PowerShell 5.1+):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\setup.ps1
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+Unblock-File -Path .\setup.ps1
+./setup.ps1
 ```
 
-The PowerShell helper will attempt to install Node.js via `winget` if it is missing and will verify that Docker Desktop is installed and running before proceeding. If `winget` or Docker Desktop are not available, the script will stop with guidance so you can install the prerequisite manually (running the terminal as Administrator may be required for package installation).
+When Windows flags the script as "not digitally signed," run the `Unblock-File` command above first (PowerShell adds this mark when the repository is downloaded from the internet). The PowerShell helper will attempt to install Node.js via `winget` if it is missing and will verify that Docker Desktop is installed and running before proceeding. If `winget` or Docker Desktop are not available, the script will stop with guidance so you can install the prerequisite manually (running the terminal as Administrator may be required for package installation).
 
 Once the setup script completes, start the API with `npm start` and browse to `http://localhost:3000/`.
 
