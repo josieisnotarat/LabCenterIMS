@@ -200,12 +200,25 @@ CREATE INDEX IX_TAuditLog_EntityPK ON dbo.TAuditLog(strEntity, intEntityPK);
 CREATE INDEX IX_TAuditLog_EventUTC ON dbo.TAuditLog(dtmEventUTC DESC);
 
 -- Basic seed (optional)
-INSERT dbo.TDepartments(strDepartmentName) VALUES ('Electrical Engineering Tech'),('IT / Software'),('Media');
-INSERT dbo.TLabTechs(strUsername,strDisplayName,strFirstName,strLastName,strEmail,strPassword,strRole)
-VALUES
-    ('jwooldridge','Josie Wooldridge','Josie','Wooldridge','j.wooldridge@example.edu','password123','admin'),
-    ('asmith','Alex Smith','Alex','Smith','a.smith@example.edu','password123','admin'),
-    ('kjones','Kris Jones','Kris','Jones','k.jones@example.edu','password123','co-op');
+IF NOT EXISTS (SELECT 1 FROM dbo.TLabTechs WHERE strUsername = 'admin')
+BEGIN
+    INSERT dbo.TLabTechs
+        (strUsername,
+         strDisplayName,
+         strFirstName,
+         strLastName,
+         strEmail,
+         strPassword,
+         strRole)
+    VALUES
+        ('admin',
+         'Administrator',
+         'Admin',
+         'User',
+         'admin@example.edu',
+         'password123',
+         'admin');
+END;
 
 
 
@@ -993,120 +1006,5 @@ GO
 /* =========================
    Demo seed data
    ========================= */
-IF NOT EXISTS (SELECT 1 FROM dbo.TBorrowers)
-BEGIN
-    INSERT dbo.TBorrowers(strFirstName,strLastName,strSchoolIDNumber,strPhoneNumber,strRoomNumber,strInstructor,intDepartmentID)
-    SELECT 'Jane','Doe','123456','513-555-1010','ATLC 102','Prof. Carter',d.intDepartmentID
-    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
-
-    INSERT dbo.TBorrowers(strFirstName,strLastName,strSchoolIDNumber,strPhoneNumber,strRoomNumber,strInstructor,intDepartmentID)
-    SELECT 'Alex','Smith','332211','513-555-2020','ATLC 204','Dr. Nguyen',d.intDepartmentID
-    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'IT / Software';
-
-    INSERT dbo.TBorrowers(strFirstName,strLastName,strSchoolIDNumber,strPhoneNumber,strRoomNumber,strInstructor,intDepartmentID)
-    SELECT 'Chris','Patel','778899','513-555-3030','ATLC 120','Prof. Rivera',d.intDepartmentID
-    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
-END
-
-IF NOT EXISTS (SELECT 1 FROM dbo.TItems)
-BEGIN
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,strDuePolicy,intDueDaysOffset,intDueHoursOffset,tDueTime,dtmFixedDueLocal)
-    SELECT 'USB-C Cable (1m)','CAB-UC-001',1,d.intDepartmentID,'Standard USB-C charging/data cable','NEXT_DAY_6PM',1,0,'18:00',NULL
-    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
-
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,strDuePolicy,intDueDaysOffset,intDueHoursOffset,tDueTime,dtmFixedDueLocal)
-    SELECT 'Raspberry Pi 5','DEV-RPI-005',1,d.intDepartmentID,'Single-board computer kit with PSU','OFFSET',3,0,'12:00',NULL
-    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'IT / Software';
-
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,strDuePolicy,intDueDaysOffset,intDueHoursOffset,tDueTime,dtmFixedDueLocal)
-    SELECT 'Scope Probe','OSC-SCP-07',1,d.intDepartmentID,'Oscilloscope probe replacement','OFFSET',7,0,'09:30',NULL
-    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
-
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,strDuePolicy,intDueDaysOffset,intDueHoursOffset,tDueTime,dtmFixedDueLocal)
-    SELECT 'Lab Laptop 15','LAP-015',1,d.intDepartmentID,'15" Windows laptop for student checkout','SEMESTER',NULL,NULL,NULL,'2024-05-10T18:00:00'
-    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Media';
-
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,strDuePolicy,intDueDaysOffset,intDueHoursOffset,tDueTime,dtmFixedDueLocal)
-    SELECT 'Multimeter #A12','MM-A12',1,d.intDepartmentID,'Digital multimeter used in circuits lab','NEXT_DAY_6PM',1,0,'18:00',NULL
-    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
-
-    INSERT dbo.TItems(strItemName,strItemNumber,blnIsSchoolOwned,intDepartmentID,strDescription,strDuePolicy,intDueDaysOffset,intDueHoursOffset,tDueTime,dtmFixedDueLocal)
-    SELECT 'Oscilloscope #S7','OSC-S7',1,d.intDepartmentID,'Bench oscilloscope station','SEMESTER',NULL,NULL,NULL,'2024-05-10T18:00:00'
-    FROM dbo.TDepartments d WHERE d.strDepartmentName = 'Electrical Engineering Tech';
-END
-
-IF NOT EXISTS (SELECT 1 FROM dbo.TItemLoans)
-BEGIN
-    DECLARE @JaneID INT = (SELECT intBorrowerID FROM dbo.TBorrowers WHERE strFirstName='Jane' AND strLastName='Doe');
-    DECLARE @AlexID INT = (SELECT intBorrowerID FROM dbo.TBorrowers WHERE strFirstName='Alex' AND strLastName='Smith');
-    DECLARE @ChrisID INT = (SELECT intBorrowerID FROM dbo.TBorrowers WHERE strFirstName='Chris' AND strLastName='Patel');
-    DECLARE @JosieID INT = (SELECT intLabTechID FROM dbo.TLabTechs WHERE strFirstName='Josie');
-    DECLARE @AlexTechID INT = (SELECT intLabTechID FROM dbo.TLabTechs WHERE strFirstName='Alex');
-
-    DECLARE @CableID INT = (SELECT intItemID FROM dbo.TItems WHERE strItemName='USB-C Cable (1m)');
-    DECLARE @PiID INT = (SELECT intItemID FROM dbo.TItems WHERE strItemName='Raspberry Pi 5');
-    DECLARE @ProbeID INT = (SELECT intItemID FROM dbo.TItems WHERE strItemName='Scope Probe');
-
-    DECLARE @Loan TABLE(intItemLoanID INT);
-
-    INSERT INTO @Loan
-    EXEC dbo.usp_CheckoutItem
-        @intItemID            = @CableID,
-        @intBorrowerID        = @JaneID,
-        @intCheckoutLabTechID = @JosieID,
-        @dtmDueUTC            = '2024-02-01T18:00:00',
-        @strCheckoutNotes     = 'Checked condition';
-    DECLARE @LoanJane INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
-    UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-6,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanJane;
-
-    DELETE FROM @Loan;
-    INSERT INTO @Loan
-    EXEC dbo.usp_CheckoutItem
-        @intItemID            = @PiID,
-        @intBorrowerID        = @AlexID,
-        @intCheckoutLabTechID = @JosieID,
-        @dtmDueUTC            = '2024-02-03T12:00:00',
-        @strCheckoutNotes     = NULL;
-    DECLARE @LoanAlex INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
-    UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-10,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanAlex;
-
-    DELETE FROM @Loan;
-    INSERT INTO @Loan
-    EXEC dbo.usp_CheckoutItem
-        @intItemID            = @ProbeID,
-        @intBorrowerID        = @ChrisID,
-        @intCheckoutLabTechID = @AlexTechID,
-        @dtmDueUTC            = '2024-01-15T09:30:00',
-        @strCheckoutNotes     = 'Handle with care';
-    DECLARE @LoanChris INT = (SELECT TOP 1 intItemLoanID FROM @Loan ORDER BY intItemLoanID DESC);
-    UPDATE dbo.TItemLoans SET dtmCheckoutUTC = DATEADD(HOUR,-30,SYSUTCDATETIME()) WHERE intItemLoanID = @LoanChris;
-END
-
-IF NOT EXISTS (SELECT 1 FROM dbo.TServiceTickets)
-BEGIN
-    DECLARE @JaneID2 INT = (SELECT intBorrowerID FROM dbo.TBorrowers WHERE strFirstName='Jane' AND strLastName='Doe');
-    DECLARE @AlexID2 INT = (SELECT intBorrowerID FROM dbo.TBorrowers WHERE strFirstName='Alex' AND strLastName='Smith');
-    DECLARE @ChrisID2 INT = (SELECT intBorrowerID FROM dbo.TBorrowers WHERE strFirstName='Chris' AND strLastName='Patel');
-    DECLARE @LaptopID INT = (SELECT intItemID FROM dbo.TItems WHERE strItemName='Lab Laptop 15');
-    DECLARE @MultimeterID INT = (SELECT intItemID FROM dbo.TItems WHERE strItemName='Multimeter #A12');
-    DECLARE @OscID INT = (SELECT intItemID FROM dbo.TItems WHERE strItemName='Oscilloscope #S7');
-    DECLARE @JosieID2 INT = (SELECT intLabTechID FROM dbo.TLabTechs WHERE strFirstName='Josie');
-    DECLARE @AlexTechID2 INT = (SELECT intLabTechID FROM dbo.TLabTechs WHERE strFirstName='Alex');
-    DECLARE @KrisID INT = (SELECT intLabTechID FROM dbo.TLabTechs WHERE strFirstName='Kris');
-
-    DECLARE @Ticket TABLE(intServiceTicketID INT);
-
-    INSERT INTO @Ticket EXEC dbo.usp_ServiceTicketCreate 'S-0192', @JaneID2, @MultimeterID, NULL, 'Reads zero', @JosieID2;
-    DECLARE @TicketMultimeter INT = (SELECT TOP 1 intServiceTicketID FROM @Ticket ORDER BY intServiceTicketID DESC);
-    UPDATE dbo.TServiceTickets SET dtmLoggedUTC = DATEADD(DAY,-2,SYSUTCDATETIME()), strStatus='Diagnosing' WHERE intServiceTicketID = @TicketMultimeter;
-
-    DELETE FROM @Ticket;
-    INSERT INTO @Ticket EXEC dbo.usp_ServiceTicketCreate 'S-0193', @AlexID2, @OscID, NULL, 'Display flicker', @AlexTechID2;
-    DECLARE @TicketOsc INT = (SELECT TOP 1 intServiceTicketID FROM @Ticket ORDER BY intServiceTicketID DESC);
-    UPDATE dbo.TServiceTickets SET dtmLoggedUTC = DATEADD(DAY,-3,SYSUTCDATETIME()), strStatus='Awaiting Parts' WHERE intServiceTicketID = @TicketOsc;
-
-    DELETE FROM @Ticket;
-    INSERT INTO @Ticket EXEC dbo.usp_ServiceTicketCreate 'S-0194', @ChrisID2, @LaptopID, NULL, 'Battery swell', @KrisID;
-    DECLARE @TicketLaptop INT = (SELECT TOP 1 intServiceTicketID FROM @Ticket ORDER BY intServiceTicketID DESC);
-    UPDATE dbo.TServiceTickets SET dtmLoggedUTC = DATEADD(DAY,-4,SYSUTCDATETIME()), strStatus='Ready for Pickup' WHERE intServiceTicketID = @TicketLaptop;
-END
+-- Intentionally left blank. All demo data has been removed so the database
+-- starts empty aside from the basic admin user account.
