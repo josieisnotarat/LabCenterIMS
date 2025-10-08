@@ -45,6 +45,12 @@
         --returned-fg: #065f46;
         --ready-bg: #ecfdf5;
         --ready-fg: #065f46;
+        --quarantine-bg: #ede9fe;
+        --quarantine-fg: #5b21b6;
+        --completed-bg: #e6f3e3;
+        --completed-fg: #166534;
+        --cancelled-bg: #f3f4f6;
+        --cancelled-fg: #374151;
 
         --radius: 12px;
         --shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.06);
@@ -403,6 +409,21 @@
         background: var(--ready-bg);
         color: var(--ready-fg);
         border-color: #a7f3d0;
+      }
+      .pill.quarantine {
+        background: var(--quarantine-bg);
+        color: var(--quarantine-fg);
+        border-color: rgba(91, 33, 182, 0.25);
+      }
+      .pill.completed {
+        background: var(--completed-bg);
+        color: var(--completed-fg);
+        border-color: rgba(68, 140, 55, 0.25);
+      }
+      .pill.cancelled {
+        background: var(--cancelled-bg);
+        color: var(--cancelled-fg);
+        border-color: rgba(55, 65, 81, 0.18);
       }
 
       /* table */
@@ -1692,6 +1713,8 @@
                 <option>Awaiting Parts</option>
                 <option>Ready for Pickup</option>
                 <option>Quarantined</option>
+                <option>Completed</option>
+                <option>Cancelled</option>
               </select>
             </div>
             <div class="full">
@@ -2295,7 +2318,19 @@
           Diagnosing: "diagnosing",
           "Ready for Pickup": "ready",
           Quarantined: "quarantine",
+          Completed: "completed",
+          Cancelled: "cancelled",
         };
+
+        const LOAN_STATUSES = ["On Time", "Overdue", "Returned"];
+        const TICKET_STATUSES = [
+          "Diagnosing",
+          "Awaiting Parts",
+          "Ready for Pickup",
+          "Quarantined",
+          "Completed",
+          "Cancelled",
+        ];
 
         /**
          * Table rows use a slightly different set of classes to tint the entire
@@ -2734,9 +2769,24 @@
           fnSelectElement("#det-id").value = id;
           fnSelectElement("#det-primary").value = primary || "";
           const sel = fnSelectElement("#det-status");
-          Array.from(sel.options).forEach((o) => {
-            if (o.text === status) sel.value = o.text;
+          const allowedStatuses =
+            kind === "loan" ? LOAN_STATUSES : TICKET_STATUSES;
+          let matchFound = false;
+          Array.from(sel.options).forEach((option) => {
+            const isAllowed = allowedStatuses.includes(option.value);
+            option.hidden = !isAllowed;
+            option.disabled = !isAllowed;
+            if (isAllowed && option.value === status) {
+              matchFound = true;
+            }
           });
+          if (matchFound) {
+            sel.value = status;
+          } else if (allowedStatuses.length > 0) {
+            sel.value = allowedStatuses[0];
+          } else {
+            sel.value = "";
+          }
           fnSelectElement("#det-note").value = "";
           fnLoadDetailNotes(kind, id);
           dlg.showModal();
