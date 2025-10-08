@@ -46,7 +46,52 @@ function Ensure-Command {
     throw "Required command '$Command' was not found. Please install $DisplayName and then re-run this script."
 }
 
-Ensure-Command -Command npm -DisplayName 'Node.js (which includes npm)'
+function Ensure-NodeJs {
+    if (Get-Command npm -ErrorAction SilentlyContinue) {
+        return
+    }
+
+    Write-WarningMessage 'Node.js (npm) not detected. Attempting to install the LTS release via winget...'
+
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if (-not $winget) {
+        throw 'Node.js is required but could not be installed automatically because winget is unavailable. Install Node.js LTS from https://nodejs.org/en/download/ and re-run this script.'
+    }
+
+    $wingetArgs = @(
+        'install',
+        '--id', 'OpenJS.NodeJS.LTS',
+        '-e',
+        '--accept-package-agreements',
+        '--accept-source-agreements'
+    )
+
+    Write-Info 'Installing Node.js LTS with winget. This may take a few minutes...'
+    $wingetPath = if ($winget.Source) { $winget.Source } else { $winget.Path }
+    & $wingetPath @wingetArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "winget failed to install Node.js (exit code $LASTEXITCODE). Review the output above or install Node.js manually, then re-run this script."
+    }
+
+    $possibleNodeDirs = @(
+        (Join-Path $env:ProgramFiles 'nodejs'),
+        (Join-Path ${env:ProgramFiles(x86)} 'nodejs')
+    ) | Where-Object { $_ -and (Test-Path $_) }
+
+    foreach ($dir in $possibleNodeDirs) {
+        if ($env:PATH -notlike "*$dir*") {
+            $env:PATH = "$dir;" + $env:PATH
+        }
+    }
+
+    if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+        throw 'Node.js installation completed but npm is still unavailable in this session. Close this PowerShell window, open a new one, and re-run the script (or install Node.js manually).'
+    }
+
+    Write-Success 'Node.js installation completed.'
+}
+
+Ensure-NodeJs
 Ensure-Command -Command sqlcmd -DisplayName 'SQL Server Command Line Utilities (sqlcmd)'
 
 if ([string]::IsNullOrWhiteSpace($SqlAdminUser)) {
