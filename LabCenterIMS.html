@@ -3754,6 +3754,71 @@
           return "Checkout complete.";
         }
 
+        function fnBuildBorrowReminder(payload) {
+          const dueUtc = payload?.dueUtc ?? payload?.dueUTC ?? null;
+          const dueText = fnNormalizeDueText(dueUtc);
+          const description =
+            payload?.dueDescription ||
+            payload?.policyDescription ||
+            payload?.policyLabel ||
+            payload?.policy ||
+            "";
+          let dueLine = "This item is due back by the stated due date.";
+          if (dueText && description) {
+            dueLine = `This item is due back by ${dueText} (${description}).`;
+          } else if (dueText) {
+            dueLine = `This item is due back by ${dueText}.`;
+          } else if (description) {
+            const normalizedDescription = description.trim();
+            if (normalizedDescription) {
+              const needsByPrefix = !/^due\b/i.test(normalizedDescription);
+              const hasEndingPunctuation = /[.?!]$/.test(normalizedDescription);
+              dueLine = `This item is due back ${
+                needsByPrefix ? "by " : ""
+              }${normalizedDescription}${hasEndingPunctuation ? "" : "."}`;
+            }
+          }
+          return [
+            "Borrowed Equipment",
+            dueLine,
+            "By checking out this equipment, you agree to return it by the stated due date and to maintain it in good condition. Any item that is lost or damaged beyond normal wear and tear is the borrower’s responsibility to replace.",
+            "",
+            "Certain items may not be removed from campus and must be returned by the end of the day. If the Lab Center is closed, please leave the trainer in your classroom and ensure the door is securely closed before leaving.",
+          ].join("\n");
+        }
+
+        function fnBuildServiceReminder() {
+          return [
+            "Repair & Service Disclaimer",
+            "By submitting your item for repair, you acknowledge that all service is performed at your own risk. While Lab Center staff will exercise reasonable care, Cincinnati State, the Lab Center, and its employees are not responsible for any additional damage, malfunction, or failure that may occur during repair attempts or for issues that cannot be resolved.",
+            "",
+            "If replacement parts are required to complete a repair, you will be notified and provided with the details. You may:",
+            "",
+            "Purchase the parts yourself,",
+            "",
+            "Authorize Lab Center to order them on your behalf at your expense, or",
+            "",
+            "Decline and retrieve your item unrepaired.",
+            "",
+            "Because Lab Center services and labor are provided free of charge, we do not supply or cover the cost of parts.",
+          ].join("\n");
+        }
+
+        function fnAlertBorrowCompletion(payload, fallbackMessage) {
+          const message =
+            (payload ? fnFormatCheckoutConfirmation(payload) : null) ||
+            fallbackMessage ||
+            "Checkout complete.";
+          const reminder = fnBuildBorrowReminder(payload || null);
+          alert(`${message}\n\n${reminder}`);
+        }
+
+        function fnAlertServiceSubmission(fallbackMessage) {
+          const message = fallbackMessage || "Service ticket created.";
+          const reminder = fnBuildServiceReminder();
+          alert(`${message}\n\n${reminder}`);
+        }
+
         function fnFormatDuePreview(payload) {
           if (!payload) return "Unable to determine due date for that item.";
           if (payload.message) return payload.message;
@@ -4931,7 +4996,6 @@
               }),
             });
 
-            let message = "Saved.";
             if (action === "borrow") {
               const checkoutRes = await fnApi("/loans/checkout", {
                 method: "POST",
@@ -4942,7 +5006,9 @@
                 }),
               });
               const payload = await checkoutRes.json().catch(() => ({}));
-              message = fnFormatCheckoutConfirmation(payload);
+              fnCloseDialogById("dlg-new-customer");
+              fnAlertBorrowCompletion(payload, "Saved.");
+              return;
             } else {
               await fnApi("/tickets", {
                 method: "POST",
@@ -4952,11 +5018,10 @@
                   issue: fnSelectElement("#ns-issue").value.trim(),
                 }),
               });
-              message = "Service ticket created.";
+              fnCloseDialogById("dlg-new-customer");
+              fnAlertServiceSubmission("Service ticket created.");
+              return;
             }
-
-            fnCloseDialogById("dlg-new-customer");
-            alert(message);
           }),
         );
 
@@ -4988,7 +5053,7 @@
             });
             const payload = await checkoutRes.json().catch(() => ({}));
             fnCloseDialogById("dlg-returning-borrow");
-            alert(fnFormatCheckoutConfirmation(payload));
+            fnAlertBorrowCompletion(payload);
           }),
         );
 
@@ -5023,7 +5088,7 @@
               }),
             });
             fnCloseDialogById("dlg-returning-service");
-            alert("Service ticket created.");
+            fnAlertServiceSubmission("Service ticket created.");
           }),
         );
 
