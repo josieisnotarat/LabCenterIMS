@@ -261,7 +261,16 @@ function Install-SqlServerExpressInstance {
     $exitCode = $LASTEXITCODE
 
     if ($exitCode -ne 0) {
-        throw "winget failed to install SQL Server Express (exit code $exitCode). Review the output above or install SQL Server manually."
+        $additionalHelp = switch ($exitCode) {
+            -1978335230 {
+                'Exit code -1978335230 indicates the SQL Server installer reported a failure, often because a reboot is pending or an existing SQL Server component is interfering. Reboot and try again, or install SQL Server Express manually using the link in the README.'
+            }
+            Default {
+                "Exit code $exitCode."
+            }
+        }
+
+        throw "winget failed to install SQL Server Express. Review the output above or install SQL Server manually. $additionalHelp"
     }
 
     Write-Success 'SQL Server Express installation completed.'
