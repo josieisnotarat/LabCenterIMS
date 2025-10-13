@@ -82,6 +82,7 @@ Prefer to wire things up yourself? Here's the checklist:
 ## 🛠️ Troubleshooting tips
 - **SQL connection errors:** Double-check that SQL Server is running, the port is open, and your credentials match what's in `.env`.
 - **`sqlcmd` not found:** Install the SQL Server Command Line Utilities or ensure they are on your PATH.
+- **`winget` installation exit code -1978335230:** This is returned by the SQL Server installer when something blocks setup (usually a pending reboot or remnants of a previous SQL Server install). Reboot Windows, uninstall any partial SQL Server components from **Apps & Features**, and if the script still fails install [SQL Server 2022 Express manually](https://go.microsoft.com/fwlink/p/?linkid=2216019&clcid=0x409&culture=en-us&country=us) before re-running `setup.ps1`.
 - **Port already in use (3000):** Either stop the other service or set a new `PORT` value in `.env` before running `npm start`.
 
 ## 🛰️ Next steps
