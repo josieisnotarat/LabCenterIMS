@@ -1,8 +1,7 @@
 # LabCenterIMS
 
-> Inventory & maintenance command center for lab technicians who like their data tidy, their workflows traceable, and their dashboards nerd-approved.
+> Inventory & maintenance command center for Cincinnati State lab center.
 
-## 🧪 Why you'll love this project
 - **SQL Server backbone** with normalized tables, triggers, and stored procedures that keep every piece of gear accounted for.
 - **Node/Express API sidekick** that talks directly to the database so the front end always stays in sync with lab reality.
 - **Seed data included**, so your mock dashboards light up with meaningful numbers seconds after install.
