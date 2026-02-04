@@ -83,6 +83,14 @@ SQLITE_PATH=/path/to/labcenter.db npx electron electron/main.js
 
 - **`better-sqlite3` fails to build:** ensure your OS build tools are installed (see prerequisites).
 - **App launches but shows a blank screen:** confirm the `LabCenterIMS.html` file exists in the repository root and that the app was started from the repo directory.
+- **PowerShell script permissions are blocked:** open PowerShell *as Administrator* and run:
+  ```powershell
+  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope LocalMachine
+  ```
+  Then re-run your script. If you want a per-user change instead, use:
+  ```powershell
+  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+  ```
 
 ## What’s Included
 
