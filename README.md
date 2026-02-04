@@ -6,12 +6,29 @@ This repository contains a self-contained Electron desktop application that runs
 
 - **Node.js LTS (18+ recommended)** with npm.
   - Download: https://nodejs.org/en/download/
-- **Build tools for native Node modules** (required by `better-sqlite3`).
-  - **Windows:** Install “Build Tools for Visual Studio 2022” (C++ workload) or run `npm install --global --production windows-build-tools` (older option).
+- **Build tools for native Node modules** (only needed if `better-sqlite3` cannot download a prebuilt binary for your OS/Node version).
+  - **Windows:** Install “Build Tools for Visual Studio 2022” (C++ workload).
   - **macOS:** `xcode-select --install`
   - **Linux:** install your distro’s `build-essential` / `gcc` / `g++` / `make` packages.
 
 ## Installation
+
+### Option A: One-command setup script (recommended)
+
+Pick the script for your OS; it creates a minimal `package.json` (if missing) and installs Electron + SQLite.
+
+**macOS/Linux (bash):**
+```bash
+chmod +x ./scripts/setup-electron.sh
+./scripts/setup-electron.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+./scripts/setup-electron.ps1
+```
+
+### Option B: Manual setup
 
 1. **Clone the repository**
    ```bash
