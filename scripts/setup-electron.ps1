@@ -1,7 +1,12 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$RootDir = Split-Path -Parent $PSScriptRoot
+$scriptPath = $MyInvocation.MyCommand.Path
+if (-not $scriptPath) {
+    throw 'Unable to resolve script path. Please run this script from a file (not pasted into the console).'
+}
+
+$RootDir = Split-Path -Parent $scriptPath
 Set-Location $RootDir
 
 if (-not (Test-Path -Path 'package.json')) {

@@ -91,6 +91,19 @@ SQLITE_PATH=/path/to/labcenter.db npx electron electron/main.js
   ```powershell
   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
   ```
+- **PowerShell reports the script isn’t digitally signed:** either use the execution policy commands above, or unblock the script file and try again:
+  ```powershell
+  Unblock-File -Path .\scripts\setup-electron.ps1
+  ```
+- **`better-sqlite3` was compiled against a different Node/Electron version:** re-install or rebuild the module against Electron’s Node version:
+  ```bash
+  npm rebuild better-sqlite3 --build-from-source
+  ```
+  If that fails, remove `node_modules` and reinstall:
+  ```bash
+  rm -rf node_modules package-lock.json
+  npm install electron better-sqlite3
+  ```
 
 ## What’s Included
 
