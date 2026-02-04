@@ -2,13 +2,34 @@
   "name": "lab-center-ims",
   "version": "1.0.0",
   "private": true,
-  "description": "API server for the Lab Center IMS demo UI",
-  "main": "server.js",
+  "description": "Electron + SQLite Lab Center IMS",
+  "main": "electron/main.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node launch.js",
+    "start:electron": "electron .",
+    "dist": "electron-builder",
+    "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "mssql": "^10.0.2"
+    "better-sqlite3": "^11.7.0",
+    "electron": "^30.5.1"
+  },
+  "devDependencies": {
+    "electron-builder": "^24.13.3",
+    "electron-rebuild": "^3.2.9"
+  },
+  "build": {
+    "appId": "edu.cincinnatistate.labcenterims",
+    "productName": "LabCenterIMS",
+    "files": [
+      "LabCenterIMS.html",
+      "launch.js",
+      "db/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    }
   }
 }
