@@ -90,3 +90,33 @@ Prefer to wire things up yourself? Here's the checklist:
 - Add automated tests for happy lab techs and their QA friends.
 
 Stay curious, stay nerdy, and keep those instruments calibrated! 🧪
+
+## 🖥️ Electron packaging (SQLite)
+
+The Electron build runs the UI without a local HTTP server by routing data requests over IPC to the SQLite data layer.
+
+### Run locally
+
+```bash
+npm install
+npm run start:electron
+```
+
+On first run, the app creates a SQLite database at:
+
+- **Windows:** `%APPDATA%/LabCenterIMS/labcenter.db`
+- **macOS:** `~/Library/Application Support/LabCenterIMS/labcenter.db`
+- **Linux:** `~/.config/LabCenterIMS/labcenter.db`
+
+A default admin user is created if none exists:
+
+- Username: `admin`
+- Password: `password123`
+
+### Build installers
+
+```bash
+npm run dist
+```
+
+The packaged installers are written to the `dist/` directory.

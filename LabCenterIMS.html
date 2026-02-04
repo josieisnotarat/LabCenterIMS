@@ -2165,6 +2165,31 @@
           });
         }
 
+        async function fnRawRequest(path, opts = {}) {
+          if (window.api?.request) {
+            const payload = {
+              method: opts.method || "GET",
+              path,
+              headers: opts.headers || {},
+              body: opts.body || null,
+            };
+            if (opts.queryString) {
+              payload.headers["x-query"] = opts.queryString;
+            }
+            const response = await window.api.request(payload);
+            const body = response?.body ?? null;
+            return {
+              ok: response?.status >= 200 && response?.status < 300,
+              status: response?.status ?? 500,
+              json: async () => body,
+              text: async () =>
+                typeof body === "string" ? body : JSON.stringify(body || {}),
+            };
+          }
+          const url = opts.queryString ? `${path}${opts.queryString}` : path;
+          return fetch(url, opts);
+        }
+
         async function fnRestoreSession() {
           const stored = window.localStorage.getItem(SESSION_STORAGE_KEY);
           if (!stored) {
@@ -2172,7 +2197,7 @@
           }
           m_strSessionToken = stored;
           try {
-            const res = await fetch(`${API_BASE}/session`, {
+            const res = await fnRawRequest(`${API_BASE}/session`, {
               method: "GET",
               headers: { Authorization: `Bearer ${stored}` },
             });
@@ -2205,7 +2230,7 @@
             return;
           }
           try {
-            await fetch(`${API_BASE}/logout`, {
+            await fnRawRequest(`${API_BASE}/logout`, {
               method: "POST",
               headers: { Authorization: `Bearer ${m_strSessionToken}` },
             });
@@ -2238,7 +2263,7 @@
             try {
               if (elLoginError) elLoginError.textContent = "";
               if (elLoginSubmit) fnSetBusyState(elLoginSubmit, true);
-              const res = await fetch(`${API_BASE}/login`, {
+              const res = await fnRawRequest(`${API_BASE}/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ username, password }),
@@ -4290,9 +4315,12 @@
           if (m_strSessionToken && !headers.Authorization) {
             headers.Authorization = `Bearer ${m_strSessionToken}`;
           }
-          const res = await fetch(API_BASE + path, {
+          const [basePath, querySuffix] = path.split("?");
+          const queryString = querySuffix ? `?${querySuffix}` : "";
+          const res = await fnRawRequest(API_BASE + basePath, {
             ...opts,
             headers,
+            queryString,
           });
           if (res.status === 401) {
             await fnHandleUnauthorized();
