@@ -528,17 +528,17 @@ $envContent = [string]::Join([Environment]::NewLine, $envLines) + [Environment]:
 $envContent | Set-Content -Path $envFile -Encoding UTF8
 Write-Success "Wrote database connection settings to $envFile."
 
+$npmExecutable = Get-CommandPath 'npm.cmd'
+if (-not $npmExecutable) {
+    $npmExecutable = Get-CommandPath 'npm'
+}
+
+if (-not $npmExecutable) {
+    throw 'npm could not be located even though Node.js should be installed. Install Node.js manually and re-run this script.'
+}
+
 if (-not (Test-Path (Join-Path $RootDir 'node_modules'))) {
     Write-Info 'Installing Node.js dependencies (npm install)...'
-
-    $npmExecutable = Get-CommandPath 'npm.cmd'
-    if (-not $npmExecutable) {
-        $npmExecutable = Get-CommandPath 'npm'
-    }
-
-    if (-not $npmExecutable) {
-        throw 'npm could not be located even though Node.js should be installed. Install Node.js manually and re-run this script.'
-    }
 
     $npmCommandLine = "`"$npmExecutable`" install"
     $cmdArgs = @('/d', '/c', $npmCommandLine)
@@ -550,6 +550,15 @@ if (-not (Test-Path (Join-Path $RootDir 'node_modules'))) {
     Write-Success 'Node dependencies installed.'
 } else {
     Write-Info 'node_modules directory already present. Skipping npm install.'
+    Write-Info 'Rebuilding native modules (npm rebuild better-sqlite3) to match the active Node.js version...'
+    $npmCommandLine = "`"$npmExecutable`" rebuild better-sqlite3"
+    $cmdArgs = @('/d', '/c', $npmCommandLine)
+    & cmd.exe @cmdArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw 'npm rebuild failed. Delete node_modules, run npm install, and re-run this script.'
+    }
+
+    Write-Success 'Native module rebuild completed.'
 }
 
 Write-Info 'Starting the API server in a new PowerShell window...'
