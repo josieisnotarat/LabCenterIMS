@@ -90,7 +90,7 @@ npx electron electron/main.js
 
 The app will:
 
-- Create a SQLite database at the Electron user data directory (for example, on Windows: `%APPDATA%/LabCenterIMS/labcenter.db`; on macOS: `~/Library/Application Support/LabCenterIMS/labcenter.db`).
+- Create a SQLite database at `db/labcenter.db` in the repository.
 - Initialize the schema from `db/schema.sql`.
 - Seed a default admin account on first run.
 
@@ -105,13 +105,7 @@ Use the seeded admin credentials on first launch:
 
 ## Optional: Reset or Move the Database
 
-If you need to reset the database, delete the `labcenter.db` file from the Electron user data folder and relaunch the app. A new database will be created automatically.
-
-If you want to use a custom database location, set the `SQLITE_PATH` environment variable before launching:
-
-```bash
-SQLITE_PATH=/path/to/labcenter.db npx electron electron/main.js
-```
+If you need to reset the database, delete `db/labcenter.db` and relaunch the app. A new database will be created automatically.
 
 ## Troubleshooting
 
