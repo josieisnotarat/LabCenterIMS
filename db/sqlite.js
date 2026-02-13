@@ -911,6 +911,18 @@ function deleteCustomer(db, borrowerId) {
   tx();
 }
 
+function hasActiveRepairTicketForItem(db, itemId) {
+  if (!Number.isFinite(itemId)) return false;
+  const row = db.prepare(`
+    SELECT 1
+    FROM TServiceTickets
+    WHERE intItemID = ?
+      AND strStatus NOT IN ('Completed', 'Cancelled')
+    LIMIT 1;
+  `).get(itemId);
+  return !!row;
+}
+
 function checkoutItem(db, payload) {
   const item = db.prepare(`
     SELECT i.intItemID, i.strItemName, i.blnIsSchoolOwned, d.strDepartmentName,
@@ -935,6 +947,10 @@ function checkoutItem(db, payload) {
   `).get(payload.itemId);
 
   if (isCheckedOut) throw new Error('Item is already checked out.');
+
+  if (hasActiveRepairTicketForItem(db, payload.itemId)) {
+    throw new Error('Item is currently in repair.');
+  }
 
   const dueInfo = computeDueFromPolicy(item);
   const dueUtc = payload.dueUtc || dueInfo?.dueUtc || null;
@@ -1409,6 +1425,7 @@ module.exports = {
   deleteCustomer,
   ensureDepartmentId,
   findItemId,
+  hasActiveRepairTicketForItem,
   generatePublicTicketId,
   listItems,
   getItem,
