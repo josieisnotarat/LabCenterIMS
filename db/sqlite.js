@@ -197,6 +197,7 @@ function getLoans(db, { status = null, search = null } = {}) {
         snapBorrowerLastName,
         snapSchoolIDNumber,
         snapRoomNumber,
+        snapInstructor,
         snapItemName,
         snapDepartmentName,
         CASE
@@ -243,6 +244,8 @@ function getLoans(db, { status = null, search = null } = {}) {
     borrowerName: [row.snapBorrowerFirstName, row.snapBorrowerLastName].filter(Boolean).join(' ').trim() || null,
     borrowerSchoolId: row.snapSchoolIDNumber || null,
     room: row.snapRoomNumber || null,
+    instructor: row.snapInstructor || null,
+    department: row.snapDepartmentName || null,
     checkoutUtc: row.dtmCheckoutUTC || null,
     dueUtc: row.dtmDueUTC || null,
     checkinUtc: row.dtmCheckinUTC || null,
@@ -294,6 +297,9 @@ function getServiceTickets(db, { status = null, search = null } = {}) {
         st.dtmLoggedUTC,
         st.intAssignedLabTechID,
         st.strStatus,
+        st.snapRoomNumber,
+        st.snapInstructor,
+        st.snapDepartmentName,
         bt.strFirstName AS borrowerFirstName,
         bt.strLastName AS borrowerLastName,
         it.strItemName,
@@ -345,6 +351,9 @@ function getServiceTickets(db, { status = null, search = null } = {}) {
     loggedUtc: row.dtmLoggedUTC || null,
     assignedName: [row.assignedFirstName, row.assignedLastName].filter(Boolean).join(' ').trim() || null,
     borrowerName: [row.borrowerFirstName, row.borrowerLastName].filter(Boolean).join(' ').trim() || null,
+    room: row.snapRoomNumber || null,
+    instructor: row.snapInstructor || null,
+    department: row.snapDepartmentName || null,
     status: row.strStatus || null,
     loggedByName: [row.assignedFirstName, row.assignedLastName].filter(Boolean).join(' ').trim() || null
   }));
@@ -581,12 +590,8 @@ function listCustomers(db, { search = null } = {}) {
                b.strLastName,
                b.strSchoolIDNumber,
                b.strPhoneNumber,
-               b.strRoomNumber,
-               b.strInstructor,
-               b.dtmCreated,
-               d.strDepartmentName
+               b.dtmCreated
         FROM TBorrowers AS b
-        LEFT JOIN TDepartments AS d ON d.intDepartmentID = b.intDepartmentID
         WHERE b.strFirstName LIKE ?
            OR b.strLastName LIKE ?
            OR (b.strFirstName || ' ' || b.strLastName) LIKE ?
@@ -606,12 +611,8 @@ function listCustomers(db, { search = null } = {}) {
                b.strLastName,
                b.strSchoolIDNumber,
                b.strPhoneNumber,
-               b.strRoomNumber,
-               b.strInstructor,
-               b.dtmCreated,
-               d.strDepartmentName
+               b.dtmCreated
         FROM TBorrowers AS b
-        LEFT JOIN TDepartments AS d ON d.intDepartmentID = b.intDepartmentID
         ORDER BY b.dtmCreated DESC, b.intBorrowerID DESC;
       `).all();
 
@@ -629,9 +630,6 @@ function listCustomers(db, { search = null } = {}) {
     name: [row.strFirstName, row.strLastName].filter(Boolean).join(' ').trim() || null,
     schoolId: row.strSchoolIDNumber || null,
     phone: row.strPhoneNumber || null,
-    room: row.strRoomNumber || null,
-    instructor: row.strInstructor || null,
-    department: row.strDepartmentName || null,
     createdUtc: row.dtmCreated || null,
     aliases: aliasRows.all(row.intBorrowerID).map((alias) => ({
       id: alias.intBorrowerAliasID ?? null,
@@ -648,12 +646,8 @@ function getCustomer(db, borrowerId) {
            b.strLastName,
            b.strSchoolIDNumber,
            b.strPhoneNumber,
-           b.strRoomNumber,
-           b.strInstructor,
-           b.dtmCreated,
-           d.strDepartmentName
+           b.dtmCreated
     FROM TBorrowers AS b
-    LEFT JOIN TDepartments AS d ON d.intDepartmentID = b.intDepartmentID
     WHERE b.intBorrowerID = ?;
   `).get(borrowerId);
 
@@ -673,9 +667,6 @@ function getCustomer(db, borrowerId) {
     name: [row.strFirstName, row.strLastName].filter(Boolean).join(' ').trim() || null,
     schoolId: row.strSchoolIDNumber || null,
     phone: row.strPhoneNumber || null,
-    room: row.strRoomNumber || null,
-    instructor: row.strInstructor || null,
-    department: row.strDepartmentName || null,
     createdUtc: row.dtmCreated || null,
     aliases: aliases.map((alias) => ({
       id: alias.intBorrowerAliasID ?? null,
@@ -687,16 +678,13 @@ function getCustomer(db, borrowerId) {
 
 function createBorrower(db, payload) {
   const info = db.prepare(`
-    INSERT INTO TBorrowers (strFirstName, strLastName, strSchoolIDNumber, strPhoneNumber, strRoomNumber, strInstructor, intDepartmentID, dtmCreated)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO TBorrowers (strFirstName, strLastName, strSchoolIDNumber, strPhoneNumber, dtmCreated)
+    VALUES (?, ?, ?, ?, ?)
   `).run(
     payload.firstName,
     payload.lastName,
     payload.schoolId || null,
     payload.phone || null,
-    payload.room || null,
-    payload.instructor || null,
-    payload.departmentId || null,
     nowIso()
   );
 
@@ -925,7 +913,7 @@ function checkoutItem(db, payload) {
   if (!item) throw new Error('Item not found.');
 
   const borrower = db.prepare(`
-    SELECT strFirstName, strLastName, strSchoolIDNumber, strPhoneNumber, strRoomNumber, strInstructor
+    SELECT strFirstName, strLastName, strSchoolIDNumber, strPhoneNumber
     FROM TBorrowers
     WHERE intBorrowerID = ?;
   `).get(payload.borrowerId);
@@ -971,11 +959,11 @@ function checkoutItem(db, payload) {
     borrower.strLastName,
     borrower.strSchoolIDNumber,
     borrower.strPhoneNumber,
-    borrower.strRoomNumber,
-    borrower.strInstructor,
+    payload.room || null,
+    payload.instructor || null,
     item.strItemName,
     item.blnIsSchoolOwned ? 1 : 0,
-    item.strDepartmentName || null
+    payload.department || item.strDepartmentName || null
   );
 
   addAuditLog(db, {
@@ -1068,9 +1056,12 @@ function createServiceTicket(db, payload) {
       strIssue,
       dtmLoggedUTC,
       intAssignedLabTechID,
-      strStatus
+      strStatus,
+      snapRoomNumber,
+      snapInstructor,
+      snapDepartmentName
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     publicId,
     payload.itemId || null,
@@ -1079,7 +1070,10 @@ function createServiceTicket(db, payload) {
     payload.issue,
     nowIso(),
     payload.assignedLabTechId || null,
-    payload.status || 'Diagnosing'
+    payload.status || 'Diagnosing',
+    payload.room || null,
+    payload.instructor || null,
+    payload.department || null
   );
 
   addAuditLog(db, {

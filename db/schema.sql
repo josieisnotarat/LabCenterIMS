@@ -111,6 +111,9 @@ CREATE TABLE IF NOT EXISTS TServiceTickets (
   dtmLoggedUTC        DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   intAssignedLabTechID INTEGER REFERENCES TLabTechs(intLabTechID),
   strStatus           TEXT NOT NULL DEFAULT 'Diagnosing',
+  snapRoomNumber      TEXT,
+  snapInstructor      TEXT,
+  snapDepartmentName  TEXT,
   CHECK (strStatus IN ('Diagnosing','Awaiting Parts','Ready for Pickup','Completed','Cancelled'))
 );
 CREATE INDEX IF NOT EXISTS IX_TServiceTickets_Status ON TServiceTickets(strStatus, dtmLoggedUTC DESC);
