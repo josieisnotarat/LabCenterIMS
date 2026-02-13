@@ -28,7 +28,7 @@ chmod +x ./scripts/setup-electron.sh
 ./scripts/setup-electron.ps1
 ```
 
-### Option B: Manual setup
+### Option B: Manual setup (no helper scripts)
 
 1. **Clone the repository**
    ```bash
@@ -36,7 +36,7 @@ chmod +x ./scripts/setup-electron.sh
    cd LabCenterIMS
    ```
 
-2. **Initialize npm (only if `package.json` is missing)**
+2. **Initialize npm**
    ```bash
    npm init -y
    ```
@@ -46,11 +46,35 @@ chmod +x ./scripts/setup-electron.sh
    npm install electron better-sqlite3
    ```
 
+4. **Add a start script to `package.json`**
+
+   Open `package.json` and add/update the `scripts` section:
+   ```json
+   {
+     "scripts": {
+       "start": "electron electron/main.js"
+     }
+   }
+   ```
+
+5. **Launch the app**
+   ```bash
+   npm start
+   ```
+
+#### Manual install notes by OS
+
+- **Windows (PowerShell):** if native builds are required, install Visual Studio Build Tools (C++ workload), then run the same `npm init -y` / `npm install ...` commands from the repo root.
+- **macOS:** install Xcode Command Line Tools first (`xcode-select --install`) so `better-sqlite3` can compile if no prebuilt binary is available.
+- **Linux:** install compiler tooling first (`build-essential`, `python3`, `make`, `g++`), then run the same npm commands.
+
 ## Running the Electron App
 
-Start the Electron app using the main process entry point:
+Start the Electron app using either npm or the direct Electron entry point:
 
 ```bash
+npm start
+# or
 npx electron electron/main.js
 ```
 
