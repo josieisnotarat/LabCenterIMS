@@ -12,4 +12,10 @@ fi
 echo "Installing Electron and better-sqlite3..."
 npm install electron better-sqlite3
 
-echo "Setup complete. Run: npx electron electron/main.js"
+echo "Installing @electron/rebuild..."
+npm install -D @electron/rebuild
+
+echo "Rebuilding better-sqlite3 for Electron..."
+npx electron-rebuild -f -w better-sqlite3
+
+echo "Setup complete. Run: npm start (or npx electron electron/main.js)"
