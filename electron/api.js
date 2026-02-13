@@ -57,6 +57,10 @@ function getUserRoleLabel(role) {
   return trimmed || null;
 }
 
+function isAdminUser(user) {
+  return normalizeUserRole(user?.role) === 'admin';
+}
+
 function readAuthToken(headers = {}) {
   const header = headers.authorization || headers.Authorization;
   if (typeof header === 'string') {
@@ -293,6 +297,10 @@ function createApiHandler(db) {
 
     if (method === 'GET' && path === '/api/audit-log') {
       return jsonResponse(200, { entries: sqlite.getAuditLog(db, { limit: 100 }) });
+    }
+
+    if (path.startsWith('/api/admin/') && !isAdminUser(user)) {
+      return jsonResponse(403, { error: 'Admin access is required.' });
     }
 
     if (method === 'GET' && path === '/api/customers') {
@@ -790,6 +798,40 @@ function createApiHandler(db) {
     if (method === 'DELETE' && path === '/api/admin/audit-log') {
       sqlite.clearAuditLog(db);
       return jsonResponse(200, { success: true });
+    }
+
+    if (method === 'GET' && path === '/api/admin/db/tables') {
+      return jsonResponse(200, { entries: sqlite.listTableNames(db) });
+    }
+
+    if (method === 'GET' && path.startsWith('/api/admin/db/tables/')) {
+      const tableName = decodeURIComponent(path.split('/')[5] || '');
+      if (!tableName) {
+        return jsonResponse(400, { error: 'Table name is required.' });
+      }
+      try {
+        const rows = sqlite.listTableRows(db, tableName, { limit: 200, offset: 0 });
+        return jsonResponse(200, rows);
+      } catch (err) {
+        return jsonResponse(400, { error: err?.message || 'Unable to load table.' });
+      }
+    }
+
+    if (method === 'PUT' && path.startsWith('/api/admin/db/tables/') && path.endsWith('/rows')) {
+      const tableName = decodeURIComponent(path.split('/')[5] || '');
+      if (!tableName) {
+        return jsonResponse(400, { error: 'Table name is required.' });
+      }
+      try {
+        sqlite.updateTableRow(db, tableName, {
+          locator: payload?.locator || {},
+          changes: payload?.changes || {}
+        });
+        const refreshed = sqlite.listTableRows(db, tableName, { limit: 200, offset: 0 });
+        return jsonResponse(200, refreshed);
+      } catch (err) {
+        return jsonResponse(400, { error: err?.message || 'Unable to update row.' });
+      }
     }
 
     if (method === 'POST' && path === '/api/admin/clear-database') {
