@@ -2665,10 +2665,6 @@
           fnSelectAllElements("table").forEach(fnEnableTableSorting);
         }
 
-        function fnApplyAllActiveTableSorts() {
-          m_mapTableSortState.forEach((_, tbodyId) => fnApplyTableSort(tbodyId));
-        }
-
         function fnCreateStatusPill(strStatus) {
           const elPill = document.createElement("span");
           elPill.className = "pill";
@@ -3423,6 +3419,7 @@
             fnAppendTableCell(tr, fnCreateStatusPill(loan.status || ""));
             tbody.appendChild(tr);
           });
+          fnApplyTableSort(tbodyId);
           fnApplyRowStatusStyles();
         }
 
@@ -3461,6 +3458,7 @@
             fnAppendTableCell(tr, fnCreateStatusPill(ticket.status || ""));
             tbody.appendChild(tr);
           });
+          fnApplyTableSort(tbodyId);
           fnApplyRowStatusStyles();
         }
 
@@ -3510,6 +3508,7 @@
             tr.appendChild(actionCell);
             tbody.appendChild(tr);
           });
+          fnApplyTableSort(tbodyId);
         }
 
         async function fnLoadHomeData() {
@@ -3600,6 +3599,7 @@
             fnAppendTableCell(tr, fnFormatItemDuePolicy(item));
             tbody.appendChild(tr);
           });
+          fnApplyTableSort(tbodyId);
         }
 
         function fnFilterInventoryEntries(entries, term) {
@@ -3707,6 +3707,7 @@
             );
             tbody.appendChild(tr);
           });
+          fnApplyTableSort(tbodyId);
         }
 
         function fnFilterAdminUsers(entries, term) {
@@ -3813,6 +3814,7 @@
             tr.appendChild(actionCell);
             tbody.appendChild(tr);
           });
+          fnApplyTableSort(tbodyId);
         }
 
         function fnFilterInventoryEntries(entries, term) {
@@ -3974,6 +3976,7 @@
             tr.appendChild(actionCell);
             tbody.appendChild(tr);
           });
+          fnApplyTableSort(tbodyId);
         }
 
         function fnFilterAdminUsers(entries, term) {
@@ -4874,6 +4877,7 @@
             });
             body.appendChild(tr);
           });
+          fnApplyTableSort("admin-db-body");
         }
 
         async function fnLoadAdminTableRows(tableName) {
@@ -5108,6 +5112,7 @@
             });
             tbody.appendChild(tr);
           });
+          fnApplyTableSort("tbl-admin-log");
         }
 
         function fnFilterAuditLogEntries(entries, term) {
