@@ -1,0 +1,31 @@
+{
+  "name": "labcenterims",
+  "version": "1.0.0",
+  "description": "This repository contains a self-contained Electron desktop application that runs the LabCenter IMS UI (`LabCenterIMS.html`) and a local SQLite database. Follow the steps below to install dependencies, create the SQLite database, and launch the app.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "start": "electron electron/main.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/josieisnotarat/LabCenterIMS.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/josieisnotarat/LabCenterIMS/issues"
+  },
+  "homepage": "https://github.com/josieisnotarat/LabCenterIMS#readme",
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "electron": "^40.4.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.3"
+  }
+}
