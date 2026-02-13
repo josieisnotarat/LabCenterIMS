@@ -452,26 +452,24 @@
         color: var(--muted);
         border-bottom: 1px solid var(--line);
       }
-      thead th.sortable {
+      table.sortable thead th {
         cursor: pointer;
         user-select: none;
         position: relative;
-        padding-right: 28px;
       }
-      thead th.sortable::after {
+      table.sortable thead th::after {
         content: "↕";
-        position: absolute;
-        right: 10px;
-        color: #9ca3af;
+        color: color-mix(in srgb, var(--muted) 60%, transparent);
+        margin-left: 6px;
         font-size: 12px;
       }
-      thead th.sortable.sort-asc::after {
+      table.sortable thead th.sorted-asc::after {
         content: "↑";
-        color: var(--brand);
+        color: var(--ink);
       }
-      thead th.sortable.sort-desc::after {
+      table.sortable thead th.sorted-desc::after {
         content: "↓";
-        color: var(--brand);
+        color: var(--ink);
       }
       tbody td {
         padding: 12px;
@@ -2522,153 +2520,6 @@
           ["co_op", "co-op"],
         ]);
 
-        const TABLE_DEFAULT_SORTS = {
-          "tbl-home-out": { columnIndex: 4, direction: "asc" },
-          "tbl-home-repairs": { columnIndex: 3, direction: "desc" },
-          "tbl-borrow": { columnIndex: 6, direction: "asc" },
-          "tbl-service": { columnIndex: 3, direction: "desc" },
-          "tbl-admin-log": { columnIndex: 3, direction: "desc" },
-          "tbl-customer-profiles": { columnIndex: 0, direction: "asc" },
-          "tbl-admin-users": { columnIndex: 0, direction: "asc" },
-          "tbl-admin-inventory": { columnIndex: 0, direction: "asc" },
-          "admin-db-body": { columnIndex: 0, direction: "asc" },
-        };
-        const m_mapTableSortState = new Map();
-
-        function fnParseSortDate(value) {
-          if (!value || value === "—") return Number.NEGATIVE_INFINITY;
-          const parsed = Date.parse(value);
-          return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed;
-        }
-
-        function fnParseSortDueIn(value) {
-          if (!value || value === "—") return Number.POSITIVE_INFINITY;
-          const match = value.trim().match(/^(-)?(\d+)([dh])$/i);
-          if (!match) return Number.POSITIVE_INFINITY;
-          const sign = match[1] ? -1 : 1;
-          const amount = Number(match[2]);
-          const unitHours = match[3].toLowerCase() === "d" ? 24 : 1;
-          return sign * amount * unitHours;
-        }
-
-        function fnGetSortValue(tbodyId, tr, columnIndex) {
-          const cell = tr.cells[columnIndex];
-          if (!cell) return "";
-          const raw = (cell.textContent || "").trim();
-          const header =
-            tr.closest("table")?.querySelectorAll("thead th")?.[columnIndex]
-              ?.textContent || "";
-          const normalizedHeader = header.trim().toLowerCase();
-
-          if (normalizedHeader.includes("due in")) {
-            return fnParseSortDueIn(raw);
-          }
-          if (
-            normalizedHeader.includes("date") ||
-            normalizedHeader.includes("logged") ||
-            normalizedHeader.includes("created") ||
-            normalizedHeader === "out" ||
-            normalizedHeader === "due"
-          ) {
-            return fnParseSortDate(raw);
-          }
-          if (
-            normalizedHeader.includes("trace") ||
-            normalizedHeader.includes("ticket") ||
-            normalizedHeader.includes("id")
-          ) {
-            const numeric = Number(raw.replace(/[^\d.-]/g, ""));
-            if (!Number.isNaN(numeric) && /\d/.test(raw)) return numeric;
-          }
-          if (tbodyId === "admin-db-body") {
-            const numeric = Number(raw);
-            if (!Number.isNaN(numeric) && raw !== "") return numeric;
-          }
-          return raw.toLowerCase();
-        }
-
-        function fnApplyTableSort(tbodyId) {
-          const tbody = document.getElementById(tbodyId);
-          if (!tbody) return;
-          const table = tbody.closest("table");
-          if (!table) return;
-          const rows = Array.from(tbody.rows).filter((tr) => tr.cells.length > 1);
-          if (!rows.length) return;
-          const state = m_mapTableSortState.get(tbodyId) || TABLE_DEFAULT_SORTS[tbodyId];
-          if (!state) return;
-
-          const directionMultiplier = state.direction === "desc" ? -1 : 1;
-          rows.sort((a, b) => {
-            const av = fnGetSortValue(tbodyId, a, state.columnIndex);
-            const bv = fnGetSortValue(tbodyId, b, state.columnIndex);
-            if (typeof av === "number" && typeof bv === "number") {
-              return (av - bv) * directionMultiplier;
-            }
-            return String(av).localeCompare(String(bv), undefined, {
-              sensitivity: "base",
-              numeric: true,
-            }) * directionMultiplier;
-          });
-          rows.forEach((row) => tbody.appendChild(row));
-        }
-
-        function fnUpdateSortHeaderStyles(table, activeColumnIndex, direction) {
-          table.querySelectorAll("thead th.sortable").forEach((th) => {
-            const idx = Number(th.dataset.columnIndex);
-            th.classList.remove("sort-asc", "sort-desc");
-            if (idx === activeColumnIndex) {
-              th.classList.add(direction === "desc" ? "sort-desc" : "sort-asc");
-            }
-          });
-        }
-
-        function fnEnableTableSorting(table) {
-          const tbody = table.querySelector("tbody[id]");
-          if (!tbody) return;
-          const tbodyId = tbody.id;
-          const headers = Array.from(table.querySelectorAll("thead th"));
-          if (!headers.length) return;
-
-          headers.forEach((th, index) => {
-            th.classList.add("sortable");
-            th.dataset.columnIndex = String(index);
-            if (!th.dataset.sortBound) {
-              th.dataset.sortBound = "1";
-              th.addEventListener("click", () => {
-                const current = m_mapTableSortState.get(tbodyId) || TABLE_DEFAULT_SORTS[tbodyId] || {
-                  columnIndex: index,
-                  direction: "asc",
-                };
-                const nextDirection =
-                  current.columnIndex === index && current.direction === "asc"
-                    ? "desc"
-                    : "asc";
-                const nextState = { columnIndex: index, direction: nextDirection };
-                m_mapTableSortState.set(tbodyId, nextState);
-                fnUpdateSortHeaderStyles(table, nextState.columnIndex, nextState.direction);
-                fnApplyTableSort(tbodyId);
-              });
-            }
-          });
-
-          if (!m_mapTableSortState.has(tbodyId) && TABLE_DEFAULT_SORTS[tbodyId]) {
-            m_mapTableSortState.set(tbodyId, { ...TABLE_DEFAULT_SORTS[tbodyId] });
-          }
-          const state = m_mapTableSortState.get(tbodyId);
-          if (state) {
-            fnUpdateSortHeaderStyles(table, state.columnIndex, state.direction);
-            fnApplyTableSort(tbodyId);
-          }
-        }
-
-        function fnInitializeGlobalTableSorting() {
-          fnSelectAllElements("table").forEach(fnEnableTableSorting);
-        }
-
-        function fnApplyAllActiveTableSorts() {
-          m_mapTableSortState.forEach((_, tbodyId) => fnApplyTableSort(tbodyId));
-        }
-
         function fnCreateStatusPill(strStatus) {
           const elPill = document.createElement("span");
           elPill.className = "pill";
@@ -3317,8 +3168,6 @@
           "tbl-service",
           "search-service",
         );
-
-        fnInitializeGlobalTableSorting();
 
         // ====== DATA FETCH + RENDERING ======
         async function fnFetchDashboardStats() {
@@ -4837,10 +4686,6 @@
             hr.appendChild(th);
           });
           head.appendChild(hr);
-          const adminDbTable = head.closest("table");
-          if (adminDbTable) {
-            fnEnableTableSorting(adminDbTable);
-          }
 
           if (!rows.length) {
             const tr = document.createElement("tr");
@@ -6271,10 +6116,7 @@
         // keep row colors consistent if DOM changes later
         // Watch for table updates (e.g., new rows inserted) so the status tinting
         // stays in sync even when other scripts mutate the DOM in the future.
-        const mo = new MutationObserver(() => {
-          fnApplyRowStatusStyles();
-          fnApplyAllActiveTableSorts();
-        });
+        const mo = new MutationObserver(fnApplyRowStatusStyles);
         mo.observe(document.body, { subtree: true, childList: true });
       });
     </script>
