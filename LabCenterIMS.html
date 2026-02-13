@@ -1769,7 +1769,6 @@
                 <option>Diagnosing</option>
                 <option>Awaiting Parts</option>
                 <option>Ready for Pickup</option>
-                <option>Quarantined</option>
                 <option>Completed</option>
                 <option>Cancelled</option>
               </select>
@@ -2425,7 +2424,6 @@
           "Awaiting Parts": "repair",
           Diagnosing: "diagnosing",
           "Ready for Pickup": "ready",
-          Quarantined: "quarantine",
           Completed: "completed",
           Cancelled: "cancelled",
         };
@@ -2435,7 +2433,6 @@
           "Diagnosing",
           "Awaiting Parts",
           "Ready for Pickup",
-          "Quarantined",
           "Completed",
           "Cancelled",
         ];
@@ -2453,7 +2450,13 @@
         };
         const DETAIL_STATUS_OPTIONS = {
           loan: ["On Time", "Overdue", "Returned"],
-          ticket: ["Diagnosing", "Awaiting Parts", "Ready for Pickup", "Returned"],
+          ticket: [
+            "Diagnosing",
+            "Awaiting Parts",
+            "Ready for Pickup",
+            "Completed",
+            "Cancelled",
+          ],
         };
         const ROW_STATUS_CLASSNAMES = Object.values(STATUS_ROW_CLASS_MAP);
 
