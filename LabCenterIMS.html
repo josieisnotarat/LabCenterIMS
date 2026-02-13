@@ -3330,7 +3330,10 @@
             fnShowTableMessage("tbl-admin-inventory", "Loading inventory…");
           }
           try {
-            const items = await fnFetchItems();
+            const [items, tickets] = await Promise.all([
+              fnFetchItems(),
+              fnFetchServiceTickets({ status: "all" }),
+            ]);
             const sorted = Array.isArray(items)
               ? items
                   .slice()
@@ -3340,16 +3343,41 @@
                     }),
                   )
               : [];
+            const blockedRepairItemIds = new Set(
+              (Array.isArray(tickets) ? tickets : [])
+                .filter(
+                  (ticket) =>
+                    ticket &&
+                    ticket.itemId != null &&
+                    !["Completed", "Cancelled"].includes(ticket.status),
+                )
+                .map((ticket) => String(ticket.itemId)),
+            );
             m_arrInventoryItems = sorted;
-            const optionList = sorted
+            const loanOptionList = sorted
+              .filter(
+                (item) =>
+                  item &&
+                  item.name &&
+                  !blockedRepairItemIds.has(String(item.id ?? "")),
+              )
+              .map((item) => ({
+                id: item.id ?? null,
+                name: item.name || "",
+              }));
+            const serviceOptionList = sorted
               .filter((item) => item && item.name)
               .map((item) => ({
                 id: item.id ?? null,
                 name: item.name || "",
               }));
-            ["nc-item", "rb-item", "ns-item", "rs-item"].forEach((id) => {
+            ["nc-item", "rb-item"].forEach((id) => {
               const select = document.getElementById(id);
-              if (select) fnPopulateItemSelect(select, optionList);
+              if (select) fnPopulateItemSelect(select, loanOptionList);
+            });
+            ["ns-item", "rs-item"].forEach((id) => {
+              const select = document.getElementById(id);
+              if (select) fnPopulateItemSelect(select, serviceOptionList);
             });
             fnUpdateInventorySearch(m_strInventorySearchTerm);
           } catch (err) {
@@ -3543,7 +3571,10 @@
             fnShowTableMessage("tbl-admin-inventory", "Loading inventory…");
           }
           try {
-            const items = await fnFetchItems();
+            const [items, tickets] = await Promise.all([
+              fnFetchItems(),
+              fnFetchServiceTickets({ status: "all" }),
+            ]);
             const sorted = Array.isArray(items)
               ? items
                   .slice()
@@ -3553,16 +3584,41 @@
                     }),
                   )
               : [];
+            const blockedRepairItemIds = new Set(
+              (Array.isArray(tickets) ? tickets : [])
+                .filter(
+                  (ticket) =>
+                    ticket &&
+                    ticket.itemId != null &&
+                    !["Completed", "Cancelled"].includes(ticket.status),
+                )
+                .map((ticket) => String(ticket.itemId)),
+            );
             m_arrInventoryItems = sorted;
-            const optionList = sorted
+            const loanOptionList = sorted
+              .filter(
+                (item) =>
+                  item &&
+                  item.name &&
+                  !blockedRepairItemIds.has(String(item.id ?? "")),
+              )
+              .map((item) => ({
+                id: item.id ?? null,
+                name: item.name || "",
+              }));
+            const serviceOptionList = sorted
               .filter((item) => item && item.name)
               .map((item) => ({
                 id: item.id ?? null,
                 name: item.name || "",
               }));
-            ["nc-item", "rb-item", "ns-item", "rs-item"].forEach((id) => {
+            ["nc-item", "rb-item"].forEach((id) => {
               const select = document.getElementById(id);
-              if (select) fnPopulateItemSelect(select, optionList);
+              if (select) fnPopulateItemSelect(select, loanOptionList);
+            });
+            ["ns-item", "rs-item"].forEach((id) => {
+              const select = document.getElementById(id);
+              if (select) fnPopulateItemSelect(select, serviceOptionList);
             });
             fnUpdateInventorySearch(m_strInventorySearchTerm);
           } catch (err) {

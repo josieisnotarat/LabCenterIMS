@@ -493,6 +493,9 @@ function createApiHandler(db) {
         if (err?.message?.includes('already checked out')) {
           return jsonResponse(409, { error: 'Item is already checked out.' });
         }
+        if (err?.message?.includes('currently in repair')) {
+          return jsonResponse(409, { error: 'Item is currently in repair and cannot be loaned out.' });
+        }
         throw err;
       }
     }
