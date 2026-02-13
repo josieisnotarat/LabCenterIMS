@@ -338,22 +338,18 @@ function createApiHandler(db) {
     }
 
     if (method === 'POST' && path === '/api/customers') {
-      const { first, last, schoolId, phone, room, instructor, department } = payload || {};
+      const { first, last, schoolId, phone } = payload || {};
       const firstName = normalizeString(first);
       const lastName = normalizeString(last);
       if (!firstName || !lastName) {
         return jsonResponse(400, { error: 'First and last name are required.' });
       }
-      const departmentId = sqlite.ensureDepartmentId(db, department);
       try {
         const borrowerId = sqlite.createBorrower(db, {
           firstName,
           lastName,
           schoolId: normalizeString(schoolId) || null,
           phone: normalizeString(phone) || null,
-          room: normalizeString(room) || null,
-          instructor: normalizeString(instructor) || null,
-          departmentId
         });
         return jsonResponse(201, { id: borrowerId });
       } catch (err) {
@@ -458,7 +454,7 @@ function createApiHandler(db) {
     }
 
     if (method === 'POST' && path === '/api/loans/checkout') {
-      const { item, notes } = payload || {};
+      const { item, notes, room, instructor, department } = payload || {};
       if (!item) {
         return jsonResponse(400, { error: 'Item is required.' });
       }
@@ -478,7 +474,10 @@ function createApiHandler(db) {
           borrowerId,
           labTechId: userId,
           dueUtc: dueInfo?.dueUtc || null,
-          notes: normalizeString(notes) || null
+          notes: normalizeString(notes) || null,
+          room: normalizeString(room) || null,
+          instructor: normalizeString(instructor) || null,
+          department: normalizeString(department) || null
         });
         const loanId = result.loanId;
         const traceNumber = typeof loanId === 'number' ? loanId.toString().padStart(6, '0') : null;
@@ -498,7 +497,7 @@ function createApiHandler(db) {
     }
 
     if (method === 'POST' && path === '/api/tickets') {
-      const { item, issue } = payload || {};
+      const { item, issue, room, instructor, department } = payload || {};
       const issueText = normalizeString(issue);
       if (!item || !issueText) {
         return jsonResponse(400, { error: 'Item and issue are required.' });
@@ -515,7 +514,10 @@ function createApiHandler(db) {
         itemLabel: ticketLabel,
         issue: issueText,
         assignedLabTechId: userId,
-        status: 'Diagnosing'
+        status: 'Diagnosing',
+        room: normalizeString(room) || null,
+        instructor: normalizeString(instructor) || null,
+        department: normalizeString(department) || null
       });
       return jsonResponse(201, result);
     }
@@ -530,7 +532,6 @@ function createApiHandler(db) {
       if (!ITEM_DUE_POLICY_SET.has(normalizedPolicy)) {
         return jsonResponse(400, { error: `Unsupported due policy: ${normalizedPolicy}` });
       }
-      const departmentId = sqlite.ensureDepartmentId(db, department);
       try {
         const itemId = sqlite.createItem(db, {
           name: itemName,
@@ -583,7 +584,6 @@ function createApiHandler(db) {
       if (!existing) {
         return jsonResponse(404, { error: 'Item not found.' });
       }
-      const departmentId = sqlite.ensureDepartmentId(db, department);
       try {
         const updated = sqlite.updateItem(db, itemId, {
           name: itemName,

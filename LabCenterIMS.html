@@ -1505,15 +1505,18 @@
               />
               <div class="hint">10 digits, no formatting.</div>
             </div>
-            <div>
+            <div data-bind="borrow">
               <label>Room</label>
               <input id="nc-room" placeholder="ATLC 102" />
             </div>
-            <div>
+            <div data-bind="borrow">
               <label>Instructor</label>
               <input id="nc-instructor" placeholder="e.g., Prof. Smith" />
             </div>
-            
+            <div data-bind="borrow">
+              <label>Department</label>
+              <input id="nc-department" placeholder="e.g., Science" />
+            </div>
 
             <!-- Borrow specifics -->
             <div class="full" data-bind="borrow">
@@ -1551,6 +1554,18 @@
                 id="ns-issue"
                 placeholder="Describe the problem…"
               ></textarea>
+            </div>
+            <div data-bind="service" style="display: none">
+              <label>Room</label>
+              <input id="ns-room" placeholder="ATLC 102" />
+            </div>
+            <div data-bind="service" style="display: none">
+              <label>Instructor</label>
+              <input id="ns-instructor" placeholder="e.g., Prof. Smith" />
+            </div>
+            <div data-bind="service" style="display: none">
+              <label>Department</label>
+              <input id="ns-department" placeholder="e.g., Science" />
             </div>
           </div>
         </div>
@@ -1618,6 +1633,18 @@
               <label>Checkout Notes</label>
               <input id="rb-notes" placeholder="optional" />
             </div>
+            <div>
+              <label>Room</label>
+              <input id="rb-room" placeholder="ATLC 102" />
+            </div>
+            <div>
+              <label>Instructor</label>
+              <input id="rb-instructor" placeholder="e.g., Prof. Smith" />
+            </div>
+            <div>
+              <label>Department</label>
+              <input id="rb-department" placeholder="e.g., Science" />
+            </div>
           </div>
           <div class="hint">Provide either ID or Name (one is required).</div>
         </div>
@@ -1681,6 +1708,18 @@
                 required
                 placeholder="Describe the problem…"
               ></textarea>
+            </div>
+            <div>
+              <label>Room</label>
+              <input id="rs-room" placeholder="ATLC 102" />
+            </div>
+            <div>
+              <label>Instructor</label>
+              <input id="rs-instructor" placeholder="e.g., Prof. Smith" />
+            </div>
+            <div>
+              <label>Department</label>
+              <input id="rs-department" placeholder="e.g., Science" />
             </div>
           </div>
           <div class="hint">Provide either ID or Name (one is required).</div>
@@ -2013,18 +2052,6 @@
             <div>
               <div class="profile-label">Phone</div>
               <div class="profile-value" id="cust-phone">—</div>
-            </div>
-            <div>
-              <div class="profile-label">Room</div>
-              <div class="profile-value" id="cust-room">—</div>
-            </div>
-            <div>
-              <div class="profile-label">Instructor</div>
-              <div class="profile-value" id="cust-instructor">—</div>
-            </div>
-            <div>
-              <div class="profile-label">Department</div>
-              <div class="profile-value" id="cust-department">—</div>
             </div>
             <div>
               <div class="profile-label">Created</div>
@@ -4858,9 +4885,6 @@
             "cust-name",
             "cust-school",
             "cust-phone",
-            "cust-room",
-            "cust-instructor",
-            "cust-department",
             "cust-created",
           ];
           ids.forEach((id) => {
@@ -4920,12 +4944,6 @@
           if (school) school.textContent = profile.schoolId || "—";
           const phone = document.getElementById("cust-phone");
           if (phone) phone.textContent = profile.phone || "—";
-          const room = document.getElementById("cust-room");
-          if (room) room.textContent = profile.room || "—";
-          const instructor = document.getElementById("cust-instructor");
-          if (instructor) instructor.textContent = profile.instructor || "—";
-          const department = document.getElementById("cust-department");
-          if (department) department.textContent = profile.department || "—";
           const created = document.getElementById("cust-created");
           if (created)
             created.textContent = profile.createdUtc
@@ -5259,8 +5277,6 @@
                 last,
                 schoolId: id || null,
                 phone: phone || null,
-                room: fnSelectElement("#nc-room").value || null,
-                instructor: fnSelectElement("#nc-instructor").value || null,
               }),
             });
 
@@ -5271,6 +5287,11 @@
                   customerName: `${first} ${last}`,
                   item: fnSelectElement("#nc-item").value.trim(),
                   notes: fnSelectElement("#nc-notes").value || null,
+                  room: fnSelectElement("#nc-room").value.trim() || null,
+                  instructor:
+                    fnSelectElement("#nc-instructor").value.trim() || null,
+                  department:
+                    fnSelectElement("#nc-department").value.trim() || null,
                 }),
               });
               const payload = await checkoutRes.json().catch(() => ({}));
@@ -5285,6 +5306,11 @@
                   customerName: `${first} ${last}`,
                   item: fnSelectElement("#ns-item").value.trim(),
                   issue: fnSelectElement("#ns-issue").value.trim(),
+                  room: fnSelectElement("#ns-room").value.trim() || null,
+                  instructor:
+                    fnSelectElement("#ns-instructor").value.trim() || null,
+                  department:
+                    fnSelectElement("#ns-department").value.trim() || null,
                 }),
               });
               fnCloseDialogById("dlg-new-customer");
@@ -5319,6 +5345,11 @@
                 name: name || null,
                 item: fnSelectElement("#rb-item").value.trim(),
                 notes: fnSelectElement("#rb-notes").value || null,
+                room: fnSelectElement("#rb-room").value.trim() || null,
+                instructor:
+                  fnSelectElement("#rb-instructor").value.trim() || null,
+                department:
+                  fnSelectElement("#rb-department").value.trim() || null,
               }),
             });
             const payload = await checkoutRes.json().catch(() => ({}));
@@ -5356,6 +5387,11 @@
                 name: name || null,
                 item: fnSelectElement("#rs-item").value.trim(),
                 issue: fnSelectElement("#rs-issue").value.trim(),
+                room: fnSelectElement("#rs-room").value.trim() || null,
+                instructor:
+                  fnSelectElement("#rs-instructor").value.trim() || null,
+                department:
+                  fnSelectElement("#rs-department").value.trim() || null,
               }),
             });
             fnCloseDialogById("dlg-returning-service");
