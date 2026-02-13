@@ -17,6 +17,14 @@ function normalizeString(value) {
   return value.trim();
 }
 
+function quoteIdentifier(value) {
+  const normalized = normalizeString(value);
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(normalized)) {
+    throw new Error('Invalid SQL identifier.');
+  }
+  return `"${normalized}"`;
+}
+
 function formatName(first, last) {
   return [first, last].filter(Boolean).join(' ').trim() || null;
 }
@@ -1276,6 +1284,105 @@ function clearDatabase(db) {
   tx();
 }
 
+function listTableNames(db) {
+  const rows = db.prepare(`
+    SELECT name
+    FROM sqlite_master
+    WHERE type = 'table'
+      AND name NOT LIKE 'sqlite_%'
+    ORDER BY name ASC;
+  `).all();
+  return rows.map((row) => row.name).filter(Boolean);
+}
+
+function getTableSchema(db, tableName) {
+  const quoted = quoteIdentifier(tableName);
+  const rows = db.prepare(`PRAGMA table_info(${quoted});`).all();
+  return rows.map((row) => ({
+    name: row.name,
+    type: row.type || null,
+    notNull: row.notnull === 1,
+    defaultValue: row.dflt_value ?? null,
+    primaryKeyOrdinal: row.pk || 0
+  }));
+}
+
+function listTableRows(db, tableName, { limit = 200, offset = 0 } = {}) {
+  const quoted = quoteIdentifier(tableName);
+  const normalizedLimit = Number.isFinite(limit) ? Math.max(1, Math.min(500, Math.trunc(limit))) : 200;
+  const normalizedOffset = Number.isFinite(offset) ? Math.max(0, Math.trunc(offset)) : 0;
+  const schema = getTableSchema(db, tableName);
+  const pkColumns = schema.filter((column) => column.primaryKeyOrdinal > 0)
+    .sort((a, b) => a.primaryKeyOrdinal - b.primaryKeyOrdinal)
+    .map((column) => column.name);
+  const rows = db.prepare(`SELECT rowid AS __rowid__, * FROM ${quoted} LIMIT ? OFFSET ?;`).all(normalizedLimit, normalizedOffset);
+  const entries = rows.map((row) => {
+    const locator = {};
+    if (row.__rowid__ != null) {
+      locator.rowid = row.__rowid__;
+    }
+    pkColumns.forEach((name) => {
+      locator[name] = row[name] ?? null;
+    });
+    return {
+      values: row,
+      locator
+    };
+  });
+  return { schema, entries, limit: normalizedLimit, offset: normalizedOffset };
+}
+
+function buildLocatorWhereClause(locator) {
+  const keys = Object.keys(locator || {});
+  if (!keys.length) {
+    throw new Error('Row locator is required.');
+  }
+  const whereParts = [];
+  const params = [];
+  keys.forEach((key) => {
+    if (key === 'rowid') {
+      const rowId = Number.parseInt(locator.rowid, 10);
+      if (!Number.isFinite(rowId)) {
+        throw new Error('Invalid row locator.');
+      }
+      whereParts.push('rowid = ?');
+      params.push(rowId);
+      return;
+    }
+    const quoted = quoteIdentifier(key);
+    const value = locator[key];
+    if (value == null) {
+      whereParts.push(`${quoted} IS NULL`);
+    } else {
+      whereParts.push(`${quoted} = ?`);
+      params.push(value);
+    }
+  });
+  return { whereClause: whereParts.join(' AND '), params };
+}
+
+function updateTableRow(db, tableName, { locator, changes }) {
+  const quotedTable = quoteIdentifier(tableName);
+  const schema = getTableSchema(db, tableName);
+  const columnNames = new Set(schema.map((column) => column.name));
+  const changeKeys = Object.keys(changes || {}).filter((key) => columnNames.has(key));
+  if (!changeKeys.length) {
+    throw new Error('No valid columns were provided to update.');
+  }
+  const assignments = [];
+  const params = [];
+  changeKeys.forEach((key) => {
+    assignments.push(`${quoteIdentifier(key)} = ?`);
+    params.push(changes[key]);
+  });
+  const locatorInfo = buildLocatorWhereClause(locator || {});
+  const statement = `UPDATE ${quotedTable} SET ${assignments.join(', ')} WHERE ${locatorInfo.whereClause};`;
+  const result = db.prepare(statement).run(...params, ...locatorInfo.params);
+  if (!result.changes) {
+    throw new Error('Row not found.');
+  }
+}
+
 module.exports = {
   openDatabase,
   addAuditLog,
@@ -1318,5 +1425,8 @@ module.exports = {
   updateUser,
   deleteUser,
   clearAuditLog,
-  clearDatabase
+  clearDatabase,
+  listTableNames,
+  listTableRows,
+  updateTableRow
 };
