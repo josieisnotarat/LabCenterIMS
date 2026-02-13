@@ -301,7 +301,8 @@
         .nav-link[href="#admin-customers"],
       body:has(#admin-users.screen:target) .nav-link[href="#admin-users"],
       body:has(#admin-inventory.screen:target)
-        .nav-link[href="#admin-inventory"] {
+        .nav-link[href="#admin-inventory"],
+      body:has(#admin-database.screen:target) .nav-link[href="#admin-database"] {
         background: var(--surface);
         border-color: var(--line);
       }
@@ -319,6 +320,11 @@
       body:has(.screen:target:not(#home)) #home {
         display: none;
       }
+
+      body:not(.is-admin) .admin-only {
+        display: none !important;
+      }
+
 
       .wrapper {
         max-width: 1200px;
@@ -870,13 +876,14 @@
           <a class="nav-link" href="#service">Service Log</a>
         </nav>
         <div class="nav-sep" aria-hidden="true"></div>
-        <div class="push-bottom">
+        <div class="push-bottom admin-only" id="admin-sidebar">
           <div class="nav-title">Admin</div>
           <nav>
             <a class="nav-link" href="#admin-action-log">Action Log</a>
             <a class="nav-link" href="#admin-customers">Customer Management</a>
             <a class="nav-link" href="#admin-users">User Management</a>
             <a class="nav-link" href="#admin-inventory">Inventory Management</a>
+            <a class="nav-link" href="#admin-database">Database Tables</a>
           </nav>
         </div>
       </aside>
@@ -1106,7 +1113,7 @@
           <!-- ADMIN: ACTION LOG -->
           <section
             id="admin-action-log"
-            class="screen"
+            class="screen admin-only"
             aria-labelledby="admin-action-title"
           >
             <div class="card">
@@ -1177,7 +1184,7 @@
           <!-- ADMIN: CUSTOMER MANAGEMENT -->
           <section
             id="admin-customers"
-            class="screen"
+            class="screen admin-only"
             aria-labelledby="admin-customers-title"
           >
             <div class="card">
@@ -1238,7 +1245,7 @@
           <!-- ADMIN: USER MANAGEMENT -->
           <section
             id="admin-users"
-            class="screen"
+            class="screen admin-only"
             aria-labelledby="admin-users-title"
           >
             <div class="card">
@@ -1301,7 +1308,7 @@
           <!-- ADMIN: INVENTORY MANAGEMENT -->
           <section
             id="admin-inventory"
-            class="screen"
+            class="screen admin-only"
             aria-labelledby="admin-inventory-title"
           >
             <div class="card">
@@ -1359,9 +1366,59 @@
               </div>
             </div>
           </section>
+
+          <!-- ADMIN: DATABASE TABLES -->
+          <section
+            id="admin-database"
+            class="screen admin-only"
+            aria-labelledby="admin-database-title"
+          >
+            <div class="card">
+              <h2 id="admin-database-title">Database Tables</h2>
+              <div class="body">
+                <div class="toolbar" style="gap: 12px; flex-wrap: wrap; align-items: center">
+                  <label for="admin-db-table-select" class="hint">Table</label>
+                  <select id="admin-db-table-select" style="min-width: 260px"></select>
+                  <button class="btn" id="btn-admin-db-refresh" type="button">Refresh</button>
+                </div>
+              </div>
+              <div class="body table">
+                <table>
+                  <thead id="admin-db-head"></thead>
+                  <tbody id="admin-db-body">
+                    <tr>
+                      <td style="text-align: center; color: var(--muted); padding: 18px 12px;">
+                        Select a table to view entries.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
         </div>
       </main>
     </div>
+
+
+    <!-- Admin: Edit Database Row -->
+    <dialog id="dlg-admin-db-row">
+      <form method="dialog" id="form-admin-db-row" novalidate>
+        <div class="modal-hd">
+          <strong>Edit Table Row</strong>
+          <button class="btn" value="close">Close</button>
+        </div>
+        <div class="modal-bd">
+          <input type="hidden" id="admin-db-edit-table" />
+          <input type="hidden" id="admin-db-edit-locator" />
+          <div class="form-grid" id="admin-db-edit-fields"></div>
+        </div>
+        <div class="modal-ft">
+          <button class="btn" value="close">Cancel</button>
+          <button class="btn primary" id="admin-db-save" type="button">Save Row</button>
+        </div>
+      </form>
+    </dialog>
 
     <!-- =============== MODALS =============== -->
 
@@ -2075,6 +2132,8 @@
         let m_idIdleTimer = null;
         let m_boolHasBootstrapped = false;
         let m_boolAuthReloadPending = false;
+        let m_arrAdminTables = [];
+        let m_objAdminActiveTablePayload = null;
         let m_strQueuedAuthMessage = window.sessionStorage.getItem(
           SESSION_MESSAGE_KEY,
         );
@@ -2116,6 +2175,33 @@
             : name;
         }
 
+        const ADMIN_HASHES = new Set([
+          "#admin-action-log",
+          "#admin-customers",
+          "#admin-users",
+          "#admin-inventory",
+          "#admin-database",
+        ]);
+
+        function fnNormalizeRole(value) {
+          return String(value || "")
+            .trim()
+            .toLowerCase()
+            .replace(/[\s_]+/g, "-");
+        }
+
+        function fnIsAdminUser() {
+          return fnNormalizeRole(m_objCurrentUser?.role) === "admin";
+        }
+
+        function fnApplyAdminUiAccess() {
+          const isAdmin = fnIsAdminUser();
+          document.body.classList.toggle("is-admin", isAdmin);
+          if (!isAdmin && ADMIN_HASHES.has(window.location.hash)) {
+            window.location.hash = "#home";
+          }
+        }
+
         function fnClearIdleTimer() {
           if (m_idIdleTimer) {
             window.clearTimeout(m_idIdleTimer);
@@ -2145,6 +2231,7 @@
             }
           }
           fnUpdateUserDisplay();
+          fnApplyAdminUiAccess();
         }
 
         function fnClearSession() {
@@ -4393,6 +4480,20 @@
           return [];
         }
 
+        async function fnFetchAdminTableNames() {
+          const res = await fnApi(`/admin/db/tables`, { method: "GET" });
+          const payload = await res.json();
+          return Array.isArray(payload?.entries) ? payload.entries : [];
+        }
+
+        async function fnFetchAdminTableRows(tableName) {
+          const res = await fnApi(
+            `/admin/db/tables/${encodeURIComponent(tableName)}`,
+            { method: "GET" },
+          );
+          return res.json();
+        }
+
         async function fnCreateCustomerAlias(id, alias) {
           const res = await fnApi(
             `/customers/${encodeURIComponent(id)}/aliases`,
@@ -4409,6 +4510,135 @@
             `/customers/${encodeURIComponent(id)}/aliases/${encodeURIComponent(aliasId)}`,
             { method: "DELETE" },
           );
+        }
+
+        function fnRenderAdminTableRows(payload) {
+          const head = document.getElementById("admin-db-head");
+          const body = document.getElementById("admin-db-body");
+          if (!head || !body) return;
+          const columns = Array.isArray(payload?.schema) ? payload.schema : [];
+          const rows = Array.isArray(payload?.entries) ? payload.entries : [];
+          head.innerHTML = "";
+          body.innerHTML = "";
+
+          const hr = document.createElement("tr");
+          ["Actions", ...columns.map((c) => c.name)].forEach((name) => {
+            const th = document.createElement("th");
+            th.scope = "col";
+            th.textContent = name;
+            hr.appendChild(th);
+          });
+          head.appendChild(hr);
+
+          if (!rows.length) {
+            const tr = document.createElement("tr");
+            const td = document.createElement("td");
+            td.colSpan = Math.max(1, columns.length + 1);
+            td.style.textAlign = "center";
+            td.style.color = "var(--muted)";
+            td.style.padding = "18px 12px";
+            td.textContent = "No rows found.";
+            tr.appendChild(td);
+            body.appendChild(tr);
+            return;
+          }
+
+          rows.forEach((entry) => {
+            const tr = document.createElement("tr");
+            const actionTd = document.createElement("td");
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "btn";
+            btn.textContent = "Edit";
+            btn.addEventListener("click", () => fnOpenAdminRowEditor(entry));
+            actionTd.appendChild(btn);
+            tr.appendChild(actionTd);
+
+            columns.forEach((column) => {
+              const td = document.createElement("td");
+              const value = entry?.values?.[column.name];
+              td.textContent = value == null ? "" : String(value);
+              tr.appendChild(td);
+            });
+            body.appendChild(tr);
+          });
+        }
+
+        async function fnLoadAdminTableRows(tableName) {
+          if (!tableName || !fnIsAdminUser()) return;
+          const body = document.getElementById("admin-db-body");
+          if (body) {
+            body.innerHTML = '<tr><td style="text-align: center; color: var(--muted); padding: 18px 12px;">Loading table rows…</td></tr>';
+          }
+          const payload = await fnFetchAdminTableRows(tableName);
+          m_objAdminActiveTablePayload = payload;
+          fnRenderAdminTableRows(payload);
+        }
+
+        async function fnLoadAdminTableList() {
+          if (!fnIsAdminUser()) return;
+          const select = document.getElementById("admin-db-table-select");
+          if (!select) return;
+          m_arrAdminTables = await fnFetchAdminTableNames();
+          select.innerHTML = "";
+          m_arrAdminTables.forEach((name) => {
+            const opt = document.createElement("option");
+            opt.value = name;
+            opt.textContent = name;
+            select.appendChild(opt);
+          });
+          if (m_arrAdminTables.length) {
+            await fnLoadAdminTableRows(select.value || m_arrAdminTables[0]);
+          }
+        }
+
+        function fnOpenAdminRowEditor(entry) {
+          if (!fnIsAdminUser()) return;
+          const payload = m_objAdminActiveTablePayload;
+          const fields = document.getElementById("admin-db-edit-fields");
+          const locator = document.getElementById("admin-db-edit-locator");
+          const table = document.getElementById("admin-db-edit-table");
+          if (!fields || !locator || !table) return;
+          const tableName = document.getElementById("admin-db-table-select")?.value;
+          table.value = tableName || "";
+          locator.value = JSON.stringify(entry?.locator || {});
+          fields.innerHTML = "";
+
+          (payload?.schema || []).forEach((column) => {
+            const wrap = document.createElement("div");
+            const label = document.createElement("label");
+            label.textContent = `${column.name}${column.primaryKeyOrdinal ? " (PK)" : ""}`;
+            const input = document.createElement("input");
+            input.type = "text";
+            input.dataset.column = column.name;
+            const value = entry?.values?.[column.name];
+            input.value = value == null ? "" : String(value);
+            input.disabled = column.primaryKeyOrdinal > 0;
+            wrap.appendChild(label);
+            wrap.appendChild(input);
+            fields.appendChild(wrap);
+          });
+
+          fnOpenDialogById("dlg-admin-db-row");
+        }
+
+        async function fnSaveAdminRowEdit() {
+          const tableName = document.getElementById("admin-db-edit-table")?.value;
+          const locatorRaw = document.getElementById("admin-db-edit-locator")?.value;
+          const fields = Array.from(document.querySelectorAll("#admin-db-edit-fields input[data-column]"));
+          const changes = {};
+          fields.forEach((input) => {
+            if (input.disabled) return;
+            changes[input.dataset.column] = input.value === "" ? null : input.value;
+          });
+          const locator = locatorRaw ? JSON.parse(locatorRaw) : {};
+          await fnApi(`/admin/db/tables/${encodeURIComponent(tableName)}/rows`, {
+            method: "PUT",
+            body: JSON.stringify({ locator, changes }),
+          });
+          fnCloseDialogById("dlg-admin-db-row");
+          await fnLoadAdminTableRows(tableName);
+          alert("Row updated.");
         }
 
         function fnFormatAuditUser(entry) {
@@ -5593,6 +5823,25 @@
           );
         }
 
+        const adminTableSelect = document.getElementById("admin-db-table-select");
+        if (adminTableSelect) {
+          adminTableSelect.addEventListener("change", async () => {
+            await fnLoadAdminTableRows(adminTableSelect.value);
+          });
+        }
+
+        const adminTableRefresh = document.getElementById("btn-admin-db-refresh");
+        if (adminTableRefresh) {
+          adminTableRefresh.addEventListener("click", async () => {
+            await fnLoadAdminTableList();
+          });
+        }
+
+        const adminDbSave = document.getElementById("admin-db-save");
+        if (adminDbSave) {
+          adminDbSave.addEventListener("click", fnWithAsyncBusy(adminDbSave, fnSaveAdminRowEdit));
+        }
+
         fnSetupDuePreview("nc-item", "nc-due-preview");
         fnSetupDuePreview("rb-item", "rb-due-preview");
         fnSetupBorrowerLookup({
@@ -5676,9 +5925,12 @@
           fnLoadBorrowingData();
           fnLoadServiceData();
           fnLoadAuditLog();
-          fnLoadInventoryData();
-          fnLoadAdminUsers();
-          fnEnsureCustomerProfilesLoaded();
+          if (fnIsAdminUser()) {
+            fnLoadInventoryData();
+            fnLoadAdminUsers();
+            fnEnsureCustomerProfilesLoaded();
+            fnLoadAdminTableList();
+          }
         }
 
         if (!USE_BACKEND) {
@@ -5693,8 +5945,12 @@
         }
 
         window.addEventListener("hashchange", () => {
-          if (window.location.hash === "#admin-customers") {
+          fnApplyAdminUiAccess();
+          if (window.location.hash === "#admin-customers" && fnIsAdminUser()) {
             fnEnsureCustomerProfilesLoaded();
+          }
+          if (window.location.hash === "#admin-database" && fnIsAdminUser()) {
+            fnLoadAdminTableList();
           }
         });
 
