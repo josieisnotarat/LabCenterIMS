@@ -6002,6 +6002,9 @@
           if (window.location.hash === "#admin-customers" && fnIsAdminUser()) {
             fnEnsureCustomerProfilesLoaded();
           }
+          if (window.location.hash === "#admin-action-log" && USE_BACKEND) {
+            fnLoadAuditLog();
+          }
           if (window.location.hash === "#admin-database" && fnIsAdminUser()) {
             fnLoadAdminTableList();
           }
