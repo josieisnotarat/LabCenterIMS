@@ -452,6 +452,25 @@
         color: var(--muted);
         border-bottom: 1px solid var(--line);
       }
+      table.sortable thead th {
+        cursor: pointer;
+        user-select: none;
+        position: relative;
+      }
+      table.sortable thead th::after {
+        content: "↕";
+        color: color-mix(in srgb, var(--muted) 60%, transparent);
+        margin-left: 6px;
+        font-size: 12px;
+      }
+      table.sortable thead th.sorted-asc::after {
+        content: "↑";
+        color: var(--ink);
+      }
+      table.sortable thead th.sorted-desc::after {
+        content: "↓";
+        color: var(--ink);
+      }
       tbody td {
         padding: 12px;
         border-bottom: 1px solid var(--line);
@@ -2574,6 +2593,140 @@
             value = Math.round(absHours) + "h";
           }
           return (isNegative ? "-" : "") + value;
+        }
+
+        const SORT_DEFAULT_DIRECTION = {
+          numeric: "desc",
+          date: "desc",
+          dueIn: "asc",
+          text: "asc",
+        };
+
+        function fnGetSortableCellText(cell) {
+          if (!cell) return "";
+          const pill = cell.querySelector(".pill");
+          if (pill) return (pill.textContent || "").trim();
+          return (cell.textContent || "").trim();
+        }
+
+        function fnDetectSortType(headerText) {
+          const text = (headerText || "").trim().toLowerCase();
+          if (text === "due in") return "dueIn";
+          if (/\b(due|out|date|time|logged|created)\b/.test(text)) {
+            return "date";
+          }
+          if (/\b(id|trace|ticket|#|count|qty|quantity)\b/.test(text)) {
+            return "numeric";
+          }
+          return "text";
+        }
+
+        function fnParseSortableValue(text, type) {
+          const normalized = (text || "").trim();
+          if (!normalized || normalized === "—") return null;
+          if (type === "dueIn") {
+            const match = normalized.match(/^(-)?(\d+)([dh])$/i);
+            if (!match) return null;
+            const sign = match[1] ? -1 : 1;
+            const amount = Number.parseInt(match[2], 10);
+            const hours = match[3].toLowerCase() === "d" ? amount * 24 : amount;
+            return sign * hours;
+          }
+          if (type === "date") {
+            const timestamp = Date.parse(normalized);
+            return Number.isNaN(timestamp) ? null : timestamp;
+          }
+          if (type === "numeric") {
+            const parsed = Number.parseFloat(normalized.replace(/[^\d.-]/g, ""));
+            return Number.isNaN(parsed) ? null : parsed;
+          }
+          return normalized.toLowerCase();
+        }
+
+        function fnApplySortToTable(table, colIndex, direction, type) {
+          const tbody = table?.tBodies?.[0];
+          if (!tbody) return;
+          const rows = Array.from(tbody.rows);
+          if (!rows.length) return;
+          if (rows.every((row) => row.cells.length <= 1 && row.cells[0]?.colSpan > 1)) {
+            return;
+          }
+          const decorated = rows.map((row, idx) => {
+            const text = fnGetSortableCellText(row.cells[colIndex]);
+            return {
+              row,
+              idx,
+              empty: !text || text === "—",
+              value: fnParseSortableValue(text, type),
+              text: text.toLowerCase(),
+            };
+          });
+          decorated.sort((a, b) => {
+            if (a.empty !== b.empty) return a.empty ? 1 : -1;
+            if (a.value == null && b.value != null) return 1;
+            if (a.value != null && b.value == null) return -1;
+            if (a.value != null && b.value != null) {
+              if (a.value < b.value) return direction === "asc" ? -1 : 1;
+              if (a.value > b.value) return direction === "asc" ? 1 : -1;
+            }
+            const cmp = a.text.localeCompare(b.text, undefined, {
+              numeric: true,
+              sensitivity: "base",
+            });
+            if (cmp !== 0) return direction === "asc" ? cmp : -cmp;
+            return a.idx - b.idx;
+          });
+          const fragment = document.createDocumentFragment();
+          decorated.forEach((item) => fragment.appendChild(item.row));
+          tbody.appendChild(fragment);
+        }
+
+        function fnInitSortableTable(table) {
+          if (!table || table.dataset.sortReady === "1") return;
+          table.dataset.sortReady = "1";
+          table.classList.add("sortable");
+          table.addEventListener("click", (event) => {
+            const th = event.target.closest("thead th");
+            if (!th || !table.contains(th)) return;
+            const row = th.parentElement;
+            if (!row) return;
+            const headers = Array.from(row.children);
+            const colIndex = headers.indexOf(th);
+            if (colIndex < 0) return;
+            const type = fnDetectSortType(th.textContent || "");
+            const defaultDir = SORT_DEFAULT_DIRECTION[type] || "asc";
+            const activeCol = Number.parseInt(table.dataset.sortCol || "", 10);
+            const nextDirection =
+              activeCol === colIndex
+                ? table.dataset.sortDir === "asc"
+                  ? "desc"
+                  : "asc"
+                : defaultDir;
+            table.dataset.sortCol = String(colIndex);
+            table.dataset.sortDir = nextDirection;
+            table.dataset.sortType = type;
+            headers.forEach((header) =>
+              header.classList.remove("sorted-asc", "sorted-desc"),
+            );
+            th.classList.add(nextDirection === "asc" ? "sorted-asc" : "sorted-desc");
+            fnApplySortToTable(table, colIndex, nextDirection, type);
+          });
+
+          const tbody = table.tBodies?.[0];
+          if (!tbody) return;
+          const observer = new MutationObserver(() => {
+            const colIndex = Number.parseInt(table.dataset.sortCol || "", 10);
+            const direction = table.dataset.sortDir;
+            const type = table.dataset.sortType || "text";
+            if (Number.isInteger(colIndex) && (direction === "asc" || direction === "desc")) {
+              fnApplySortToTable(table, colIndex, direction, type);
+            }
+          });
+          observer.observe(tbody, { childList: true });
+        }
+
+        function fnInitSortableTables() {
+          fnSelectAllElements(".table table").forEach(fnInitSortableTable);
         }
 
         /**
@@ -5845,6 +5998,8 @@
         if (adminDbSave) {
           adminDbSave.addEventListener("click", fnWithAsyncBusy(adminDbSave, fnSaveAdminRowEdit));
         }
+
+        fnInitSortableTables();
 
         fnSetupDuePreview("nc-item", "nc-due-preview");
         fnSetupDuePreview("rb-item", "rb-due-preview");
