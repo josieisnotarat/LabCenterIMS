@@ -15,7 +15,7 @@ This repository contains a self-contained Electron desktop application that runs
 
 ### Option A: One-command setup script (recommended)
 
-Pick the script for your OS; it creates a minimal `package.json` (if missing) and installs Electron + SQLite.
+Pick the script for your OS; it creates a minimal `package.json` (if missing), installs Electron + SQLite, installs `@electron/rebuild`, and rebuilds `better-sqlite3` for your Electron version.
 
 **macOS/Linux (bash):**
 ```bash
@@ -28,7 +28,7 @@ chmod +x ./scripts/setup-electron.sh
 ./scripts/setup-electron.ps1
 ```
 
-### Option B: Manual setup
+### Option B: Manual setup (no helper scripts)
 
 1. **Clone the repository**
    ```bash
@@ -36,7 +36,7 @@ chmod +x ./scripts/setup-electron.sh
    cd LabCenterIMS
    ```
 
-2. **Initialize npm (only if `package.json` is missing)**
+2. **Initialize npm**
    ```bash
    npm init -y
    ```
@@ -46,11 +46,45 @@ chmod +x ./scripts/setup-electron.sh
    npm install electron better-sqlite3
    ```
 
+4. **Install Electron rebuild tooling**
+   ```bash
+   npm install -D @electron/rebuild
+   ```
+
+5. **Rebuild native modules for Electron**
+   ```bash
+   npx electron-rebuild -f -w better-sqlite3
+   ```
+
+6. **Add a start script to `package.json`**
+
+   Open `package.json` and add/update the `scripts` section:
+   ```json
+   {
+     "scripts": {
+       "start": "electron electron/main.js"
+     }
+   }
+   ```
+
+7. **Launch the app**
+   ```bash
+   npm start
+   ```
+
+#### Manual install notes by OS
+
+- **Windows (PowerShell):** if native builds are required, install Visual Studio Build Tools (C++ workload), then run the same `npm init -y` / `npm install ...` commands from the repo root, then run `npx electron-rebuild -f -w better-sqlite3`.
+- **macOS:** install Xcode Command Line Tools first (`xcode-select --install`) so `better-sqlite3` can compile if no prebuilt binary is available, then run `npx electron-rebuild -f -w better-sqlite3`.
+- **Linux:** install compiler tooling first (`build-essential`, `python3`, `make`, `g++`), then run the same npm commands and `npx electron-rebuild -f -w better-sqlite3`.
+
 ## Running the Electron App
 
-Start the Electron app using the main process entry point:
+Start the Electron app using either npm or the direct Electron entry point:
 
 ```bash
+npm start
+# or
 npx electron electron/main.js
 ```
 
@@ -103,6 +137,8 @@ SQLITE_PATH=/path/to/labcenter.db npx electron electron/main.js
   ```bash
   rm -rf node_modules package-lock.json
   npm install electron better-sqlite3
+  npm install -D @electron/rebuild
+  npx electron-rebuild -f -w better-sqlite3
   ```
 
 ## What’s Included
