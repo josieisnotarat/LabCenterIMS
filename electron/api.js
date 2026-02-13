@@ -24,6 +24,16 @@ const USER_ROLE_ALIASES = new Map([
   ['co_op', 'co-op']
 ]);
 
+const ITEM_DUE_POLICY_SET = new Set(['NEXT_DAY_6PM', 'OFFSET', 'SEMESTER', 'FIXED']);
+const LOAN_STATUS_SET = new Set(['On Time', 'Overdue', 'Returned']);
+const TICKET_STATUS_SET = new Set([
+  'Diagnosing',
+  'Awaiting Parts',
+  'Ready for Pickup',
+  'Completed',
+  'Cancelled'
+]);
+
 function normalizeString(value) {
   if (typeof value !== 'string') return '';
   return value.trim();
@@ -55,6 +65,12 @@ function getUserRoleLabel(role) {
   }
   const trimmed = normalizeString(role);
   return trimmed || null;
+}
+
+function normalizeDuePolicy(value) {
+  const normalized = normalizeString(value).toUpperCase();
+  if (!normalized) return 'NEXT_DAY_6PM';
+  return normalized;
 }
 
 function isAdminUser(user) {
@@ -510,6 +526,10 @@ function createApiHandler(db) {
       if (!itemName) {
         return jsonResponse(400, { error: 'Item name is required.' });
       }
+      const normalizedPolicy = normalizeDuePolicy(duePolicy);
+      if (!ITEM_DUE_POLICY_SET.has(normalizedPolicy)) {
+        return jsonResponse(400, { error: `Unsupported due policy: ${normalizedPolicy}` });
+      }
       const departmentId = sqlite.ensureDepartmentId(db, department);
       try {
         const itemId = sqlite.createItem(db, {
@@ -517,7 +537,7 @@ function createApiHandler(db) {
           departmentId,
           schoolOwned: schoolOwned !== false,
           description: normalizeString(description) || null,
-          duePolicy,
+          duePolicy: normalizedPolicy,
           offsetDays,
           offsetHours,
           dueTime,
@@ -555,6 +575,10 @@ function createApiHandler(db) {
       if (!itemName) {
         return jsonResponse(400, { error: 'Item name is required.' });
       }
+      const normalizedPolicy = normalizeDuePolicy(duePolicy);
+      if (!ITEM_DUE_POLICY_SET.has(normalizedPolicy)) {
+        return jsonResponse(400, { error: `Unsupported due policy: ${normalizedPolicy}` });
+      }
       const existing = sqlite.getItem(db, itemId);
       if (!existing) {
         return jsonResponse(404, { error: 'Item not found.' });
@@ -566,7 +590,7 @@ function createApiHandler(db) {
           departmentId,
           schoolOwned: schoolOwned !== false,
           description: normalizeString(description) || null,
-          duePolicy,
+          duePolicy: normalizedPolicy,
           offsetDays,
           offsetHours,
           dueTime,
@@ -609,16 +633,6 @@ function createApiHandler(db) {
       }
       const userId = resolveLabTechIdForLoans(db, user);
       const trimmedNote = normalizeString(note) || null;
-
-      const LOAN_STATUS_SET = new Set(['On Time', 'Overdue', 'Returned']);
-      const TICKET_STATUS_SET = new Set([
-        'Diagnosing',
-        'Awaiting Parts',
-        'Ready for Pickup',
-        'Quarantined',
-        'Completed',
-        'Cancelled'
-      ]);
 
       if (type === 'Loan') {
         if (!LOAN_STATUS_SET.has(statusText)) {
