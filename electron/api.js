@@ -614,7 +614,7 @@ function createApiHandler(db) {
       try {
         sqlite.deleteItem(db, itemId);
       } catch (err) {
-        if (err?.message?.includes('foreign key')) {
+        if (err?.message?.includes('foreign key') || err?.message?.includes('existing loan or service history')) {
           return jsonResponse(409, { error: 'Cannot delete item that is referenced by loans or tickets.' });
         }
         if (err?.message?.includes('Item not found')) {

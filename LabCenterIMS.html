@@ -301,8 +301,7 @@
         .nav-link[href="#admin-customers"],
       body:has(#admin-users.screen:target) .nav-link[href="#admin-users"],
       body:has(#admin-inventory.screen:target)
-        .nav-link[href="#admin-inventory"],
-      body:has(#admin-database.screen:target) .nav-link[href="#admin-database"] {
+        .nav-link[href="#admin-inventory"] {
         background: var(--surface);
         border-color: var(--line);
       }
@@ -883,7 +882,6 @@
             <a class="nav-link" href="#admin-customers">Customer Management</a>
             <a class="nav-link" href="#admin-users">User Management</a>
             <a class="nav-link" href="#admin-inventory">Inventory Management</a>
-            <a class="nav-link" href="#admin-database">Database Tables</a>
           </nav>
         </div>
       </aside>
@@ -1370,62 +1368,11 @@
             </div>
           </section>
 
-          <!-- ADMIN: DATABASE TABLES -->
-          <section
-            id="admin-database"
-            class="screen admin-only"
-            aria-labelledby="admin-database-title"
-          >
-            <div class="card">
-              <h2 id="admin-database-title">Database Tables</h2>
-              <div class="body">
-                <div class="toolbar" style="gap: 12px; flex-wrap: wrap; align-items: center">
-                  <label for="admin-db-table-select" class="hint">Table</label>
-                  <select id="admin-db-table-select" style="min-width: 260px"></select>
-                  <button class="btn" id="btn-admin-db-refresh" type="button">Refresh</button>
-                </div>
-              </div>
-              <div class="body table">
-                <table>
-                  <thead id="admin-db-head"></thead>
-                  <tbody id="admin-db-body">
-                    <tr>
-                      <td style="text-align: center; color: var(--muted); padding: 18px 12px;">
-                        Select a table to view entries.
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
         </div>
       </main>
     </div>
 
 
-    <!-- Admin: Edit Database Row -->
-    <dialog id="dlg-admin-db-row">
-      <form method="dialog" id="form-admin-db-row" novalidate>
-        <div class="modal-hd">
-          <strong>Edit Table Row</strong>
-          <button class="btn" value="close">Close</button>
-        </div>
-        <div class="modal-bd">
-          <input type="hidden" id="admin-db-edit-table" />
-          <input type="hidden" id="admin-db-edit-locator" />
-          <div class="form-grid" id="admin-db-edit-fields"></div>
-        </div>
-        <div class="modal-ft">
-          <button class="btn" value="close">Cancel</button>
-          <button class="btn primary" id="admin-db-save" type="button">Save Row</button>
-        </div>
-      </form>
-    </dialog>
-
-    <!-- =============== MODALS =============== -->
-
-    <!-- Quick Help -->
     <dialog id="dlg-help">
       <form method="dialog">
         <div class="modal-hd">
@@ -2182,7 +2129,6 @@
           "#admin-customers",
           "#admin-users",
           "#admin-inventory",
-          "#admin-database",
         ]);
 
         function fnNormalizeRole(value) {
@@ -5498,6 +5444,8 @@
               body: JSON.stringify({ id, type, status, note }),
             });
 
+            fnCloseDialogById("dlg-detail");
+
             const refreshTasks = [fnLoadHomeData()];
             const kindForRefresh = fnMapTypeToKind(type);
             if (kindForRefresh === "loan") {
@@ -5519,7 +5467,6 @@
               m_mapDetailNoteCache.delete(cacheKey);
             }
 
-            fnCloseDialogById("dlg-detail");
             alert("Saved status & note.");
           }),
         );
@@ -5876,24 +5823,6 @@
           );
         }
 
-        const adminTableSelect = document.getElementById("admin-db-table-select");
-        if (adminTableSelect) {
-          adminTableSelect.addEventListener("change", async () => {
-            await fnLoadAdminTableRows(adminTableSelect.value);
-          });
-        }
-
-        const adminTableRefresh = document.getElementById("btn-admin-db-refresh");
-        if (adminTableRefresh) {
-          adminTableRefresh.addEventListener("click", async () => {
-            await fnLoadAdminTableList();
-          });
-        }
-
-        const adminDbSave = document.getElementById("admin-db-save");
-        if (adminDbSave) {
-          adminDbSave.addEventListener("click", fnWithAsyncBusy(adminDbSave, fnSaveAdminRowEdit));
-        }
 
         fnSetupDuePreview("nc-item", "nc-due-preview");
         fnSetupDuePreview("rb-item", "rb-due-preview");
@@ -5982,7 +5911,6 @@
           if (fnIsAdminUser()) {
             fnLoadAdminUsers();
             fnEnsureCustomerProfilesLoaded();
-            fnLoadAdminTableList();
           }
         }
 
@@ -6001,9 +5929,6 @@
           fnApplyAdminUiAccess();
           if (window.location.hash === "#admin-customers" && fnIsAdminUser()) {
             fnEnsureCustomerProfilesLoaded();
-          }
-          if (window.location.hash === "#admin-database" && fnIsAdminUser()) {
-            fnLoadAdminTableList();
           }
         });
 
