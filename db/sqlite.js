@@ -863,6 +863,16 @@ function updateItem(db, itemId, payload) {
 }
 
 function deleteItem(db, itemId) {
+  const dependency = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM TItemLoans WHERE intItemID = ?) AS LoanCount,
+      (SELECT COUNT(*) FROM TServiceTickets WHERE intItemID = ?) AS TicketCount;
+  `).get(itemId, itemId);
+
+  if ((dependency?.LoanCount ?? 0) > 0 || (dependency?.TicketCount ?? 0) > 0) {
+    throw new Error('Cannot delete item with existing loan or service history.');
+  }
+
   const info = db.prepare(`DELETE FROM TItems WHERE intItemID = ?`).run(itemId);
   if (!info.changes) {
     throw new Error('Item not found.');
