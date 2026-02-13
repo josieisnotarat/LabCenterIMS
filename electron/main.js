@@ -8,7 +8,7 @@ let db;
 let apiHandler;
 
 function getDatabasePath() {
-  return path.join(app.getPath('userData'), 'labcenter.db');
+  return path.resolve(__dirname, '..', 'db', 'labcenter.db');
 }
 
 function createWindow() {
